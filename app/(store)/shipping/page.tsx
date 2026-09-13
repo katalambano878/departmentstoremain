@@ -227,7 +227,7 @@ export default function ShippingPage() {
         <div className="bg-white border border-gray-200 rounded-2xl p-8 mb-16">
           <h2 className="text-3xl font-bold text-gray-900 mb-6">Order Tracking</h2>
           <p className="text-gray-600 mb-6 leading-relaxed">
-            Track your order anytime using your order number and email address. You'll see real-time updates including:
+            Track your order anytime using your email, order number, or phone number. You'll see real-time updates including:
           </p>
           <div className="grid md:grid-cols-4 gap-6">
             <div className="text-center">

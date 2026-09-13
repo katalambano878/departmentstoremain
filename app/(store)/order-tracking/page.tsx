@@ -13,33 +13,36 @@ function OrderTrackingContent() {
 
   const [orderNumber, setOrderNumber] = useState(urlOrderNumber);
   const [email, setEmail] = useState('');
+  const [phone, setPhone] = useState('');
   const [isTracking, setIsTracking] = useState(false);
   const [order, setOrder] = useState<any>(null);
+  const [matches, setMatches] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-  // SECURITY: Email is always required and must be typed by the user.
-  // We intentionally do NOT auto-submit from URL params — exposing a customer's
-  // email in the URL leaks it to browser history, analytics, and referrer headers.
+  const fetchOrder = async () => {
+    const orderNum = orderNumber.trim();
+    const emailVal = email.trim();
+    const phoneVal = phone.trim();
 
-  const fetchOrder = async (orderNum: string, verifyEmail?: string) => {
-    const emailToVerify = verifyEmail || email;
-
-    if (!emailToVerify) {
-      setError('Please enter your email address to verify your identity.');
+    if (!orderNum && !emailVal && !phoneVal) {
+      setError('Enter your email, order number, or phone number.');
       return;
     }
 
     setLoading(true);
     setError('');
+    setMatches([]);
 
     try {
-      // SECURITY: All verification is performed server-side — the API route checks
-      // email against the DB and never returns data on mismatch.
       const res = await fetch('/api/storefront/orders/track', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ orderNumber: orderNum, email: emailToVerify }),
+        body: JSON.stringify({
+          orderNumber: orderNum || undefined,
+          email: emailVal || undefined,
+          phone: phoneVal || undefined,
+        }),
       });
 
       if (res.status === 429) {
@@ -49,7 +52,7 @@ function OrderTrackingContent() {
       }
 
       if (res.status === 404) {
-        setError('Order not found. Please check your order number and email address.');
+        setError('No order found. Check your email, order number, or phone and try again.');
         setIsTracking(false);
         return;
       }
@@ -61,8 +64,26 @@ function OrderTrackingContent() {
         return;
       }
 
-      const { order: data } = await res.json();
-      setOrder(data);
+      const body = await res.json();
+      const orders = Array.isArray(body.orders)
+        ? body.orders
+        : body.order
+          ? [body.order]
+          : [];
+
+      if (orders.length === 0) {
+        setError('No order found. Check your email, order number, or phone and try again.');
+        setIsTracking(false);
+        return;
+      }
+
+      if (orders.length === 1) {
+        setOrder(orders[0]);
+        setMatches([]);
+      } else {
+        setMatches(orders);
+        setOrder(null);
+      }
       setIsTracking(true);
     } catch (err) {
       console.error('Error fetching order:', err);
@@ -75,18 +96,7 @@ function OrderTrackingContent() {
   const handleTrack = (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
-
-    if (!orderNumber) {
-      setError('Please enter your order number');
-      return;
-    }
-
-    if (!email) {
-      setError('Please enter your email address for verification');
-      return;
-    }
-
-    fetchOrder(orderNumber, email);
+    fetchOrder();
   };
 
   // Build tracking timeline from real order data
@@ -175,33 +185,20 @@ function OrderTrackingContent() {
   };
 
   // Search form
-  if (!isTracking || !order) {
+  if (!isTracking || (!order && matches.length === 0)) {
     return (
       <main className="min-h-screen bg-gray-50 py-12 px-4">
         <div className="max-w-2xl mx-auto">
           <div className="text-center mb-8">
             <h1 className="text-4xl font-bold text-gray-900 mb-2">Track Your Order</h1>
-            <p className="text-gray-600">Enter your order number or tracking number to track your shipment</p>
+            <p className="text-gray-600">Use your email, order number, or phone number — any one is enough</p>
           </div>
 
           <div className="bg-white rounded-xl shadow-sm p-8">
             <form onSubmit={handleTrack} className="space-y-6">
               <div>
                 <label className="block text-sm font-semibold text-gray-900 mb-2">
-                  Order Number or Tracking Number
-                </label>
-                <input
-                  type="text"
-                  value={orderNumber}
-                  onChange={(e) => setOrderNumber(e.target.value)}
-                  className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
-                  placeholder="e.g. ORD-1770328211911-915 or SLI-ABC123"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-semibold text-gray-900 mb-2">
-                  Email Address <span className="text-red-500 font-normal">*</span>
+                  Email
                 </label>
                 <input
                   type="email"
@@ -209,6 +206,32 @@ function OrderTrackingContent() {
                   onChange={(e) => setEmail(e.target.value)}
                   className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
                   placeholder="you@example.com"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-semibold text-gray-900 mb-2">
+                  Order Number
+                </label>
+                <input
+                  type="text"
+                  value={orderNumber}
+                  onChange={(e) => setOrderNumber(e.target.value)}
+                  className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                  placeholder="e.g. ORD-1770328211911-915"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-semibold text-gray-900 mb-2">
+                  Phone Number
+                </label>
+                <input
+                  type="tel"
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
+                  className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                  placeholder="e.g. 0248615775"
                 />
               </div>
 
@@ -238,7 +261,7 @@ function OrderTrackingContent() {
                 <div>
                   <p className="text-sm font-semibold text-emerald-900">Need Help?</p>
                   <p className="text-sm text-emerald-700 mt-1">
-                    You can find your order number and tracking number in the SMS or email we sent you after your order was confirmed.
+                    Fill in any one field — the email, order number, or phone you used at checkout. You can find these in the SMS or email we sent after your order was confirmed.
                   </p>
                 </div>
               </div>
@@ -250,6 +273,82 @@ function OrderTrackingContent() {
               <i className="ri-arrow-left-line mr-2"></i>
               Back to Home
             </Link>
+          </div>
+        </div>
+      </main>
+    );
+  }
+
+  const resetSearch = () => {
+    setIsTracking(false);
+    setOrder(null);
+    setMatches([]);
+    setOrderNumber('');
+    setEmail('');
+    setPhone('');
+    setError('');
+  };
+
+  // Multiple matches — pick one
+  if (isTracking && !order && matches.length > 1) {
+    return (
+      <main className="min-h-screen bg-gray-50 py-12 px-4">
+        <div className="max-w-2xl mx-auto">
+          <button
+            onClick={resetSearch}
+            className="text-gray-600 hover:text-gray-900 font-medium inline-flex items-center whitespace-nowrap cursor-pointer mb-6"
+          >
+            <i className="ri-arrow-left-line mr-2"></i>
+            New search
+          </button>
+          <div className="bg-white rounded-xl shadow-sm p-8">
+            <h1 className="text-2xl font-bold text-gray-900 mb-2">We found {matches.length} orders</h1>
+            <p className="text-gray-600 mb-6">Select an order to see its tracking status.</p>
+            <div className="space-y-3">
+              {matches.map((item) => {
+                const statusMap: Record<string, { label: string; color: string }> = {
+                  pending: { label: 'Pending', color: 'bg-amber-100 text-amber-800' },
+                  processing: { label: 'Processing', color: 'bg-emerald-100 text-emerald-800' },
+                  shipped: { label: 'Packaged', color: 'bg-purple-100 text-purple-800' },
+                  picked_up: { label: 'Picked Up by Rider', color: 'bg-emerald-100 text-emerald-800' },
+                  completed: { label: 'Completed', color: 'bg-emerald-100 text-emerald-800' },
+                  delivered: { label: 'Delivered', color: 'bg-emerald-100 text-emerald-800' },
+                  cancelled: { label: 'Cancelled', color: 'bg-red-100 text-red-800' },
+                };
+                const badge = statusMap[item.status] || { label: item.status, color: 'bg-gray-100 text-gray-800' };
+                return (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => setOrder(item)}
+                    className="w-full text-left p-4 rounded-xl border-2 border-gray-200 hover:border-emerald-500 hover:bg-emerald-50 transition-colors"
+                  >
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <p className="font-bold text-gray-900">{item.order_number}</p>
+                        <p className="text-sm text-gray-500 mt-1">
+                          {new Date(item.created_at).toLocaleDateString('en-GB', {
+                            day: 'numeric',
+                            month: 'short',
+                            year: 'numeric',
+                          })}
+                          {' · '}
+                          {item.order_items?.length || 0} item{(item.order_items?.length || 0) !== 1 ? 's' : ''}
+                        </p>
+                      </div>
+                      <div className="text-right">
+                        <span className={`inline-block px-3 py-1 rounded-full text-xs font-semibold ${badge.color}`}>
+                          {badge.label}
+                        </span>
+                        <p className="text-sm font-semibold text-gray-900 mt-2">
+                          GH₵ {Number(item.total).toFixed(2)}
+                        </p>
+                      </div>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
           </div>
         </div>
       </main>
@@ -275,11 +374,17 @@ function OrderTrackingContent() {
       <div className="max-w-4xl mx-auto">
         <div className="mb-8">
           <button 
-            onClick={() => { setIsTracking(false); setOrder(null); setOrderNumber(''); setEmail(''); }}
+            onClick={() => {
+              if (matches.length > 1) {
+                setOrder(null);
+                return;
+              }
+              resetSearch();
+            }}
             className="text-gray-600 hover:text-gray-900 font-medium inline-flex items-center whitespace-nowrap cursor-pointer"
           >
             <i className="ri-arrow-left-line mr-2"></i>
-            Track Another Order
+            {matches.length > 1 ? 'Back to orders' : 'Track Another Order'}
           </button>
         </div>
 

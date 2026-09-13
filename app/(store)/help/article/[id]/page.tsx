@@ -29,7 +29,7 @@ const articles: any = {
       <h3>Method 2: Track on Website</h3>
       <ol>
         <li>Go to the <a href="/order-tracking">Order Tracking</a> page</li>
-        <li>Enter your order number and email address</li>
+        <li>Enter your email, order number, or phone number</li>
         <li>Click "Track Order" to see your delivery status</li>
       </ol>
       

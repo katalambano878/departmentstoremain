@@ -35,7 +35,7 @@ export default function FAQsPage() {
     {
       category: 'orders',
       question: 'How do I track my order?',
-      answer: 'After your order ships, you\'ll receive a tracking number via email and SMS. Visit our Order Tracking page and enter your order number and email address to see real-time updates on your delivery status.'
+      answer: 'After your order is confirmed, you\'ll receive details via email and SMS. Visit our Order Tracking page and enter your email, order number, or phone number to see updates on your delivery status.'
     },
     {
       category: 'orders',

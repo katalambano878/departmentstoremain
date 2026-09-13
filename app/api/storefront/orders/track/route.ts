@@ -1,12 +1,71 @@
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase-admin';
 import { checkRateLimit, getClientIdentifier } from '@/lib/rate-limit';
+import { normalizeGhPhone } from '@/lib/hubtel';
 
 const TRACK_RATE_LIMIT = { maxRequests: 10, windowSeconds: 60 };
+const ORDER_NUMBER_RE = /^[A-Za-z0-9-]{1,64}$/;
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const ORDER_SELECT = `
+    id,
+    order_number,
+    status,
+    payment_status,
+    total,
+    email,
+    phone,
+    created_at,
+    shipping_address,
+    metadata,
+    order_items (
+        id,
+        product_name,
+        variant_name,
+        quantity,
+        unit_price,
+        metadata,
+        product_variants ( image_url ),
+        products (
+            product_images ( url )
+        )
+    )
+`;
+
+function notFound() {
+    return NextResponse.json(
+        { error: 'No order found. Check your email, order number, or phone and try again.' },
+        { status: 404 }
+    );
+}
+
+function phonesMatch(stored: string | null | undefined, input: string): boolean {
+    const a = normalizeGhPhone(stored);
+    const b = normalizeGhPhone(input);
+    if (!a || !b) return false;
+    return a === b || a.endsWith(b.slice(-9)) || b.endsWith(a.slice(-9));
+}
+
+function phoneLookupVariants(input: string): string[] {
+    const digits = String(input).replace(/\D+/g, '');
+    if (digits.length < 9) return [];
+    const local9 = digits.slice(-9);
+    return Array.from(new Set([
+        input.trim(),
+        local9,
+        `0${local9}`,
+        `233${local9}`,
+        `+233${local9}`,
+    ]));
+}
+
+function sanitizeOrder(order: any) {
+    const { email: _email, phone: _phone, ...safe } = order;
+    return safe;
+}
 
 export async function POST(request: Request) {
     try {
-        // Rate limiting — strict, same as payment endpoints
         const clientId = getClientIdentifier(request);
         const rateLimitResult = checkRateLimit(`track:${clientId}`, TRACK_RATE_LIMIT);
 
@@ -18,73 +77,75 @@ export async function POST(request: Request) {
         }
 
         const body = await request.json();
-        const { orderNumber, email } = body;
+        const orderNumber = typeof body.orderNumber === 'string' ? body.orderNumber.trim() : '';
+        const email = typeof body.email === 'string' ? body.email.trim() : '';
+        const phone = typeof body.phone === 'string' ? body.phone.trim() : '';
 
-        if (!orderNumber || typeof orderNumber !== 'string') {
-            return NextResponse.json({ error: 'Order number is required' }, { status: 400 });
-        }
-        if (!email || typeof email !== 'string') {
-            return NextResponse.json({ error: 'Email is required' }, { status: 400 });
+        if (!orderNumber && !email && !phone) {
+            return NextResponse.json(
+                { error: 'Enter your email, order number, or phone number' },
+                { status: 400 }
+            );
         }
 
-        // Validate formats before touching the DB
-        if (!/^[A-Za-z0-9\-]{1,64}$/.test(orderNumber.trim())) {
+        if (orderNumber && !ORDER_NUMBER_RE.test(orderNumber)) {
             return NextResponse.json({ error: 'Invalid order number format' }, { status: 400 });
         }
-        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
+        if (email && !EMAIL_RE.test(email)) {
             return NextResponse.json({ error: 'Invalid email format' }, { status: 400 });
         }
+        if (phone && phone.replace(/\D+/g, '').length < 9) {
+            return NextResponse.json({ error: 'Invalid phone number' }, { status: 400 });
+        }
 
-        // SECURITY: Server-side lookup via admin client — RLS does not apply
-        const { data: order, error: orderError } = await supabaseAdmin
+        let query = supabaseAdmin
             .from('orders')
-            .select(`
-                id,
-                order_number,
-                status,
-                payment_status,
-                total,
-                email,
-                created_at,
-                shipping_address,
-                metadata,
-                order_items (
-                    id,
-                    product_name,
-                    variant_name,
-                    quantity,
-                    unit_price,
-                    metadata,
-                    product_variants ( image_url ),
-                    products (
-                        product_images ( url )
-                    )
-                )
-            `)
-            .eq('order_number', orderNumber.trim())
-            .single();
+            .select(ORDER_SELECT)
+            .order('created_at', { ascending: false })
+            .limit(20);
 
-        // SECURITY: Return the same generic error whether the order doesn't exist
-        // or the email doesn't match — prevents order number enumeration.
-        if (orderError || !order) {
-            return NextResponse.json(
-                { error: 'Order not found or email does not match' },
-                { status: 404 }
-            );
+        if (orderNumber) {
+            if (UUID_RE.test(orderNumber)) {
+                query = query.or(`order_number.eq.${orderNumber},id.eq.${orderNumber}`);
+            } else {
+                query = query.eq('order_number', orderNumber);
+            }
+        } else if (email) {
+            query = query.ilike('email', email);
+        } else if (phone) {
+            const last9 = phone.replace(/\D+/g, '').slice(-9);
+            const variants = phoneLookupVariants(phone).filter((v) => /^\+?\d+$/.test(v));
+            const orParts = [
+                ...variants.map((v) => `phone.eq.${v}`),
+                `phone.ilike.%${last9}%`,
+            ];
+            query = query.or(orParts.join(','));
         }
 
-        // SECURITY: Email verified server-side — data is never returned without this check
-        if (order.email?.toLowerCase() !== email.trim().toLowerCase()) {
-            return NextResponse.json(
-                { error: 'Order not found or email does not match' },
-                { status: 404 }
-            );
+        const { data: rows, error: orderError } = await query;
+
+        if (orderError || !rows || rows.length === 0) {
+            return notFound();
         }
 
-        // Strip the email from the response — the client already knows it
-        const { email: _email, ...safeOrder } = order;
-        return NextResponse.json({ order: safeOrder });
+        const matches = rows.filter((order) => {
+            if (email && order.email?.toLowerCase() !== email.toLowerCase()) return false;
+            if (phone) {
+                const shippingPhone = (order.shipping_address as any)?.phone;
+                if (!phonesMatch(order.phone, phone) && !phonesMatch(shippingPhone, phone)) {
+                    return false;
+                }
+            }
+            return true;
+        });
 
+        if (matches.length === 0) {
+            return notFound();
+        }
+
+        return NextResponse.json({
+            orders: matches.map(sanitizeOrder),
+        });
     } catch (error: any) {
         console.error('[Track] Error:', error);
         return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
