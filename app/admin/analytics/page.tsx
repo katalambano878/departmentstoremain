@@ -7,6 +7,11 @@ import { fetchAllPaged } from '@/lib/supabase-paginate';
 import { PieChart, Pie, AreaChart, Area, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 
 type TimeRange = 'day' | 'week' | 'month';
+type SalesChannel = 'all' | 'website' | 'pos';
+
+function isPosSale(metadata: any): boolean {
+  return metadata?.pos_sale === true || metadata?.pos_sale === 'true';
+}
 
 type SalesRow = {
   date: string;
@@ -94,6 +99,7 @@ export default function AnalyticsPage() {
   const todayYmd = ymd(Number(todayParts.year), Number(todayParts.month), Number(todayParts.day));
 
   const [timeRange, setTimeRange] = useState<TimeRange>('day');
+  const [channel, setChannel] = useState<SalesChannel>('all');
   const [anchorDate, setAnchorDate] = useState(todayYmd);
   const [loading, setLoading] = useState(true);
 
@@ -154,7 +160,7 @@ export default function AnalyticsPage() {
   useEffect(() => {
     fetchAnalytics();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [period.startYmd, period.endYmd, timeRange]);
+  }, [period.startYmd, period.endYmd, timeRange, channel]);
 
   const shiftPeriod = (direction: -1 | 1) => {
     if (timeRange === 'day') {
@@ -179,21 +185,29 @@ export default function AnalyticsPage() {
       const isoStart = period.start.toISOString();
       const isoEnd = period.end.toISOString();
 
-      const orders = await fetchAllPaged<{
+      const allOrders = await fetchAllPaged<{
         id: string;
         created_at: string;
         total: number | null;
         payment_status: string;
+        metadata: any;
       }>(() =>
         supabase
           .from('orders')
-          .select('id, created_at, total, payment_status')
+          .select('id, created_at, total, payment_status, metadata')
           .gte('created_at', isoStart)
           .lte('created_at', isoEnd)
           .eq('payment_status', 'paid')
           .neq('status', 'cancelled')
           .order('created_at')
       );
+
+      const orders = allOrders.filter((o) => {
+        const pos = isPosSale(o.metadata);
+        if (channel === 'pos') return pos;
+        if (channel === 'website') return !pos;
+        return true;
+      });
 
       let validItems: any[] = [];
       if (orders.length > 0) {
@@ -300,7 +314,7 @@ export default function AnalyticsPage() {
     const url = window.URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `analytics-${timeRange}-${period.startYmd}.csv`;
+    a.download = `analytics-${timeRange}-${channel}-${period.startYmd}.csv`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -337,21 +351,43 @@ export default function AnalyticsPage() {
         {/* Period filter — Daily / Weekly / Monthly */}
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 mb-6">
           <div className="flex flex-col lg:flex-row lg:items-center gap-4 justify-between">
-            <div className="inline-flex rounded-xl border border-gray-200 overflow-hidden self-start">
-              {rangeTabs.map(tab => (
-                <button
-                  key={tab.key}
-                  type="button"
-                  onClick={() => setTimeRange(tab.key)}
-                  className={`px-4 py-2.5 text-sm font-semibold transition-colors cursor-pointer ${
-                    timeRange === tab.key
-                      ? 'bg-blue-700 text-white'
-                      : 'bg-white text-gray-600 hover:bg-gray-50'
-                  }`}
-                >
-                  {tab.label}
-                </button>
-              ))}
+            <div className="flex flex-wrap items-center gap-3">
+              <div className="inline-flex rounded-xl border border-gray-200 overflow-hidden self-start">
+                {rangeTabs.map(tab => (
+                  <button
+                    key={tab.key}
+                    type="button"
+                    onClick={() => setTimeRange(tab.key)}
+                    className={`px-4 py-2.5 text-sm font-semibold transition-colors cursor-pointer ${
+                      timeRange === tab.key
+                        ? 'bg-blue-700 text-white'
+                        : 'bg-white text-gray-600 hover:bg-gray-50'
+                    }`}
+                  >
+                    {tab.label}
+                  </button>
+                ))}
+              </div>
+              <div className="inline-flex rounded-xl border border-gray-200 overflow-hidden self-start">
+                {([
+                  { key: 'all', label: 'All sales' },
+                  { key: 'website', label: 'Website' },
+                  { key: 'pos', label: 'POS' },
+                ] as const).map(tab => (
+                  <button
+                    key={tab.key}
+                    type="button"
+                    onClick={() => setChannel(tab.key)}
+                    className={`px-4 py-2.5 text-sm font-semibold transition-colors cursor-pointer ${
+                      channel === tab.key
+                        ? 'bg-emerald-700 text-white'
+                        : 'bg-white text-gray-600 hover:bg-gray-50'
+                    }`}
+                  >
+                    {tab.label}
+                  </button>
+                ))}
+              </div>
             </div>
 
             <div className="flex flex-wrap items-center gap-2">
@@ -426,7 +462,7 @@ export default function AnalyticsPage() {
               {period.label}
             </span>
             <span>
-              Showing paid orders only · Africa/Accra timezone
+              Showing paid {channel === 'all' ? 'website + POS' : channel === 'pos' ? 'POS' : 'website'} orders only · Africa/Accra timezone
             </span>
             {loading && (
               <span className="inline-flex items-center gap-1 text-blue-600">
@@ -476,6 +512,11 @@ export default function AnalyticsPage() {
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-xl font-bold text-gray-900">
               {timeRange === 'day' ? 'Day Sales Detail' : timeRange === 'week' ? 'Daily Breakdown (This Week)' : 'Daily Breakdown (This Month)'}
+              {channel !== 'all' && (
+                <span className="ml-2 text-sm font-semibold text-emerald-700">
+                  · {channel === 'pos' ? 'POS' : 'Website'}
+                </span>
+              )}
             </h2>
             <p className="text-sm font-semibold text-gray-700">
               Total: GH₵{metrics.revenue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
