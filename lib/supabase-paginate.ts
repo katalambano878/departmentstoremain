@@ -40,7 +40,15 @@ export async function fetchAllPaged<T>(
     while (from < hardCap) {
         const to = from + pageSize - 1;
         const { data, error } = await queryFactory().range(from, to);
-        if (error) throw error;
+        if (error) {
+            const message = String(error.message || '');
+            const rangeExhausted =
+                error.code === 'PGRST103' ||
+                /range not satisfiable/i.test(message) ||
+                /requested range not satisfiable/i.test(message);
+            if (rangeExhausted) break;
+            throw error;
+        }
         const rows = (data ?? []) as T[];
         if (rows.length === 0) break;
         all.push(...rows);

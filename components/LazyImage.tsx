@@ -17,7 +17,7 @@ interface LazyImageProps {
   quality?: number;
 }
 
-const SRCSET_WIDTHS = [320, 480, 640, 960, 1200];
+const SRCSET_WIDTHS = [480, 800];
 
 function buildSrcSet(src: string, quality: number): string {
   return SRCSET_WIDTHS
@@ -43,17 +43,20 @@ export default function LazyImage({
 }: LazyImageProps) {
   const [isLoaded, setIsLoaded] = useState(false);
   const [hasError, setHasError] = useState(false);
+  const [useOrigin, setUseOrigin] = useState(false);
   const normalizedSrc = typeof src === 'string' ? src.trim() : '';
 
   const optimizedSrc = optimizeWidth
     ? getOptimizedImageUrl(normalizedSrc, { width: optimizeWidth, quality, format: 'webp' })
     : getOptimizedImageUrl(normalizedSrc, { width: 800, quality, format: 'webp' });
 
-  const srcSet = buildSrcSet(normalizedSrc, quality);
+  const displaySrc = useOrigin ? normalizedSrc : optimizedSrc;
+  const srcSet = useOrigin ? '' : buildSrcSet(normalizedSrc, quality);
 
   useEffect(() => {
     setIsLoaded(false);
     setHasError(false);
+    setUseOrigin(false);
   }, [src]);
 
   const handleLoad = () => {
@@ -62,6 +65,11 @@ export default function LazyImage({
   };
 
   const handleError = () => {
+    if (!useOrigin && optimizedSrc !== normalizedSrc) {
+      setUseOrigin(true);
+      setIsLoaded(false);
+      return;
+    }
     setHasError(true);
     setIsLoaded(true);
     onLoad?.();
@@ -87,7 +95,7 @@ export default function LazyImage({
         <div className="absolute inset-0 bg-gray-200 animate-pulse z-10"></div>
       )}
       <img
-        src={optimizedSrc}
+        src={displaySrc}
         srcSet={srcSet || undefined}
         sizes={srcSet ? sizes : undefined}
         alt={alt}

@@ -46,6 +46,8 @@ export function getOptimizedImageUrl(
     proxied.searchParams.set('q', String(quality));
     // Never upscale beyond the original resolution.
     proxied.searchParams.set('we', '');
+    // Keep origin fetches rare — wsrv 429s were stampeding Supabase storage.
+    proxied.searchParams.set('maxage', '2592000');
     if (format && format !== 'origin') {
       proxied.searchParams.set('output', format);
     }

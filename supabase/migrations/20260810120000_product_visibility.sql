@@ -23,6 +23,8 @@ CREATE INDEX IF NOT EXISTS idx_products_storefront_visible
   ON public.products (status, visibility)
   WHERE status = 'active' AND visibility = 'global';
 
+DROP POLICY IF EXISTS "Allow public read" ON public.products;
+DROP POLICY IF EXISTS "Allow public read products" ON public.products;
 DROP POLICY IF EXISTS "Public view active products" ON public.products;
 CREATE POLICY "Public view active products" ON public.products
   FOR SELECT
