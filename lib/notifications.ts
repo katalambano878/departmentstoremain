@@ -1,11 +1,9 @@
-import { Resend } from 'resend';
 import { supabase } from '@/lib/supabase';
 import { supabaseAdmin } from '@/lib/supabase-admin';
 import { escapeHtml } from '@/lib/sanitize';
 import { getPublicSiteUrl } from '@/lib/site-url';
 import { PUBLIC_CONTACT_PHONE } from '@/lib/brand-contact';
 
-const resend = new Resend(process.env.RESEND_API_KEY || 'missing_api_key');
 const ADMIN_EMAIL = process.env.ADMIN_EMAIL || 'info@discountdiscoveryzone.com';
 const ADMIN_PHONE = process.env.ADMIN_PHONE || '';
 const ADMIN_PHONES = Array.from(
@@ -16,7 +14,8 @@ const ADMIN_PHONES = Array.from(
             .filter(Boolean)
     )
 );
-const EMAIL_FROM = process.env.EMAIL_FROM || 'Discount Discovery Zone <noreply@discount-discovery-zone.vercel.app>';
+const EMAIL_FROM = process.env.EMAIL_FROM || 'Discount Discovery Zone <noreply@discountdiscoveryzone.com>';
+const POSTAL_API_URL = (process.env.POSTAL_API_URL || 'https://postal.zoepayhub.com').replace(/\/+$/, '');
 const BRAND = {
     name: 'Discount Discovery Zone',
     color: '#2563eb',
@@ -99,17 +98,31 @@ function maskPhone(phone: string): string {
 }
 
 export async function sendEmail({ to, subject, html }: { to: string; subject: string; html: string }) {
-    if (!process.env.RESEND_API_KEY) {
-        console.warn('[Email] RESEND_API_KEY not configured');
+    const apiKey = process.env.POSTAL_API_KEY;
+    if (!apiKey) {
+        console.warn('[Email] POSTAL_API_KEY not configured');
         return null;
     }
     try {
-        const data = await resend.emails.send({
-            from: EMAIL_FROM,
-            to,
-            subject,
-            html,
+        const response = await fetch(`${POSTAL_API_URL}/api/v1/send/message`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-Server-API-Key': apiKey,
+            },
+            body: JSON.stringify({
+                to: [to],
+                from: EMAIL_FROM,
+                subject,
+                html_body: html,
+            }),
         });
+        const data = await response.json().catch(() => null);
+        if (!response.ok || data?.status === 'error') {
+            const detail = data?.data?.message || data?.message || response.statusText;
+            console.error('[Email] Postal rejected send:', detail);
+            return null;
+        }
         console.log('[Email] Sent successfully to:', to.split('@')[0] + '@***');
         return data;
     } catch (error: any) {

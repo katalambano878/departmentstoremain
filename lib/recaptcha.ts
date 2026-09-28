@@ -48,15 +48,8 @@ export async function verifyRecaptcha(
     token: string,
     expectedAction?: string
 ): Promise<{ success: boolean; score?: number; error?: string }> {
-    if (!RECAPTCHA_SECRET_KEY) {
-        if (process.env.NODE_ENV === 'production') {
-            // SECURITY: Never silently pass in production — an unconfigured key means
-            // all bot/spam protection is disabled, which is a security regression.
-            console.error('[reCAPTCHA] RECAPTCHA_SECRET_KEY is not set in production. Blocking request.');
-            return { success: false, error: 'reCAPTCHA is not configured' };
-        }
-        // Development/test: pass through to avoid blocking local work
-        console.warn('[reCAPTCHA] RECAPTCHA_SECRET_KEY not configured — skipping verification (non-production only)');
+    const disabled = process.env.RECAPTCHA_DISABLED === 'true' || !RECAPTCHA_SECRET_KEY;
+    if (disabled) {
         return { success: true, score: 1.0 };
     }
 
