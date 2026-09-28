@@ -134,6 +134,9 @@ export async function middleware(request: NextRequest) {
     response.headers.set('X-Content-Type-Options', 'nosniff');
     response.headers.set('X-Frame-Options', 'DENY');
     response.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin');
+    if (!isApiRoute && !pathname.startsWith('/_next')) {
+        response.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate');
+    }
 
     // ============================================================
     // Maintenance mode for storefront routes

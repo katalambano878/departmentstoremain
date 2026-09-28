@@ -1,8 +1,6 @@
-// Discount Discovery Zone - Service Worker v5.0
-//   v5: stop caching storefront APIs & HTML navigations to avoid
-//       serving stale prices/stock/orders.  Images + /_next/static
-//       are still cache-first since they are content-hashed and safe.
-const CACHE_VERSION = 'ddz-v5.0-no-api-html-cache';
+// Discount Discovery Zone - Service Worker v6.0
+//   v6: wipe every cache left from the Vercel host, and never store HTML.
+const CACHE_VERSION = 'ddz-v6.0-vercel-cutover';
 const STATIC_CACHE = `static-${CACHE_VERSION}`;
 const DYNAMIC_CACHE = `dynamic-${CACHE_VERSION}`;
 const IMAGE_CACHE = `images-${CACHE_VERSION}`;
@@ -10,12 +8,6 @@ const API_CACHE = `api-${CACHE_VERSION}`;
 
 // Core app shell files to pre-cache
 const STATIC_ASSETS = [
-  '/',
-  '/shop',
-  '/cart',
-  '/wishlist',
-  '/account',
-  '/categories',
   '/offline',
   '/icons/icon-192x192.png',
 ];
@@ -57,7 +49,7 @@ self.addEventListener('install', (event) => {
 // non-current ones — to guarantee that any previously cached multimey
 // favicon/PWA icon is purged from every device on the next visit.
 self.addEventListener('activate', (event) => {
-  console.log('[SW] Activating v4.0 (hard cache wipe)...');
+  console.log('[SW] Activating v6.0 (hard cache wipe)...');
   event.waitUntil(
     (async () => {
       const keys = await caches.keys();
@@ -69,7 +61,7 @@ self.addEventListener('activate', (event) => {
       // and reload to pick up the fresh icons.
       const clientsList = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
       clientsList.forEach((client) => {
-        client.postMessage({ type: 'DDZ_CACHE_RESET', reason: 'favicon-reset' });
+        client.postMessage({ type: 'DDZ_CACHE_RESET', reason: 'vercel-cutover' });
       });
       await self.clients.claim();
     })()
@@ -143,7 +135,7 @@ self.addEventListener('fetch', (event) => {
   // Strategy: Static assets (JS, CSS, fonts) - Cache First
   if (
     url.pathname.startsWith('/_next/static') ||
-    url.pathname.match(/\.(js|css|woff|woff2|ttf|eot)$/) ||
+    (url.pathname.match(/\.(js|css|woff|woff2|ttf|eot)$/) && url.pathname !== '/service-worker.js') ||
     url.hostname === 'fonts.googleapis.com' ||
     url.hostname === 'fonts.gstatic.com' ||
     url.hostname === 'cdn.jsdelivr.net'
