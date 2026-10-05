@@ -34,8 +34,16 @@ function parseSettingValue(raw: string) {
 }
 
 export default async function MaintenancePage() {
-  let message = DEFAULT_MESSAGE;
-  let endsAt = new Date(Date.now() + 5 * 60 * 60 * 1000).toISOString();
+  const envMessage = process.env.MAINTENANCE_MESSAGE?.trim();
+  const envUntil = process.env.MAINTENANCE_UNTIL?.trim();
+  let message = envMessage || DEFAULT_MESSAGE;
+  let endsAt = envUntil && !Number.isNaN(new Date(envUntil).getTime())
+    ? envUntil
+    : new Date(Date.now() + 5 * 60 * 60 * 1000).toISOString();
+
+  if (envUntil) {
+    return renderPage(message, endsAt);
+  }
 
   try {
     const { data } = await supabaseAdmin
@@ -58,6 +66,10 @@ export default async function MaintenancePage() {
     // Keep the five-hour fallback if settings cannot be read.
   }
 
+  return renderPage(message, endsAt);
+}
+
+function renderPage(message: string, endsAt: string) {
   return (
     <main className="relative min-h-[100dvh] overflow-hidden bg-[#07111f] text-[#f7f3ea]">
       <div

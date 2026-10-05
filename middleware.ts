@@ -80,7 +80,22 @@ async function getRoleFromToken(token: string): Promise<{ userId: string; role: 
     }
 }
 
+function maintenanceFromEnv(): { enabled: boolean; until: string; message: string } | null {
+    if (process.env.MAINTENANCE_MODE !== 'true') return null;
+    const until = process.env.MAINTENANCE_UNTIL?.trim() || '';
+    const untilMs = until ? new Date(until).getTime() : NaN;
+    const stillRunning = !until || Number.isNaN(untilMs) || untilMs > Date.now();
+    return {
+        enabled: stillRunning,
+        until,
+        message: process.env.MAINTENANCE_MESSAGE?.trim() || '',
+    };
+}
+
 async function getMaintenanceSettings(): Promise<{ enabled: boolean; until: string; message: string }> {
+    const fromEnv = maintenanceFromEnv();
+    if (fromEnv) return fromEnv;
+
     if (!supabaseServiceKey) {
         return { enabled: false, until: '', message: '' };
     }
