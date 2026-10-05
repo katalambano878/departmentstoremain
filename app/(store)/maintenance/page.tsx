@@ -1,7 +1,6 @@
 import type { Metadata } from 'next';
 import { Fraunces } from 'next/font/google';
 import MaintenanceCountdown from '@/components/MaintenanceCountdown';
-import { supabaseAdmin } from '@/lib/supabase-admin';
 import {
   PUBLIC_CONTACT_EMAIL,
   PUBLIC_CONTACT_PHONE,
@@ -25,51 +24,12 @@ export const metadata: Metadata = {
 const DEFAULT_MESSAGE =
   "We're making a few updates to the website. They're almost done, and the store will open again when this countdown ends.";
 
-function parseSettingValue(raw: string) {
-  try {
-    return JSON.parse(raw);
-  } catch {
-    return raw;
-  }
-}
-
 export default async function MaintenancePage() {
-  const envMessage = process.env.MAINTENANCE_MESSAGE?.trim();
-  const envUntil = process.env.MAINTENANCE_UNTIL?.trim();
-  let message = envMessage || DEFAULT_MESSAGE;
-  let endsAt = envUntil && !Number.isNaN(new Date(envUntil).getTime())
-    ? envUntil
-    : new Date(Date.now() + 5 * 60 * 60 * 1000).toISOString();
-
-  if (envUntil) {
-    return renderPage(message, endsAt);
-  }
-
-  try {
-    const { data } = await supabaseAdmin
-      .from('site_settings')
-      .select('key, value')
-      .in('key', ['maintenance_message', 'maintenance_until']);
-
-    const map: Record<string, unknown> = {};
-    (data || []).forEach((row: { key: string; value: string }) => {
-      map[row.key] = parseSettingValue(row.value);
-    });
-
-    if (typeof map.maintenance_message === 'string' && map.maintenance_message.trim()) {
-      message = map.maintenance_message;
-    }
-    if (typeof map.maintenance_until === 'string' && !Number.isNaN(new Date(map.maintenance_until).getTime())) {
-      endsAt = map.maintenance_until;
-    }
-  } catch {
-    // Keep the five-hour fallback if settings cannot be read.
-  }
-
-  return renderPage(message, endsAt);
+  const message = process.env.MAINTENANCE_MESSAGE?.trim() || DEFAULT_MESSAGE;
+  return renderPage(message);
 }
 
-function renderPage(message: string, endsAt: string) {
+function renderPage(message: string) {
   return (
     <main className="relative min-h-[100dvh] overflow-hidden bg-[#07111f] text-[#f7f3ea]">
       <div
@@ -89,7 +49,7 @@ function renderPage(message: string, endsAt: string) {
           </h1>
           <p className="mt-6 max-w-lg text-lg leading-relaxed text-[#c9d3e2]">{message}</p>
           <div className={display.className}>
-            <MaintenanceCountdown endsAt={endsAt} />
+            <MaintenanceCountdown />
           </div>
         </div>
 

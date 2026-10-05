@@ -2,6 +2,10 @@
 
 import { useEffect, useState } from 'react';
 
+const WAIT_MS = 5 * 60 * 60 * 1000;
+const STORAGE_KEY = 'ddz-maintenance-ends-at';
+const COOKIE = 'ddz_wait_until';
+
 type Parts = { hours: number; minutes: number; seconds: number; done: boolean };
 
 function split(endsAtMs: number, now: number): Parts {
@@ -19,28 +23,57 @@ function pad(value: number) {
   return String(value).padStart(2, '0');
 }
 
-export default function MaintenanceCountdown({ endsAt }: { endsAt: string }) {
-  const endsAtMs = new Date(endsAt).getTime();
-  const valid = !Number.isNaN(endsAtMs);
+function rememberEnd(endsAtMs: number) {
+  localStorage.setItem(STORAGE_KEY, String(endsAtMs));
+  document.cookie = `${COOKIE}=${endsAtMs}; path=/; max-age=${60 * 60 * 24 * 30}; SameSite=Lax`;
+}
+
+function personalEnd(): number {
+  const saved = Number(localStorage.getItem(STORAGE_KEY));
+  if (Number.isFinite(saved) && saved > 0) {
+    rememberEnd(saved);
+    return saved;
+  }
+  const endsAtMs = Date.now() + WAIT_MS;
+  rememberEnd(endsAtMs);
+  return endsAtMs;
+}
+
+export default function MaintenanceCountdown() {
+  const [endsAtMs, setEndsAtMs] = useState<number | null>(null);
   const [now, setNow] = useState(() => Date.now());
 
   useEffect(() => {
+    setEndsAtMs(personalEnd());
     const id = window.setInterval(() => setNow(Date.now()), 1000);
     return () => window.clearInterval(id);
   }, []);
 
   useEffect(() => {
-    if (!valid || endsAtMs > Date.now()) return;
+    if (endsAtMs == null || endsAtMs > Date.now()) return;
     const key = 'ddz-maintenance-reopen';
     if (sessionStorage.getItem(key)) return;
     sessionStorage.setItem(key, '1');
     const id = window.setTimeout(() => {
       window.location.assign('/');
-    }, 1500);
+    }, 1200);
     return () => window.clearTimeout(id);
-  }, [endsAtMs, valid, now]);
+  }, [endsAtMs, now]);
 
-  if (!valid) return null;
+  if (endsAtMs == null) {
+    return (
+      <div className="mt-10">
+        <p className="text-[11px] uppercase tracking-[0.28em] text-[#9fb0c9]">Your 5 hours start now</p>
+        <div className="mt-5 grid grid-cols-3 gap-3 sm:gap-4">
+          {['05', '00', '00'].map((value) => (
+            <div key={value} className="rounded-2xl border border-white/10 bg-white/[0.04] px-2 py-5 sm:px-4">
+              <div className="text-5xl tabular-nums tracking-tight text-[#f7f3ea] sm:text-6xl">{value}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
 
   const parts = split(endsAtMs, now);
   const reopenLabel = new Date(endsAtMs).toLocaleTimeString('en-GH', {
@@ -57,13 +90,13 @@ export default function MaintenanceCountdown({ endsAt }: { endsAt: string }) {
 
   return (
     <div className="mt-10">
-      <p className="text-[11px] uppercase tracking-[0.28em] text-[#9fb0c9]">
-        {parts.done ? 'Opening the store' : `Back around ${reopenLabel} Accra time`}
+      <p className="font-sans text-[11px] uppercase tracking-[0.28em] text-[#9fb0c9]">
+        {parts.done ? 'Your wait is over' : `Your store opens around ${reopenLabel} Accra time`}
       </p>
       {parts.done ? (
-        <p className="mt-4 text-2xl text-[#f4efe6]">The updates are finished. Taking you back in.</p>
+        <p className="mt-4 text-2xl text-[#f4efe6]">Taking you into the store.</p>
       ) : (
-        <div className="mt-5 grid grid-cols-3 gap-3 sm:gap-4" aria-label="Time remaining">
+        <div className="mt-5 grid grid-cols-3 gap-3 sm:gap-4" aria-label="Your time remaining">
           {units.map((unit) => (
             <div key={unit.label} className="rounded-2xl border border-white/10 bg-white/[0.04] px-2 py-5 sm:px-4">
               <div className="text-5xl tabular-nums tracking-tight text-[#f7f3ea] sm:text-6xl">

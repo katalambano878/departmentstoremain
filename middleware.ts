@@ -82,14 +82,17 @@ async function getRoleFromToken(token: string): Promise<{ userId: string; role: 
 
 function maintenanceFromEnv(): { enabled: boolean; until: string; message: string } | null {
     if (process.env.MAINTENANCE_MODE !== 'true') return null;
-    const until = process.env.MAINTENANCE_UNTIL?.trim() || '';
-    const untilMs = until ? new Date(until).getTime() : NaN;
-    const stillRunning = !until || Number.isNaN(untilMs) || untilMs > Date.now();
     return {
-        enabled: stillRunning,
-        until,
+        enabled: true,
+        until: '',
         message: process.env.MAINTENANCE_MESSAGE?.trim() || '',
     };
+}
+
+function visitorWaitFinished(request: NextRequest): boolean {
+    const raw = request.cookies.get('ddz_wait_until')?.value;
+    const endsAt = Number(raw);
+    return Number.isFinite(endsAt) && endsAt > 0 && endsAt <= Date.now();
 }
 
 async function getMaintenanceSettings(): Promise<{ enabled: boolean; until: string; message: string }> {
@@ -168,7 +171,7 @@ export async function middleware(request: NextRequest) {
             const isAdminViewer =
                 auth?.role === 'admin' || auth?.role === 'staff' || auth?.role === 'staff_pos';
 
-            if (!isAdminViewer) {
+            if (!isAdminViewer && !visitorWaitFinished(request)) {
                 const maintenanceUrl = new URL('/maintenance', request.url);
                 return NextResponse.redirect(maintenanceUrl);
             }
