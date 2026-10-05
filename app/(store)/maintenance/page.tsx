@@ -1,13 +1,31 @@
+import type { Metadata } from 'next';
+import { Fraunces } from 'next/font/google';
+import MaintenanceCountdown from '@/components/MaintenanceCountdown';
 import { supabaseAdmin } from '@/lib/supabase-admin';
 import {
   PUBLIC_CONTACT_EMAIL,
   PUBLIC_CONTACT_PHONE,
+  PUBLIC_CONTACT_PHONE_DISPLAY,
   PUBLIC_CONTACT_PHONE_WHATSAPP,
 } from '@/lib/brand-contact';
 
-const DEFAULT_MESSAGE = "We're currently performing scheduled maintenance to improve your shopping experience. We'll be back online shortly.";
+const display = Fraunces({
+  subsets: ['latin'],
+  weight: ['500', '600'],
+});
 
-function parseSettingValue(raw: string): any {
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
+export const metadata: Metadata = {
+  title: "We'll be right back",
+  robots: { index: false, follow: false },
+};
+
+const DEFAULT_MESSAGE =
+  "We're making a few updates to the website. They're almost done, and the store will open again when this countdown ends.";
+
+function parseSettingValue(raw: string) {
   try {
     return JSON.parse(raw);
   } catch {
@@ -15,16 +33,9 @@ function parseSettingValue(raw: string): any {
   }
 }
 
-function to24HourTime(iso?: string) {
-  if (!iso) return '';
-  const date = new Date(iso);
-  if (Number.isNaN(date.getTime())) return '';
-  return date.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false });
-}
-
 export default async function MaintenancePage() {
   let message = DEFAULT_MESSAGE;
-  let untilTime = '';
+  let endsAt = new Date(Date.now() + 5 * 60 * 60 * 1000).toISOString();
 
   try {
     const { data } = await supabaseAdmin
@@ -32,112 +43,64 @@ export default async function MaintenancePage() {
       .select('key, value')
       .in('key', ['maintenance_message', 'maintenance_until']);
 
-    const map: Record<string, any> = {};
-    (data || []).forEach((row: any) => {
+    const map: Record<string, unknown> = {};
+    (data || []).forEach((row: { key: string; value: string }) => {
       map[row.key] = parseSettingValue(row.value);
     });
 
     if (typeof map.maintenance_message === 'string' && map.maintenance_message.trim()) {
       message = map.maintenance_message;
     }
-    if (typeof map.maintenance_until === 'string') {
-      untilTime = to24HourTime(map.maintenance_until);
+    if (typeof map.maintenance_until === 'string' && !Number.isNaN(new Date(map.maintenance_until).getTime())) {
+      endsAt = map.maintenance_until;
     }
   } catch {
-    // Keep defaults when settings are unavailable.
+    // Keep the five-hour fallback if settings cannot be read.
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-emerald-50 via-white to-amber-50 flex items-center justify-center px-4">
-      <div className="max-w-2xl mx-auto text-center">
-        <div className="mb-8">
-          <div className="w-32 h-32 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-6">
-            <i className="ri-tools-line text-6xl text-emerald-700"></i>
-          </div>
-          <h1 className="text-5xl font-bold text-gray-900 mb-6">
-            We'll Be Right Back
+    <main className="relative min-h-[100dvh] overflow-hidden bg-[#07111f] text-[#f7f3ea]">
+      <div
+        className="pointer-events-none absolute inset-0"
+        style={{
+          background:
+            'radial-gradient(900px 480px at 12% -10%, rgba(37,99,235,0.45), transparent 60%), radial-gradient(700px 420px at 100% 110%, rgba(180,140,74,0.18), transparent 55%)',
+        }}
+      />
+      <div className="relative mx-auto flex min-h-[100dvh] max-w-3xl flex-col justify-between px-6 py-10 sm:px-10">
+        <img src="/ddz-logo-white.png" alt="Discount Discovery Zone" className="h-12 w-auto self-start object-contain sm:h-14" />
+
+        <div className="py-12">
+          <p className="text-[11px] uppercase tracking-[0.32em] text-[#c4a574]">Almost done</p>
+          <h1 className={`${display.className} mt-4 max-w-xl text-5xl leading-[0.95] text-[#f7f3ea] sm:text-7xl`}>
+            We&apos;re updating the store.
           </h1>
-          <p className="text-xl text-gray-600 mb-8 leading-relaxed">
-            {message}
-          </p>
-        </div>
-
-        <div className="bg-white border border-gray-200 rounded-2xl p-8 mb-8">
-          <h2 className="text-2xl font-bold text-gray-900 mb-4">Expected Downtime</h2>
-          <div className="flex items-center justify-center gap-3 text-emerald-700">
-            <i className="ri-time-line text-3xl"></i>
-            <div className="text-left">
-              <p className="text-sm text-gray-600">Estimated completion</p>
-              <p className="text-2xl font-bold">{untilTime || 'In about 24 hours'}</p>
-              {untilTime && (
-                <p className="text-xs text-gray-500 mt-1">24-hour time</p>
-              )}
-            </div>
+          <p className="mt-6 max-w-lg text-lg leading-relaxed text-[#c9d3e2]">{message}</p>
+          <div className={display.className}>
+            <MaintenanceCountdown endsAt={endsAt} />
           </div>
         </div>
 
-        <div className="grid md:grid-cols-3 gap-6 mb-8">
-          <div className="bg-white border border-gray-200 rounded-xl p-6">
-            <div className="w-12 h-12 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-4">
-              <i className="ri-rocket-line text-2xl text-emerald-700"></i>
-            </div>
-            <h3 className="font-bold text-gray-900 mb-2">Performance</h3>
-            <p className="text-gray-600 text-sm">Faster loading times and smoother navigation</p>
-          </div>
-
-          <div className="bg-white border border-gray-200 rounded-xl p-6">
-            <div className="w-12 h-12 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-4">
-              <i className="ri-shield-check-line text-2xl text-emerald-700"></i>
-            </div>
-            <h3 className="font-bold text-gray-900 mb-2">Security</h3>
-            <p className="text-gray-600 text-sm">Enhanced protection for your data and transactions</p>
-          </div>
-
-          <div className="bg-white border border-gray-200 rounded-xl p-6">
-            <div className="w-12 h-12 bg-amber-100 rounded-full flex items-center justify-center mx-auto mb-4">
-              <i className="ri-sparkle-line text-2xl text-amber-700"></i>
-            </div>
-            <h3 className="font-bold text-gray-900 mb-2">Features</h3>
-            <p className="text-gray-600 text-sm">New functionality to enhance your experience</p>
-          </div>
-        </div>
-
-        <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-8 mb-8">
-          <h3 className="text-xl font-bold text-gray-900 mb-4">Need Immediate Assistance?</h3>
-          <p className="text-gray-600 mb-6">
-            Our customer service team is still available to help you
-          </p>
-          <div className="flex flex-wrap gap-4 justify-center">
-            <a
-              href={`mailto:${PUBLIC_CONTACT_EMAIL}`}
-              className="inline-flex items-center gap-2 bg-white text-gray-900 px-6 py-3 rounded-full font-medium hover:bg-gray-50 transition-colors border border-gray-200 whitespace-nowrap"
-            >
-              <i className="ri-mail-line"></i>
-              Email Us
+        <div className="flex flex-col gap-4 border-t border-white/10 pt-6 text-sm text-[#9fb0c9] sm:flex-row sm:items-center sm:justify-between">
+          <p>The shop is closed for a short while. We can still help you directly.</p>
+          <div className="flex flex-wrap gap-x-4 gap-y-2">
+            <a className="text-[#f7f3ea] underline decoration-white/30 underline-offset-4" href={`tel:${PUBLIC_CONTACT_PHONE}`}>
+              {PUBLIC_CONTACT_PHONE_DISPLAY}
             </a>
             <a
+              className="text-[#f7f3ea] underline decoration-white/30 underline-offset-4"
               href={`https://wa.me/${PUBLIC_CONTACT_PHONE_WHATSAPP}`}
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex items-center gap-2 bg-emerald-700 text-white px-6 py-3 rounded-full font-medium hover:bg-emerald-800 transition-colors whitespace-nowrap"
             >
-              <i className="ri-whatsapp-line"></i>
               WhatsApp
             </a>
-            <a
-              href={`tel:${PUBLIC_CONTACT_PHONE}`}
-              className="inline-flex items-center gap-2 bg-white text-gray-900 px-6 py-3 rounded-full font-medium hover:bg-gray-50 transition-colors border border-gray-200 whitespace-nowrap"
-            >
-              <i className="ri-phone-line"></i>
-              Call Us
+            <a className="text-[#f7f3ea] underline decoration-white/30 underline-offset-4" href={`mailto:${PUBLIC_CONTACT_EMAIL}`}>
+              {PUBLIC_CONTACT_EMAIL}
             </a>
           </div>
         </div>
-
-        <div className="text-gray-500 text-sm text-center">
-          <p className="mb-2">Thank you for your patience</p>
-        </div>
       </div>
-    </div>
+    </main>
   );
 }

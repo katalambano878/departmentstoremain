@@ -1,6 +1,7 @@
 'use client';
 
 import { Suspense } from 'react';
+import { usePathname } from 'next/navigation';
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
 import MobileBottomNav from '@/components/MobileBottomNav';
@@ -26,6 +27,11 @@ export default function StoreLayout({
 }: {
   children: React.ReactNode;
 }) {
+  const pathname = usePathname();
+  if (pathname === '/maintenance') {
+    return <div className="min-h-screen">{children}</div>;
+  }
+
   return (
     <AffiliateProvider>
       <Suspense fallback={null}>

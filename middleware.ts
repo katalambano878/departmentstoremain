@@ -108,9 +108,12 @@ async function getMaintenanceSettings(): Promise<{ enabled: boolean; until: stri
             map[row.key] = parseSettingValue(row.value);
         });
 
+        const until = typeof map.maintenance_until === 'string' ? map.maintenance_until : '';
+        const untilMs = until ? new Date(until).getTime() : NaN;
+        const stillRunning = !until || Number.isNaN(untilMs) || untilMs > Date.now();
         const settings = {
-            enabled: map.maintenance_mode === true || map.maintenance_mode === 'true',
-            until: typeof map.maintenance_until === 'string' ? map.maintenance_until : '',
+            enabled: (map.maintenance_mode === true || map.maintenance_mode === 'true') && stillRunning,
+            until,
             message: typeof map.maintenance_message === 'string' ? map.maintenance_message : '',
         };
 
