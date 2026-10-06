@@ -7,6 +7,41 @@ import { getPosCodeFromMetadata } from '@/lib/posCode';
 
 const BarcodeScanner = dynamic(() => import('@/components/admin/BarcodeScanner'), { ssr: false });
 
+// TEMPORARY: record offline sales from the outage (Sat 3 Oct 2026 through today).
+// Delete this block and the checkout UI that uses it once those orders are entered.
+const OFFLINE_CATCHUP_FROM = '2026-10-03';
+
+function accraTodayYmd() {
+    return new Intl.DateTimeFormat('en-CA', {
+        timeZone: 'Africa/Accra',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+    }).format(new Date());
+}
+
+function offlineCatchupDates(todayYmd: string) {
+    if (todayYmd < OFFLINE_CATCHUP_FROM) return [];
+    const [year, month, day] = OFFLINE_CATCHUP_FROM.split('-').map(Number);
+    let cursor = new Date(Date.UTC(year, month - 1, day));
+    const dates: { ymd: string; label: string }[] = [];
+    while (true) {
+        const ymd = cursor.toISOString().slice(0, 10);
+        if (ymd > todayYmd) break;
+        dates.push({
+            ymd,
+            label: cursor.toLocaleDateString('en-GH', {
+                weekday: 'short',
+                day: 'numeric',
+                month: 'short',
+                timeZone: 'UTC',
+            }),
+        });
+        cursor = new Date(cursor.getTime() + 24 * 60 * 60 * 1000);
+    }
+    return dates;
+}
+
 interface Product {
     id: string;
     name: string;
@@ -70,6 +105,9 @@ export default function POSPage() {
     const [processing, setProcessing] = useState(false);
     const [completedOrder, setCompletedOrder] = useState<any>(null);
     const [checkoutError, setCheckoutError] = useState<string | null>(null);
+    const [backdateSale, setBackdateSale] = useState(false);
+    const [backdateYmd, setBackdateYmd] = useState(OFFLINE_CATCHUP_FROM);
+    const catchupDates = useMemo(() => offlineCatchupDates(accraTodayYmd()), []);
     const [deliveryMethod, setDeliveryMethod] = useState<'pickup' | 'doorstep'>('pickup');
     const [guestDetails, setGuestDetails] = useState({
         firstName: '',
@@ -347,6 +385,13 @@ export default function POSPage() {
             if (tendered < grandTotal) return 'Insufficient amount tendered';
         }
 
+        if (backdateSale) {
+            if (paymentMethod === 'momo') return 'Offline catch-up sales must be Cash or Card. They are recorded as already paid.';
+            if (!catchupDates.some((day) => day.ymd === backdateYmd)) {
+                return 'Pick a sale date between Saturday and today.';
+            }
+        }
+
         // Require address for doorstep delivery
         if (deliveryMethod === 'doorstep') {
             if (!guestDetails.address.trim()) return 'Delivery address is required';
@@ -375,6 +420,7 @@ export default function POSPage() {
             const customerPhone = getOrderPhone();
 
             const isCashOrCard = paymentMethod === 'cash' || paymentMethod === 'card';
+            const saleCreatedAt = backdateSale ? `${backdateYmd}T12:00:00.000Z` : null;
 
             // Build shipping/billing address
             const addressData = selectedCustomer ? {
@@ -417,11 +463,13 @@ export default function POSPage() {
                     payment_method: paymentMethod === 'momo' ? 'moolre' : paymentMethod,
                     shipping_address: addressData,
                     billing_address: addressData,
+                    ...(saleCreatedAt ? { created_at: saleCreatedAt } : {}),
                     metadata: {
                         pos_sale: true,
                         first_name: addressData.firstName,
                         last_name: addressData.lastName,
-                        phone: customerPhone
+                        phone: customerPhone,
+                        ...(saleCreatedAt ? { offline_catchup: true, sale_date: backdateYmd } : {}),
                     }
                 }])
                 .select()
@@ -512,7 +560,7 @@ export default function POSPage() {
 
                 // Receipt SMS for every POS sale when a customer phone is present
                 let receiptSmsNote: string | null = null;
-                if (customerPhone?.trim()) {
+                if (customerPhone?.trim() && !saleCreatedAt) {
                     try {
                         const { data: { session: smsSession } } = await supabase.auth.getSession();
                         const smsRes = await fetch('/api/notifications', {
@@ -548,7 +596,7 @@ export default function POSPage() {
                 });
 
                 // Send notification
-                if (customerEmail && customerEmail !== 'pos-walkin@store.local') {
+                if (!saleCreatedAt && customerEmail && customerEmail !== 'pos-walkin@store.local') {
                     const { data: { session } } = await supabase.auth.getSession();
                     fetch('/api/notifications', {
                         method: 'POST',
@@ -1001,6 +1049,11 @@ export default function POSPage() {
                                         {completedOrder.paymentPending ? 'Payment Link Generated!' : 'Payment Successful!'}
                                     </h2>
                                     <p className="text-gray-500 mt-1">Order #{completedOrder.orderNumber}</p>
+                                    {backdateSale && (
+                                        <p className="mt-2 text-sm font-medium text-amber-800">
+                                            Dated {catchupDates.find((day) => day.ymd === backdateYmd)?.label || backdateYmd}. No receipt was sent.
+                                        </p>
+                                    )}
 
                                     {!completedOrder.paymentPending && paymentMethod === 'cash' && changeDue > 0 && (
                                         <div className="mt-3 bg-blue-50 border border-blue-200 rounded-lg p-3">
@@ -1083,6 +1136,39 @@ export default function POSPage() {
                                         <p className="text-sm text-blue-800 uppercase tracking-wide font-semibold">Amount to Pay</p>
                                         <p className="text-4xl font-extrabold text-blue-700 mt-1">GH₵{grandTotal.toFixed(2)}</p>
                                     </div>
+
+                                    {catchupDates.length > 0 && (
+                                        <div className="rounded-xl border border-amber-200 bg-amber-50 p-4">
+                                            <label className="flex items-start gap-3 cursor-pointer">
+                                                <input
+                                                    type="checkbox"
+                                                    checked={backdateSale}
+                                                    onChange={(e) => setBackdateSale(e.target.checked)}
+                                                    className="mt-1 h-4 w-4 rounded border-amber-400 text-amber-700 focus:ring-amber-500"
+                                                />
+                                                <span>
+                                                    <span className="block text-sm font-semibold text-amber-950">Record an offline sale</span>
+                                                    <span className="mt-1 block text-xs leading-relaxed text-amber-800">
+                                                        Temporary. Puts this POS sale on a day the website was down, from Saturday through today. No receipt SMS or email is sent. Stock is still reduced.
+                                                    </span>
+                                                </span>
+                                            </label>
+                                            {backdateSale && (
+                                                <label className="mt-3 block">
+                                                    <span className="mb-1 block text-xs font-semibold text-amber-900">Sale date</span>
+                                                    <select
+                                                        value={backdateYmd}
+                                                        onChange={(e) => setBackdateYmd(e.target.value)}
+                                                        className="w-full rounded-lg border border-amber-300 bg-white p-3 text-sm font-medium text-gray-900 outline-none focus:ring-2 focus:ring-amber-500"
+                                                    >
+                                                        {catchupDates.map((day) => (
+                                                            <option key={day.ymd} value={day.ymd}>{day.label}</option>
+                                                        ))}
+                                                    </select>
+                                                </label>
+                                            )}
+                                        </div>
+                                    )}
 
                                     {/* Customer Select */}
                                     <div>
