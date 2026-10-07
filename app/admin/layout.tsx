@@ -19,6 +19,7 @@ export default function AdminLayout({
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [user, setUser] = useState<any>(null);
   const [userRole, setUserRole] = useState<string | null>(null);
+  const [canViewLogs, setCanViewLogs] = useState(false);
   const { getSetting } = useCMS();
   const siteName = getSetting('site_name') || 'Discount Discovery Zone';
   const adminLogo = getSetting('site_logo');
@@ -82,6 +83,11 @@ export default function AdminLayout({
         await supabase.auth.signOut();
         router.push('/admin/login?error=unauthorized');
         return;
+      }
+
+      if (profile.role === 'admin') {
+        const { data: logsAccess } = await supabase.rpc('can_view_audit_logs');
+        setCanViewLogs(logsAccess === true);
       }
 
       setUser(session.user);
@@ -396,6 +402,12 @@ export default function AdminLayout({
       path: '/admin/modules'
     },
     {
+      title: 'Activity Logs',
+      icon: 'ri-history-line',
+      path: '/admin/activity-logs',
+      requiresLogAccess: true
+    },
+    {
       title: 'Settings',
       icon: 'ri-settings-3-line',
       path: '/admin/settings'
@@ -406,6 +418,8 @@ export default function AdminLayout({
     if (userRole === 'staff_pos') {
       return item.path === '/admin/orders' || item.path === '/admin/pos';
     }
+    // @ts-ignore
+    if (item.requiresLogAccess && !canViewLogs) return false;
     // @ts-ignore
     if (!item.moduleId) return true;
     // @ts-ignore

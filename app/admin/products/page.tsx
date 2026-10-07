@@ -6,6 +6,7 @@ import { supabase } from '@/lib/supabase';
 import { fetchAllPaged } from '@/lib/supabase-paginate';
 import { getProductVisibility } from '@/lib/product-visibility';
 import { getOptimizedImageUrl } from '@/lib/imageOptimization';
+import { logActivity } from '@/lib/activity-log';
 
 const PRODUCTS_SCROLL_KEY = 'admin_products_scroll_y';
 const STOCK_PRINT_PART_SIZE = 100;
@@ -414,6 +415,10 @@ export default function ProductsPage() {
         win.document.write(html);
         win.document.close();
         win.focus();
+        void logActivity(
+          'print_stock_list',
+          `Printed stock list part ${partIndex + 1} of ${partCount} (products ${totalProducts ? startIdx + 1 : 0}–${endIdx})`,
+        );
       } else {
         alert('Could not open the print window. Please allow pop-ups for this site and try again.');
       }
@@ -500,6 +505,7 @@ export default function ProductsPage() {
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
+      void logActivity('export_csv', `Exported stock list CSV (${rows.length} products)`);
       URL.revokeObjectURL(url);
     } catch (err: any) {
       console.error('Export CSV error:', err);
