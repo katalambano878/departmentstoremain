@@ -5,8 +5,10 @@ import { useState, useEffect, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
 import { fetchAllPaged } from '@/lib/supabase-paginate';
 import { getProductVisibility } from '@/lib/product-visibility';
+import { getOptimizedImageUrl } from '@/lib/imageOptimization';
 
 const PRODUCTS_SCROLL_KEY = 'admin_products_scroll_y';
+const STOCK_PRINT_PART_SIZE = 100;
 const PRODUCTS_UI_STATE_KEY = 'admin_products_ui_state';
 
 export default function ProductsPage() {
@@ -23,6 +25,7 @@ export default function ProductsPage() {
   const [products, setProducts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [printing, setPrinting] = useState(false);
+  const [showPrintParts, setShowPrintParts] = useState(false);
   const [categories, setCategories] = useState<any[]>([]);
   const pendingScrollRestoreRef = useRef<number | null>(null);
 
@@ -164,8 +167,9 @@ export default function ProductsPage() {
     }
   };
 
-  const handlePrintStockList = async () => {
+  const handlePrintStockList = async (partIndex: number) => {
     if (printing) return;
+    setShowPrintParts(false);
     setPrinting(true);
 
     // Open the print window synchronously (before any await) so popup
@@ -183,27 +187,27 @@ export default function ProductsPage() {
           .replace(/>/g, '&gt;')
           .replace(/"/g, '&quot;');
 
-      // The list on screen is already filtered/sorted; print exactly that set.
-      const rows = filteredProducts;
+      // The list on screen is already filtered/sorted; print one part of it.
+      const totalProducts = filteredProducts.length;
+      const partCount = Math.max(1, Math.ceil(totalProducts / STOCK_PRINT_PART_SIZE));
+      const startIdx = partIndex * STOCK_PRINT_PART_SIZE;
+      const rows = filteredProducts.slice(startIdx, startIdx + STOCK_PRINT_PART_SIZE);
+      const endIdx = startIdx + rows.length;
       const ids = rows.map((p) => p.id);
 
-      // Pull every variant for the products being printed. Fetch all variants
-      // in pages and group locally — far cheaper than a giant `.in(...)` URL.
       const variantMap = new Map<string, any[]>();
       if (ids.length > 0) {
-        const idSet = new Set(ids);
-        const allVariants = await fetchAllPaged<any>(() =>
+        const partVariants = await fetchAllPaged<any>(() =>
           supabase
             .from('product_variants')
             .select('product_id, name, sku, option1, option2, option3, quantity, image_url')
+            .in('product_id', ids)
             .order('option2', { ascending: true })
             .order('option1', { ascending: true }),
         );
-        for (const v of allVariants) {
-          if (!idSet.has(v.product_id)) continue;
+        for (const v of partVariants) {
           const list = variantMap.get(v.product_id) || [];
-          list.push(v);
-          variantMap.set(v.product_id, list);
+          variantMap.set(v.product_id, [...list, v]);
         }
       }
 
@@ -213,8 +217,8 @@ export default function ProductsPage() {
         'Default';
 
       const thumb = (src: string) =>
-        src
-          ? `<img class="thumb" src="${esc(src)}" alt="" />`
+        src && !src.includes('via.placeholder.com')
+          ? `<img class="thumb" src="${esc(getOptimizedImageUrl(src, { width: 80, quality: 60 }))}" alt="" />`
           : '<div class="thumb noimg"></div>';
 
       let totalUnits = 0;
@@ -296,7 +300,7 @@ export default function ProductsPage() {
 <html>
 <head>
 <meta charset="utf-8" />
-<title>Product & Stock List — Discount Discovery Zone</title>
+<title>Product & Stock List — Part ${partIndex + 1} of ${partCount} — Discount Discovery Zone</title>
 <style>
   * { box-sizing: border-box; }
   body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; color: #111827; margin: 0; padding: 28px 32px; }
@@ -368,9 +372,10 @@ export default function ProductsPage() {
       });
     }
   </script>
-  <h1>Product &amp; Stock List</h1>
+  <h1>Product &amp; Stock List — Part ${partIndex + 1} of ${partCount}</h1>
   <div class="meta">
-    Discount Discovery Zone &nbsp;•&nbsp; Generated <strong>${esc(generatedAt)}</strong>
+    Discount Discovery Zone &nbsp;•&nbsp; Products <strong>${totalProducts ? startIdx + 1 : 0}–${endIdx}</strong> of ${totalProducts}
+    &nbsp;•&nbsp; Generated <strong>${esc(generatedAt)}</strong>
     ${appliedFilters.length ? `&nbsp;•&nbsp; Filters: ${esc(appliedFilters.join(' · '))}` : ''}
   </div>
   <div class="summary">
@@ -396,7 +401,8 @@ export default function ProductsPage() {
     </tbody>
   </table>
   <div class="footer">
-    ${rows.length} product${rows.length !== 1 ? 's' : ''} listed.
+    Part ${partIndex + 1} of ${partCount}: ${rows.length} product${rows.length !== 1 ? 's' : ''} listed (products ${totalProducts ? startIdx + 1 : 0}–${endIdx} of ${totalProducts}).
+    Summary figures above cover this part only.
     Low/out-of-stock flags and counts use each product's low-stock threshold (default 5),
     counted per variant for products that have variants and per product otherwise.
   </div>
@@ -625,15 +631,51 @@ export default function ProductsPage() {
             <i className="ri-file-excel-2-line mr-2"></i>
             Export CSV
           </button>
-          <button
-            onClick={handlePrintStockList}
-            disabled={printing || loading}
-            className="px-5 py-3 border-2 border-gray-300 text-gray-700 rounded-lg font-semibold transition-colors whitespace-nowrap cursor-pointer flex items-center justify-center hover:border-gray-400 disabled:opacity-50 disabled:cursor-not-allowed"
-            title="Generate a printable PDF of all products, variants and current stock"
-          >
-            <i className={`mr-2 ${printing ? 'ri-loader-4-line animate-spin' : 'ri-printer-line'}`}></i>
-            {printing ? 'Preparing…' : 'Print stock list'}
-          </button>
+          <div className="relative">
+            <button
+              onClick={() => setShowPrintParts((open) => !open)}
+              disabled={printing || loading}
+              className="px-5 py-3 border-2 border-gray-300 text-gray-700 rounded-lg font-semibold transition-colors whitespace-nowrap cursor-pointer flex items-center justify-center hover:border-gray-400 disabled:opacity-50 disabled:cursor-not-allowed"
+              title={`Generate printable PDFs of products, variants and current stock, ${STOCK_PRINT_PART_SIZE} products per part`}
+            >
+              <i className={`mr-2 ${printing ? 'ri-loader-4-line animate-spin' : 'ri-printer-line'}`}></i>
+              {printing ? 'Preparing…' : 'Print stock list'}
+              {!printing && <i className="ri-arrow-down-s-line ml-1"></i>}
+            </button>
+            {showPrintParts && (
+              <div className="absolute right-0 mt-2 w-72 bg-white border border-gray-200 rounded-lg shadow-lg z-20">
+                <div className="px-4 py-3 border-b border-gray-100">
+                  <p className="text-sm font-semibold text-gray-900">Choose a part to print</p>
+                  <p className="text-xs text-gray-500 mt-0.5">
+                    {filteredProducts.length} products, {STOCK_PRINT_PART_SIZE} per part. Uses the current filters.
+                  </p>
+                </div>
+                <div className="max-h-80 overflow-y-auto py-1">
+                  {filteredProducts.length === 0 ? (
+                    <p className="px-4 py-3 text-sm text-gray-500">No products match the current filters.</p>
+                  ) : (
+                    Array.from(
+                      { length: Math.ceil(filteredProducts.length / STOCK_PRINT_PART_SIZE) },
+                      (_, i) => {
+                        const from = i * STOCK_PRINT_PART_SIZE + 1;
+                        const to = Math.min((i + 1) * STOCK_PRINT_PART_SIZE, filteredProducts.length);
+                        return (
+                          <button
+                            key={i}
+                            onClick={() => handlePrintStockList(i)}
+                            className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center justify-between cursor-pointer"
+                          >
+                            <span className="font-medium">Part {i + 1}</span>
+                            <span className="text-gray-500">Products {from}–{to}</span>
+                          </button>
+                        );
+                      },
+                    )
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
           <Link
             href="/admin/products/new"
             className="px-6 py-3 bg-blue-700 hover:bg-blue-800 text-white rounded-lg font-semibold transition-colors whitespace-nowrap cursor-pointer flex items-center justify-center md:items-start"
