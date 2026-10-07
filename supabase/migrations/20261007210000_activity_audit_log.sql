@@ -136,7 +136,7 @@ BEGIN
   END IF;
 
   v_label := coalesce(
-    v_row ->> 'order_number', v_row ->> 'name', v_row ->> 'title', v_row ->> 'code',
+    v_row ->> 'order_number', v_row ->> 'product_name', v_row ->> 'name', v_row ->> 'title', v_row ->> 'code',
     v_row ->> 'sku', v_row ->> 'key', v_row ->> 'email', v_row ->> 'full_name', v_id
   );
 
