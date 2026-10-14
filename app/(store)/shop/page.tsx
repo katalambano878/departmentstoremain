@@ -253,8 +253,7 @@ function ShopContent() {
             const from = (page - 1) * productsPerPage;
             const to = from + productsPerPage - 1;
             const result = await query.range(from, to);
-            // Ordering embedded images in this query makes PostgREST answer
-            // 416 once the page offset passes the joined rows.
+            // A leftover ?page= from a longer list asks past the last row.
             if (isRangeNotSatisfiable(result.error)) {
               return { data: [], count: result.count ?? 0, error: null };
             }
@@ -306,6 +305,10 @@ function ShopContent() {
               colorVariants
             };
           });
+          if (page > 1 && formattedProducts.length === 0) {
+            goToPage(1, false);
+            return;
+          }
           setProducts(formattedProducts);
           setTotalProducts(count || 0);
         }
@@ -317,7 +320,7 @@ function ShopContent() {
     }
 
     fetchProducts();
-  }, [selectedCategory, priceRange, selectedRating, sortBy, page, searchParams]);
+  }, [selectedCategory, priceRange, selectedRating, sortBy, page, searchParams, goToPage]);
 
   const totalPages = Math.ceil(totalProducts / productsPerPage);
 

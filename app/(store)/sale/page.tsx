@@ -170,6 +170,10 @@ function SaleContent() {
                     };
                 });
 
+                if (page > 1 && formatted.length === 0) {
+                    setParam({ page: null }, false);
+                    return;
+                }
                 setProducts(formatted);
                 setTotalProducts(count || 0);
             } catch (err) {
@@ -179,7 +183,7 @@ function SaleContent() {
             }
         }
         fetchProducts();
-    }, [selectedCategory, sortBy, page, salesActive]);
+    }, [selectedCategory, sortBy, page, salesActive, setParam]);
 
     const totalPages = Math.ceil(totalProducts / PRODUCTS_PER_PAGE);
 
