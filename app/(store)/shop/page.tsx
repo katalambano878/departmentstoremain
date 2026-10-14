@@ -11,6 +11,12 @@ import { cachedQuery } from '@/lib/query-cache';
 import { rememberShopListingPath } from '@/lib/shopListingReturn';
 import PageHero from '@/components/PageHero';
 import { applyStorefrontProductFilter } from '@/lib/product-visibility';
+import { isRangeNotSatisfiable } from '@/lib/supabase-paginate';
+
+function coverImage(images: { url?: string; position?: number }[] | null | undefined) {
+  const sorted = [...(images || [])].sort((a, b) => (a.position ?? 0) - (b.position ?? 0));
+  return sorted[0]?.url || 'https://via.placeholder.com/800x800?text=No+Image';
+}
 
 function ShopContent() {
   usePageTitle('Shop All Products');
@@ -127,8 +133,7 @@ function ShopContent() {
                   product_variants(id, name, price, quantity, option1, option2, image_url)
                 `)
               )
-                .in('id', hits.map((h: any) => h.id))
-                .order('position', { foreignTable: 'product_images', ascending: true });
+                .in('id', hits.map((h: any) => h.id));
 
               // Price / rating filters still apply on top of search results
               if (priceRange[1] < 5000) {
@@ -196,8 +201,7 @@ function ShopContent() {
                 product_images!product_id(url, position),
                 product_variants(id, name, price, quantity, option1, option2, image_url)
               `, { count: 'exact' })
-            )
-              .order('position', { foreignTable: 'product_images', ascending: true });
+            );
 
             // Category Filter with Subcategories
             if (selectedCategory !== 'all') {
@@ -248,9 +252,13 @@ function ShopContent() {
             // Pagination
             const from = (page - 1) * productsPerPage;
             const to = from + productsPerPage - 1;
-            query = query.range(from, to);
-
-            return query as any;
+            const result = await query.range(from, to);
+            // Ordering embedded images in this query makes PostgREST answer
+            // 416 once the page offset passes the joined rows.
+            if (isRangeNotSatisfiable(result.error)) {
+              return { data: [], count: result.count ?? 0, error: null };
+            }
+            return result;
           },
           2 * 60 * 1000 // Cache for 2 minutes
         );
@@ -284,7 +292,7 @@ function ShopContent() {
               name: p.name,
               price: p.price,
               originalPrice: p.compare_at_price,
-              image: p.product_images?.[0]?.url || 'https://via.placeholder.com/800x800?text=No+Image',
+              image: coverImage(p.product_images),
               rating: p.rating_avg || 0,
               reviewCount: 0, // Need to implement reviews relation
               badge: p.compare_at_price > p.price ? 'Sale' : undefined, // Simple badge logic
@@ -315,13 +323,10 @@ function ShopContent() {
 
   // If ?page= is past the last page (e.g. after filters shrink results), clamp the URL
   useEffect(() => {
-    if (loading || totalPages < 1 || page <= totalPages) return;
-    const params = new URLSearchParams(searchParams.toString());
-    if (totalPages <= 1) params.delete('page');
-    else params.set('page', String(totalPages));
-    const qs = params.toString();
-    router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
-  }, [loading, totalPages, page, pathname, router, searchParams]);
+    if (loading || page <= 1) return;
+    if (totalPages >= 1 && page <= totalPages) return;
+    goToPage(totalPages >= 1 ? totalPages : 1, false);
+  }, [loading, totalPages, page, goToPage]);
 
   return (
     <main className="min-h-screen bg-white">

@@ -9,6 +9,7 @@ import {
     normalizeProductVisibility,
     type ProductVisibility,
 } from '@/lib/product-visibility';
+import { slugify } from '@/lib/slug';
 
 interface ProductFormProps {
     initialData?: any;
@@ -312,7 +313,7 @@ export default function ProductForm({ initialData, isEditMode = false }: Product
 
     useEffect(() => {
         if (!isEditMode && productName && !urlSlug) {
-            setUrlSlug(productName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)+/g, ''));
+            setUrlSlug(slugify(productName));
         }
     }, [productName, isEditMode, urlSlug]);
 
@@ -475,7 +476,7 @@ export default function ProductForm({ initialData, isEditMode = false }: Product
 
             const productData = {
                 name: productName,
-                slug: urlSlug || productName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)+/g, ''),
+                slug: slugify(urlSlug) || slugify(productName) || `product-${Date.now()}`,
                 description,
                 category_id: categoryId || null,
                 ...pricingFields,
@@ -1572,7 +1573,7 @@ export default function ProductForm({ initialData, isEditMode = false }: Product
                                     </div>
                                 ))}
 
-                                <label className={`aspect-square border-2 border-dashed border-gray-300 rounded-xl hover:border-blue-700 hover:bg-blue-50 transition-colors flex flex-col items-center justify-center space-y-2 text-gray-600 hover:text-blue-700 cursor-pointer ${uploading ? 'opacity-50 cursor-not-allowed' : ''}`}>
+                                <label className={`aspect-square border-2 border-dashed border-gray-300 rounded-xl hover:border-blue-700 transition-colors flex flex-col items-center justify-center space-y-2 text-gray-600 hover:text-blue-700 cursor-pointer ${uploading ? 'opacity-50 cursor-not-allowed' : ''}`}>
                                     {uploading ? <i className="ri-loader-4-line animate-spin text-3xl"></i> : <i className="ri-upload-2-line text-3xl"></i>}
                                     <span className="text-sm font-semibold text-center px-2">{uploading ? 'Uploading...' : 'Upload Images'}</span>
                                     <span className="text-xs text-gray-400">Tap to select multiple</span>
@@ -1629,6 +1630,7 @@ export default function ProductForm({ initialData, isEditMode = false }: Product
                                         type="text"
                                         value={urlSlug}
                                         onChange={(e) => setUrlSlug(e.target.value)}
+                                        onBlur={() => setUrlSlug(slugify(urlSlug))}
                                         className="flex-1 px-4 py-3 border-2 border-gray-300 rounded-r-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                                         placeholder="product-slug"
                                     />

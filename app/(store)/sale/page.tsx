@@ -10,6 +10,12 @@ import { cachedQuery } from '@/lib/query-cache';
 import { rememberShopListingPath } from '@/lib/shopListingReturn';
 import PageHero from '@/components/PageHero';
 import { applyStorefrontProductFilter } from '@/lib/product-visibility';
+import { isRangeNotSatisfiable } from '@/lib/supabase-paginate';
+
+function coverImage(images: { url?: string; position?: number }[] | null | undefined) {
+    const sorted = [...(images || [])].sort((a, b) => (a.position ?? 0) - (b.position ?? 0));
+    return sorted[0]?.url || 'https://via.placeholder.com/800x800?text=No+Image';
+}
 
 const PRODUCTS_PER_PAGE = 12;
 
@@ -102,8 +108,7 @@ function SaleContent() {
                                     { count: 'exact' },
                                 )
                         )
-                            .eq('on_sale', true)
-                            .order('position', { foreignTable: 'product_images', ascending: true });
+                            .eq('on_sale', true);
 
                         if (selectedCategory !== 'all') {
                             query = query.eq('categories.slug', selectedCategory);
@@ -114,10 +119,11 @@ function SaleContent() {
                         else query = query.order('created_at', { ascending: false });
 
                         const from = (page - 1) * PRODUCTS_PER_PAGE;
-                        query = query.range(from, from + PRODUCTS_PER_PAGE - 1);
-
-                        const { data, count, error } = await query;
-                        return { data, count, error };
+                        const result = await query.range(from, from + PRODUCTS_PER_PAGE - 1);
+                        if (isRangeNotSatisfiable(result.error)) {
+                            return { data: [], count: result.count ?? 0, error: null };
+                        }
+                        return result;
                     },
                 );
 
@@ -151,7 +157,7 @@ function SaleContent() {
                         name: p.name,
                         price: p.price,
                         originalPrice: p.compare_at_price,
-                        image: p.product_images?.[0]?.url || 'https://via.placeholder.com/800x800?text=No+Image',
+                        image: coverImage(p.product_images),
                         rating: p.rating_avg || 0,
                         reviewCount: 0,
                         inStock: effectiveStock > 0,
@@ -176,6 +182,12 @@ function SaleContent() {
     }, [selectedCategory, sortBy, page, salesActive]);
 
     const totalPages = Math.ceil(totalProducts / PRODUCTS_PER_PAGE);
+
+    useEffect(() => {
+        if (loading || salesActive !== true || page <= 1) return;
+        if (totalPages >= 1 && page <= totalPages) return;
+        setParam({ page: totalPages > 1 ? String(totalPages) : null }, false);
+    }, [loading, salesActive, totalPages, page, setParam]);
 
     return (
         <main className="min-h-screen bg-white">

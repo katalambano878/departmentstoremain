@@ -27,6 +27,17 @@
  * The factory must build a fresh PostgrestFilterBuilder on every call
  * because each call needs its own `.range()`.
  */
+/** PostgREST 416: the requested page starts past the last row. */
+export function isRangeNotSatisfiable(error: { code?: string; message?: string } | null | undefined): boolean {
+    if (!error) return false;
+    const message = String(error.message || '');
+    return (
+        error.code === 'PGRST103' ||
+        /range not satisfiable/i.test(message) ||
+        /requested range not satisfiable/i.test(message)
+    );
+}
+
 export async function fetchAllPaged<T>(
     queryFactory: () => any,
     options: { pageSize?: number; hardCap?: number } = {}
@@ -41,12 +52,7 @@ export async function fetchAllPaged<T>(
         const to = from + pageSize - 1;
         const { data, error } = await queryFactory().range(from, to);
         if (error) {
-            const message = String(error.message || '');
-            const rangeExhausted =
-                error.code === 'PGRST103' ||
-                /range not satisfiable/i.test(message) ||
-                /requested range not satisfiable/i.test(message);
-            if (rangeExhausted) break;
+            if (isRangeNotSatisfiable(error)) break;
             throw error;
         }
         const rows = (data ?? []) as T[];

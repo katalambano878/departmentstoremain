@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
+import { slugify } from '@/lib/slug';
 import { cachedQuery } from '@/lib/query-cache';
 import ProductCard from '@/components/ProductCard';
 import ProductReviews from '@/components/ProductReviews';
@@ -86,24 +87,31 @@ export default function ProductDetailClient({ slug }: { slug: string }) {
         const { data: productData, error } = await cachedQuery<{ data: any; error: any }>(
           `product:${slug}`,
           async () => {
-            let query = supabase
-              .from('products')
-              .select(`
+            const select = `
                 *,
                 categories(name),
                 product_variants(*),
                 product_images(url, position, alt_text, variant_id)
-              `);
-
+              `;
             const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(slug);
+            const load = (value: string) => {
+              let query = supabase.from('products').select(select);
+              if (isUUID) query = query.or(`id.eq.${slug},slug.eq.${value}`);
+              else query = query.eq('slug', value);
+              return query.maybeSingle();
+            };
 
-            if (isUUID) {
-              query = query.or(`id.eq.${slug},slug.eq.${slug}`);
-            } else {
-              query = query.eq('slug', slug);
+            let decoded = slug;
+            try {
+              decoded = decodeURIComponent(slug);
+            } catch {
+              decoded = slug;
             }
-
-            return query.single() as any;
+            const first = await load(decoded);
+            if (first.data || first.error || isUUID) return first;
+            const cleaned = slugify(decoded);
+            if (!cleaned || cleaned === decoded) return first;
+            return load(cleaned);
           },
           2 * 60 * 1000 // 2 minutes
         );
