@@ -414,6 +414,33 @@ export default function POSPage() {
         setCheckoutError(null);
 
         try {
+            const productIds = [...new Set(cart.map((item) => item.productId))];
+            const { data: liveProducts, error: livePriceError } = await supabase
+                .from('products')
+                .select('id, price, product_variants(id, price)')
+                .in('id', productIds);
+            if (livePriceError) throw livePriceError;
+
+            const liveById = new Map((liveProducts || []).map((product) => [product.id, product]));
+            let pricesChanged = false;
+            const pricedCart = cart.map((item) => {
+                const product = liveById.get(item.productId);
+                if (!product) return item;
+                const variant = item.variantId
+                    ? (product.product_variants || []).find((row: { id: string }) => row.id === item.variantId)
+                    : null;
+                const livePrice = Number(variant?.price ?? product.price);
+                if (!Number.isFinite(livePrice) || Math.abs(livePrice - item.price) < 0.001) return item;
+                pricesChanged = true;
+                return { ...item, price: livePrice };
+            });
+            if (pricesChanged) {
+                setCart(pricedCart);
+                setCheckoutError('A product price was updated. The total has been refreshed. Check it, then complete the sale again.');
+                setProcessing(false);
+                return;
+            }
+
             const orderNumber = `ORD-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
             const customerName = getCustomerFullName();
             const customerEmail = getOrderEmail();
@@ -478,7 +505,7 @@ export default function POSPage() {
             if (orderError) throw orderError;
 
             // 2. Create Order Items (with product_name, unit_price, total_price)
-            const orderItems = cart.map(item => ({
+            const orderItems = pricedCart.map(item => ({
                 order_id: order.id,
                 product_id: item.productId,
                 variant_id: item.variantId || null,

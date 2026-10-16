@@ -495,13 +495,28 @@ export default function ProductForm({ initialData, isEditMode = false }: Product
             let productId = initialData?.id;
             let error;
 
+            const chargedPrice = Number(pricingFields.price);
             if (isEditMode && productId) {
-                const { error: updateError } = await supabase.from('products').update(productData).eq('id', productId);
+                const { data: saved, error: updateError } = await supabase
+                    .from('products')
+                    .update(productData)
+                    .eq('id', productId)
+                    .select('id, price')
+                    .maybeSingle();
                 error = updateError;
+                if (!updateError && !saved) {
+                    throw new Error('The price was not saved. Sign in with an admin account and try again.');
+                }
+                if (saved && Math.abs(Number(saved.price) - chargedPrice) >= 0.001) {
+                    throw new Error(`The price saved as GH₵${Number(saved.price).toFixed(2)}, not GH₵${chargedPrice.toFixed(2)}.`);
+                }
             } else {
-                const { data: newProduct, error: insertError } = await supabase.from('products').insert([productData]).select().single();
+                const { data: newProduct, error: insertError } = await supabase.from('products').insert([productData]).select('id, price').single();
                 if (newProduct) productId = newProduct.id;
                 error = insertError;
+                if (newProduct && Math.abs(Number(newProduct.price) - chargedPrice) >= 0.001) {
+                    throw new Error(`The price saved as GH₵${Number(newProduct.price).toFixed(2)}, not GH₵${chargedPrice.toFixed(2)}.`);
+                }
             }
 
             if (error) throw error;
