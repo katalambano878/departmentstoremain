@@ -3,6 +3,13 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 
+/** coupons.type (discount_type enum) -> label shown in the table. */
+const TYPE_LABELS: Record<string, string> = {
+  percentage: 'Percentage',
+  fixed_amount: 'Fixed Amount',
+  free_shipping: 'Free Shipping',
+};
+
 export default function AdminCouponsPage() {
   const [showAddModal, setShowAddModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
@@ -28,13 +35,16 @@ export default function AdminCouponsPage() {
         setCoupons(data.map((c: any) => ({
           id: c.id,
           code: c.code,
-          type: c.discount_type || 'Percentage', // Adjust key if needed (e.g. type)
-          value: c.discount_value || c.value || 0,
-          minPurchase: c.min_purchase_amount || 0,
+          type: TYPE_LABELS[c.type] || 'Percentage',
+          value: Number(c.value) || 0,
+          minPurchase: Number(c.minimum_purchase) || 0,
           usageLimit: c.usage_limit || null,
-          usedCount: c.times_used || 0,
+          usedCount: c.usage_count || 0,
           startDate: c.start_date ? new Date(c.start_date).toLocaleDateString() : 'N/A',
           endDate: c.end_date ? new Date(c.end_date).toLocaleDateString() : null,
+          // yyyy-mm-dd for the edit form's date input
+          endDateInput: c.end_date ? String(c.end_date).slice(0, 10) : '',
+          isActive: c.is_active !== false,
           status: isCouponActive(c) ? 'Active' : 'Expired' // Derive status
         })));
       }
@@ -77,8 +87,8 @@ export default function AdminCouponsPage() {
       discount_value: coupon.value || 0,
       min_purchase_amount: coupon.minPurchase || 0,
       usage_limit: coupon.usageLimit || 0,
-      end_date: coupon.endDate || '',
-      is_active: coupon.status === 'Active'
+      end_date: coupon.endDateInput || '',
+      is_active: coupon.isActive
     });
     setShowEditModal(true);
   };
@@ -89,13 +99,15 @@ export default function AdminCouponsPage() {
 
   const handleSaveCoupon = async () => {
     if (!couponForm.code.trim()) { alert('Please enter a coupon code'); return; }
-    if (couponForm.discount_value <= 0) { alert('Please enter a discount value'); return; }
+    const freeShipping = couponForm.discount_type === 'free_shipping';
+    if (!freeShipping && couponForm.discount_value <= 0) { alert('Please enter a discount value'); return; }
+    if (couponForm.discount_type === 'percentage' && couponForm.discount_value > 100) { alert('A percentage discount cannot be more than 100%'); return; }
 
     const payload = {
       code: couponForm.code.toUpperCase().trim(),
-      discount_type: couponForm.discount_type,
-      discount_value: couponForm.discount_value,
-      min_purchase_amount: couponForm.min_purchase_amount || 0,
+      type: couponForm.discount_type,
+      value: freeShipping ? 0 : couponForm.discount_value,
+      minimum_purchase: couponForm.min_purchase_amount || 0,
       usage_limit: couponForm.usage_limit || null,
       end_date: couponForm.end_date || null,
       is_active: couponForm.is_active

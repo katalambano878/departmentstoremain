@@ -46,7 +46,8 @@ export default function AdminReviewsPage() {
           title: r.title,
           comment: r.content,
           date: new Date(r.created_at).toLocaleDateString(),
-          status: r.status || 'Pending',
+          // Shown as Pending / Approved / Rejected; stored lowercase.
+          status: r.status ? r.status.charAt(0).toUpperCase() + r.status.slice(1) : 'Pending',
           helpful: r.helpful || 0
         }));
         setReviews(formatted);
@@ -113,8 +114,9 @@ export default function AdminReviewsPage() {
     if (selectedReviews.length === 0) return;
     try {
       let newStatus = '';
-      if (action === 'Approve') newStatus = 'Approved';
-      if (action === 'Reject') newStatus = 'Rejected';
+      // review_status enum values are lowercase.
+      if (action === 'Approve') newStatus = 'approved';
+      if (action === 'Reject') newStatus = 'rejected';
 
       if (newStatus) {
         const { error } = await supabase

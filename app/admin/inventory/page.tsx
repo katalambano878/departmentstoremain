@@ -221,7 +221,7 @@ export default function InventoryManagementPage() {
                   >
                     {filter === 'all' && 'All'}
                     {filter === 'low' && 'Low Stock'}
-                    {filter === 'out' && 'Out (0)'}
+                    {filter === 'out' && `Out (${outOfStockCount})`}
                     {filter === 'good' && 'In Stock'}
                   </button>
                 ))}
