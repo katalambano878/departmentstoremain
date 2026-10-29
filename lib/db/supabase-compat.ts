@@ -470,7 +470,7 @@ export class QueryBuilder implements PromiseLike<{ data: any; error: any; count:
     const clauses: string[] = [];
     const embedFilters = new Map<string, Filter[]>();
     for (const f of this.filters) {
-      if (f.kind === "cmp" && f.col!.includes(".")) {
+      if (isEmbedFilter(f)) {
         const alias = f.col!.slice(0, f.col!.indexOf("."));
         embedFilters.set(alias, [...(embedFilters.get(alias) || []), f]);
       }
@@ -481,33 +481,9 @@ export class QueryBuilder implements PromiseLike<{ data: any; error: any; count:
       throw new Error("Embedded filters are only supported on reads");
     }
     for (const f of this.filters) {
-      if (f.kind === "cmp" && f.col!.includes(".")) continue;
-      if (f.kind === "cmp") {
-        clauses.push(this.cmpClause(f.col!, f.op!, f.value, params));
-      } else if (f.kind === "in") {
-        if (!f.values || f.values.length === 0) {
-          clauses.push("false");
-        } else {
-          const ph = f.values.map((v) => {
-            params.push(v);
-            return `$${params.length}`;
-          });
-          clauses.push(`${colExpr(f.col!)} IN (${ph.join(",")})`);
-        }
-      } else if (f.kind === "notIn") {
-        const raw = String(f.value).replace(/^\(|\)$/g, "").trim();
-        if (!raw) { clauses.push("true"); continue; }
-        const vals = raw.split(",").map((s) => s.trim());
-        const ph = vals.map((v) => {
-          params.push(v);
-          return `$${params.length}`;
-        });
-        clauses.push(`(${colExpr(f.col!)} IS NULL OR ${colExpr(f.col!)} NOT IN (${ph.join(",")}))`);
-      } else if (f.kind === "is") {
-        clauses.push(this.isClause(f.col!, f.value));
-      } else if (f.kind === "notIs") {
-        const inner = this.isClause(f.col!, f.value);
-        clauses.push(`NOT (${inner})`);
+      if (isEmbedFilter(f)) continue;
+      if (f.kind === "cmp" || f.kind === "in" || f.kind === "notIn" || f.kind === "is" || f.kind === "notIs") {
+        clauses.push(this.columnClause(f, f.col!, params));
       } else if (f.kind === "or") {
         clauses.push(this.orClause(f.orParts!, params));
       } else if (f.kind === "raw") {
@@ -543,7 +519,7 @@ export class QueryBuilder implements PromiseLike<{ data: any; error: any; count:
       const conds: string[] = [];
       for (const f of embedFilters.get(e.alias) || []) {
         const col = f.col!.slice(f.col!.indexOf(".") + 1);
-        conds.push(this.cmpClause(col, f.op!, f.value, params, "e"));
+        conds.push(this.columnClause(f, col, params, "e"));
       }
       const fwd =
         e.fkColumn ?? (FK_MAP[this.table] || []).find((x) => x.foreignTable === e.table)?.column;
@@ -559,11 +535,41 @@ export class QueryBuilder implements PromiseLike<{ data: any; error: any; count:
     return out;
   }
 
-  private isClause(col: string, value: any): string {
-    if (value === null || value === "null") return `${colExpr(col)} IS NULL`;
-    if (value === true || value === "true") return `${colExpr(col)} IS TRUE`;
-    if (value === false || value === "false") return `${colExpr(col)} IS FALSE`;
-    if (value === "unknown") return `${colExpr(col)} IS UNKNOWN`;
+  /**
+   * One filter on one column (cmp, in, not in, is, not is). `tableAlias`
+   * qualifies the column when it lives on an `!inner` embedded table.
+   */
+  private columnClause(f: Filter, col: string, params: any[], tableAlias?: string): string {
+    const left = (tableAlias ? `${tableAlias}.` : "") + colExpr(col);
+    if (f.kind === "cmp") return this.cmpClause(col, f.op!, f.value, params, tableAlias);
+    if (f.kind === "in") {
+      if (!f.values || f.values.length === 0) return "false";
+      const ph = f.values.map((v) => {
+        params.push(v);
+        return `$${params.length}`;
+      });
+      return `${left} IN (${ph.join(",")})`;
+    }
+    if (f.kind === "notIn") {
+      const raw = String(f.value).replace(/^\(|\)$/g, "").trim();
+      if (!raw) return "true";
+      const ph = raw.split(",").map((v) => {
+        params.push(v.trim());
+        return `$${params.length}`;
+      });
+      return `(${left} IS NULL OR ${left} NOT IN (${ph.join(",")}))`;
+    }
+    if (f.kind === "is") return this.isClause(col, f.value, tableAlias);
+    if (f.kind === "notIs") return `NOT (${this.isClause(col, f.value, tableAlias)})`;
+    throw new Error(`Unsupported filter on ${col}`);
+  }
+
+  private isClause(col: string, value: any, tableAlias?: string): string {
+    const left = (tableAlias ? `${tableAlias}.` : "") + colExpr(col);
+    if (value === null || value === "null") return `${left} IS NULL`;
+    if (value === true || value === "true") return `${left} IS TRUE`;
+    if (value === false || value === "false") return `${left} IS FALSE`;
+    if (value === "unknown") return `${left} IS UNKNOWN`;
     // PostgREST only accepts null/true/false/unknown here. Never splice the
     // raw value into SQL: it arrives straight from the request query string.
     throw new Error(`Unsupported is value: ${String(value)}`);
@@ -1014,6 +1020,14 @@ export function pgError(err: any): { message: string; code: string | null; detai
 /** PostgREST accepts `*` as the wildcard in like/ilike patterns (URL-safe `%`). */
 function likePattern(op: string, value: any): any {
   return (op === "like" || op === "ilike") && typeof value === "string" ? value.replace(/\*/g, "%") : value;
+}
+
+/** A filter on a column of an embedded table, e.g. `categories.slug` (not a JSON path). */
+function isEmbedFilter(f: Filter): boolean {
+  return (
+    (f.kind === "cmp" || f.kind === "in" || f.kind === "notIn" || f.kind === "is" || f.kind === "notIs") &&
+    !!f.col && f.col.includes(".") && !f.col.includes("->")
+  );
 }
 
 function isCountOnly(parsed: ParsedSelect): boolean {
