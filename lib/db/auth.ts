@@ -289,7 +289,7 @@ export async function signUpWithPassword(opts: {
   // any later Supabase tooling expect it.
   await query(
     `INSERT INTO auth.identities (id, provider_id, user_id, identity_data, provider, created_at, updated_at)
-     VALUES (gen_random_uuid(), $1, $1::uuid, jsonb_build_object('sub', $1, 'email', $2::text, 'email_verified', false), 'email', now(), now())`,
+     VALUES (gen_random_uuid(), $1::text, $1::uuid, jsonb_build_object('sub', $1::text, 'email', $2::text, 'email_verified', false), 'email', now(), now())`,
     [id, email]
   ).catch((e) => console.warn("[auth] identity row not created:", e.message));
   // The on_auth_user_created trigger creates the customer profile.
@@ -529,7 +529,7 @@ export async function adminCreateUser(attrs: {
   );
   await query(
     `INSERT INTO auth.identities (id, provider_id, user_id, identity_data, provider, created_at, updated_at)
-     VALUES (gen_random_uuid(), $1, $1::uuid, jsonb_build_object('sub', $1, 'email', $2::text, 'email_verified', $3::boolean), 'email', now(), now())`,
+     VALUES (gen_random_uuid(), $1::text, $1::uuid, jsonb_build_object('sub', $1::text, 'email', $2::text, 'email_verified', $3::boolean), 'email', now(), now())`,
     [id, email, !!attrs.email_confirm]
   ).catch((e) => console.warn("[auth] identity row not created:", e.message));
   return { user: await getUserById(id), error: null };
