@@ -619,6 +619,8 @@ export default function POSPage() {
                     orderNumber,
                     total: grandTotal,
                     items: cart,
+                    // Fixed now: the cart (and grandTotal) is cleared right after.
+                    changeDue: paymentMethod === 'cash' ? changeDue : 0,
                     receiptSmsWarning: receiptSmsNote || undefined
                 });
 
@@ -1082,10 +1084,10 @@ export default function POSPage() {
                                         </p>
                                     )}
 
-                                    {!completedOrder.paymentPending && paymentMethod === 'cash' && changeDue > 0 && (
+                                    {!completedOrder.paymentPending && completedOrder.changeDue > 0 && (
                                         <div className="mt-3 bg-blue-50 border border-blue-200 rounded-lg p-3">
                                             <p className="text-sm text-blue-700">Change Due</p>
-                                            <p className="text-2xl font-bold text-blue-800">GH₵{changeDue.toFixed(2)}</p>
+                                            <p className="text-2xl font-bold text-blue-800">GH₵{completedOrder.changeDue.toFixed(2)}</p>
                                         </div>
                                     )}
 
