@@ -1,6 +1,7 @@
-// Discount Discovery Zone - Service Worker v6.0
+// Discount Discovery Zone - Service Worker v7.0
 //   v6: wipe every cache left from the Vercel host, and never store HTML.
-const CACHE_VERSION = 'ddz-v6.0-vercel-cutover';
+//   v7: the data API (/rest, /auth/v1, /storage) is served from this origin.
+const CACHE_VERSION = 'ddz-v7.0-plain-postgres';
 const STATIC_CACHE = `static-${CACHE_VERSION}`;
 const DYNAMIC_CACHE = `dynamic-${CACHE_VERSION}`;
 const IMAGE_CACHE = `images-${CACHE_VERSION}`;
@@ -49,7 +50,7 @@ self.addEventListener('install', (event) => {
 // non-current ones — to guarantee that any previously cached multimey
 // favicon/PWA icon is purged from every device on the next visit.
 self.addEventListener('activate', (event) => {
-  console.log('[SW] Activating v6.0 (hard cache wipe)...');
+  console.log('[SW] Activating v7.0 (hard cache wipe)...');
   event.waitUntil(
     (async () => {
       const keys = await caches.keys();
@@ -99,7 +100,7 @@ self.addEventListener('fetch', (event) => {
   if (
     request.destination === 'image' ||
     url.pathname.match(/\.(png|jpg|jpeg|gif|webp|svg|ico)$/) ||
-    url.hostname.includes('supabase.co') && url.pathname.includes('/storage/')
+    url.pathname.startsWith('/storage/v1/object/public/')
   ) {
     event.respondWith(
       caches.open(IMAGE_CACHE).then((cache) => {
@@ -128,7 +129,11 @@ self.addEventListener('fetch', (event) => {
   // auth tokens change constantly; stale responses here cause real bugs
   // (customers seeing an old cart, out-of-stock items, other people's
   // order tracking results, etc.).
-  if (url.pathname.startsWith('/api/')) {
+  if (
+    url.pathname.startsWith('/api/') ||
+    url.pathname.startsWith('/rest/') ||
+    url.pathname.startsWith('/auth/v1/')
+  ) {
     return; // let the browser handle it directly, no SW caching
   }
 

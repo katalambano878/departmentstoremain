@@ -1,4 +1,3 @@
-import { supabase } from '@/lib/supabase';
 import { supabaseAdmin } from '@/lib/supabase-admin';
 import { escapeHtml } from '@/lib/sanitize';
 import { getPublicSiteUrl } from '@/lib/site-url';
@@ -67,7 +66,7 @@ ${body}
 }
 
 // Reusable styled button
-function emailButton(text: string, href: string, color?: string): string {
+export function emailButton(text: string, href: string, color?: string): string {
     const bg = color || BRAND.color;
     return `<table role="presentation" cellpadding="0" cellspacing="0" style="margin:24px auto;"><tr>
 <td style="background-color:${bg};border-radius:8px;"><a href="${href}" target="_blank" style="display:inline-block;padding:14px 32px;color:#ffffff;font-size:15px;font-weight:600;text-decoration:none;letter-spacing:0.3px;">${text}</a></td>
@@ -97,7 +96,28 @@ function maskPhone(phone: string): string {
     return phone.slice(0, 4) + '****' + phone.slice(-2);
 }
 
+/**
+ * Staging runs on a copy of the live customer data. When NOTIFY_ALLOWLIST is
+ * set (comma-separated emails and phone numbers), email and SMS go only to
+ * those recipients, so testing never messages real customers. Unset in
+ * production, where everything is sent.
+ */
+function recipientAllowed(recipient: string, kind: 'email' | 'sms'): boolean {
+    const raw = process.env.NOTIFY_ALLOWLIST?.trim();
+    if (!raw) return true;
+    const allowed = raw.split(/[,\s]+/).map((v) => v.trim().toLowerCase()).filter(Boolean);
+    const ok = kind === 'email'
+        ? allowed.includes(recipient.trim().toLowerCase())
+        : allowed.some((v) => /\d/.test(v) && formatPhoneNumber(v) === formatPhoneNumber(recipient));
+    if (!ok) {
+        console.log(`[${kind === 'email' ? 'Email' : 'SMS'}] Skipped (not on NOTIFY_ALLOWLIST):`,
+            kind === 'email' ? recipient.split('@')[0].slice(0, 2) + '***' : maskPhone(recipient));
+    }
+    return ok;
+}
+
 export async function sendEmail({ to, subject, html }: { to: string; subject: string; html: string }) {
+    if (!recipientAllowed(to, 'email')) return null;
     const apiKey = process.env.POSTAL_API_KEY;
     if (!apiKey) {
         console.warn('[Email] POSTAL_API_KEY not configured');
@@ -190,6 +210,7 @@ async function sendViaTaysend(to: string, message: string, senderFallback?: stri
 
 export async function sendSMS({
  to, message }: { to: string; message: string }) {
+        if (!recipientAllowed(to, 'sms')) return null;
         const viaTaysend = await sendViaTaysend(formatPhoneNumber(to), message);
     if (viaTaysend) return viaTaysend;
 
@@ -365,7 +386,7 @@ export async function sendOrderConfirmation(order: any) {
     // Fetch order items to get preorder_shipping info
     let shippingNotes: string[] = [];
     try {
-        const { data: items } = await supabase
+        const { data: items } = await supabaseAdmin
             .from('order_items')
             .select('product_name, metadata')
             .eq('order_id', id);

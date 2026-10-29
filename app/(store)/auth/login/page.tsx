@@ -18,6 +18,7 @@ export default function LoginPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [authError, setAuthError] = useState('');
   const [passwordResetOk, setPasswordResetOk] = useState(false);
+  const [emailConfirmed, setEmailConfirmed] = useState(false);
   const { getToken, verifying } = useRecaptcha();
 
   useEffect(() => {
@@ -25,6 +26,9 @@ export default function LoginPage() {
     const params = new URLSearchParams(window.location.search);
     if (params.get('reset') === 'success') {
       setPasswordResetOk(true);
+    }
+    if (params.get('confirmed') === '1') {
+      setEmailConfirmed(true);
     }
   }, []);
 
@@ -93,6 +97,11 @@ export default function LoginPage() {
           {passwordResetOk && (
             <div className="mb-4 p-4 bg-green-50 border border-green-200 text-green-800 rounded-lg text-sm">
               Your password was updated. Sign in with your new password.
+            </div>
+          )}
+          {emailConfirmed && (
+            <div className="mb-4 p-4 bg-green-50 border border-green-200 text-green-800 rounded-lg text-sm">
+              Your email is confirmed. Sign in to continue.
             </div>
           )}
           {authError && (

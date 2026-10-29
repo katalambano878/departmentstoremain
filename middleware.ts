@@ -1,9 +1,12 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
+import { jwtVerify } from 'jose';
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+// The middleware runs on the edge and cannot reach the database. It checks the
+// session signature itself, then asks the app (same container, over loopback)
+// for the live role and the maintenance settings, so a demoted or banned
+// staff member loses the dashboard at once, as with the hosted Supabase check.
+const INTERNAL_ORIGIN = `http://127.0.0.1:${process.env.PORT || 3000}`;
 
 const MAINTENANCE_CACHE_TTL_MS = 30 * 1000;
 let maintenanceCache: {
@@ -13,68 +16,40 @@ let maintenanceCache: {
     fetchedAt: number;
 } | null = null;
 
-function parseSettingValue(raw: string): any {
-    try {
-        return JSON.parse(raw);
-    } catch {
-        return raw;
-    }
-}
+const ROLE_CACHE_TTL_MS = 30 * 1000;
+const roleCache = new Map<string, { userId: string; role: string; fetchedAt: number }>();
 
 function extractAuthToken(request: NextRequest): string | undefined {
-    let token: string | undefined;
-
-    // 1) Explicit cookie set after admin login
-    token = request.cookies.get('sb-access-token')?.value;
-
-    // 2) Supabase project cookie format
-    if (!token) {
-        const projectRef = supabaseUrl?.split('//')[1]?.split('.')[0];
-        token = request.cookies.get(`sb-${projectRef}-auth-token`)?.value;
-    }
-
-    // 3) Other Supabase auth cookie formats
-    if (!token) {
-        for (const [name, cookie] of request.cookies) {
-            if (name.startsWith('sb-') && (name.endsWith('-auth-token') || name.includes('auth'))) {
-                try {
-                    const parsed = JSON.parse(cookie.value);
-                    if (Array.isArray(parsed) && parsed[0]) {
-                        token = parsed[0];
-                    } else if (typeof parsed === 'object' && parsed.access_token) {
-                        token = parsed.access_token;
-                    } else if (typeof parsed === 'string') {
-                        token = parsed;
-                    }
-                } catch {
-                    token = cookie.value;
-                }
-                if (token) break;
-            }
-        }
-    }
-
-    return token;
+    // Set by the admin login page and kept fresh by the admin layout.
+    return request.cookies.get('sb-access-token')?.value || undefined;
 }
 
 async function getRoleFromToken(token: string): Promise<{ userId: string; role: string } | null> {
-    if (!supabaseServiceKey) return null;
+    const secret = process.env.AUTH_JWT_SECRET || process.env.JWT_SECRET;
+    if (!secret) return null;
     try {
-        const supabase = createClient(supabaseUrl, supabaseServiceKey, {
-            auth: { autoRefreshToken: false, persistSession: false }
+        const { payload } = await jwtVerify(token, new TextEncoder().encode(secret));
+        if (payload.typ === 'refresh' || typeof payload.sub !== 'string') return null;
+    } catch {
+        return null;
+    }
+
+    const now = Date.now();
+    const cached = roleCache.get(token);
+    if (cached && now - cached.fetchedAt < ROLE_CACHE_TTL_MS) {
+        return { userId: cached.userId, role: cached.role };
+    }
+    try {
+        const res = await fetch(`${INTERNAL_ORIGIN}/api/auth/session-role`, {
+            headers: { Authorization: `Bearer ${token}` },
+            cache: 'no-store',
         });
-
-        const { data: { user }, error } = await supabase.auth.getUser(token);
-        if (error || !user) return null;
-
-        const { data: profile } = await supabase
-            .from('profiles')
-            .select('role')
-            .eq('id', user.id)
-            .single();
-
-        if (!profile) return null;
-        return { userId: user.id, role: profile.role };
+        if (!res.ok) return null;
+        const body = (await res.json()) as { userId?: string; role?: string };
+        if (!body.userId || !body.role) return null;
+        if (roleCache.size > 500) roleCache.clear();
+        roleCache.set(token, { userId: body.userId, role: body.role, fetchedAt: now });
+        return { userId: body.userId, role: body.role };
     } catch {
         return null;
     }
@@ -99,10 +74,6 @@ async function getMaintenanceSettings(): Promise<{ enabled: boolean; until: stri
     const fromEnv = maintenanceFromEnv();
     if (fromEnv) return fromEnv;
 
-    if (!supabaseServiceKey) {
-        return { enabled: false, until: '', message: '' };
-    }
-
     const now = Date.now();
     if (maintenanceCache && now - maintenanceCache.fetchedAt < MAINTENANCE_CACHE_TTL_MS) {
         return {
@@ -113,28 +84,14 @@ async function getMaintenanceSettings(): Promise<{ enabled: boolean; until: stri
     }
 
     try {
-        const supabase = createClient(supabaseUrl, supabaseServiceKey, {
-            auth: { autoRefreshToken: false, persistSession: false }
-        });
-        const { data } = await supabase
-            .from('site_settings')
-            .select('key, value')
-            .in('key', ['maintenance_mode', 'maintenance_until', 'maintenance_message']);
-
-        const map: Record<string, any> = {};
-        (data || []).forEach((row: any) => {
-            map[row.key] = parseSettingValue(row.value);
-        });
-
-        const until = typeof map.maintenance_until === 'string' ? map.maintenance_until : '';
-        const untilMs = until ? new Date(until).getTime() : NaN;
-        const stillRunning = !until || Number.isNaN(untilMs) || untilMs > Date.now();
+        const res = await fetch(`${INTERNAL_ORIGIN}/api/site-status`, { cache: 'no-store' });
+        if (!res.ok) return { enabled: false, until: '', message: '' };
+        const body = (await res.json()) as { enabled?: boolean; until?: string; message?: string };
         const settings = {
-            enabled: (map.maintenance_mode === true || map.maintenance_mode === 'true') && stillRunning,
-            until,
-            message: typeof map.maintenance_message === 'string' ? map.maintenance_message : '',
+            enabled: body.enabled === true,
+            until: typeof body.until === 'string' ? body.until : '',
+            message: typeof body.message === 'string' ? body.message : '',
         };
-
         maintenanceCache = { ...settings, fetchedAt: now };
         return settings;
     } catch {
@@ -231,7 +188,9 @@ export async function middleware(request: NextRequest) {
 
 export const config = {
     matcher: [
-        '/((?!api|admin|_next/static|_next/image|favicon.ico|.*\\..*).*)',
+        // Storefront pages. The data API (/rest, /auth/v1, /storage) is
+        // served from this app now and must never hit the maintenance redirect.
+        '/((?!api|admin|rest/|auth/v1/|storage/|_next/static|_next/image|favicon.ico|.*\\..*).*)',
         '/admin/:path*',
         '/api/:path*',
     ],

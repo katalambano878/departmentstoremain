@@ -2,7 +2,9 @@
   "dependencies": {
     "@react-google-maps/api": "^2.19.3",
     "@supabase/supabase-js": "^2.91.1",
+    "bcryptjs": "^2.4.3",
     "html5-qrcode": "^2.3.8",
+    "jose": "^5.10.0",
     "jsbarcode": "^3.12.3",
     "next": "15.1.11",
     "pg": "^8.18.0",
@@ -13,7 +15,9 @@
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
+    "@types/bcryptjs": "^2.4.6",
     "@types/node": "^20",
+    "@types/pg": "^8.23.1",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "autoprefixer": "^10.4.21",
