@@ -40,6 +40,23 @@ the database with a fresh copy. Step 2 moves staging off both before the swap.
    security: none`, `SYNC OK` with 0 missing storage files. Any `MISMATCH`
    stops the cutover.
 
+   `supabase_login.sh` needs a working Supabase Management token in
+   `~/.config/supabase/crytoatm-access-token`. The one there stopped working
+   by 2026-11-13 ("Invalid access token"): make a new one at
+   supabase.com → Account → Access Tokens before the cutover day.
+
+3b. **Add the features Supabase does not have** (after `PARITY OK`, so the
+   parity check compares like with like). Run each as the database owner:
+   ```bash
+   for f in supabase/migrations/20261114090000_per_product_sale_switch.sql \
+            supabase/migrations/20261114091000_customer_birthdays.sql; do
+     (echo 'set role store_departmentstore;'; echo begin; cat "$f"; echo commit) \
+       | ssh big-vps 'docker exec -i fleet-postgres psql -v ON_ERROR_STOP=1 -U postgres -d store_departmentstore_new'
+   done
+   ```
+   The first adds the per-product sale on/off functions, the second the
+   customer birthday columns. Both are safe to run twice.
+
 4. **Swap the databases** (staging is stopped, so nothing is connected):
    ```sql
    ALTER DATABASE store_departmentstore RENAME TO store_departmentstore_staging_<date>;
@@ -63,9 +80,15 @@ the database with a fresh copy. Step 2 moves staging off both before the swap.
    - `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`,
      `SUPABASE_SERVICE_ROLE_KEY` are no longer read; leave them or delete them
    - add the volume: host `/data/coolify/departmentstore/storage` → `/app/storage`
+   - add a scheduled task **birthday-messages**, daily at `0 8 * * *`
+     (8:00 Accra time, the server runs on UTC), command:
+     `wget -qO- --header="Authorization: Bearer $CRON_SECRET" http://127.0.0.1:3000/api/cron/birthdays`
+     (same shape as the existing payment-reminders task). To check who is due
+     without sending, add `?dry=1` to the URL.
 
-6. **Ship the code:** merge `staging/plain-postgres` into `main`, push, and
-   deploy `departmentstore-app` from Coolify.
+6. **Ship the code:** merge `staging/plain-postgres` into `main` and push. The
+   push deploys `departmentstore-app` automatically; do not also start a
+   deploy from Coolify (that queues a second build).
 
 7. **Verify on the live domain** before turning maintenance off:
    `node ~/Documents/Websites/Migration/scripts/diagnose-site.mjs --base https://www.discountdiscoveryzone.com --supabase-url https://www.discountdiscoveryzone.com --anon-key x`

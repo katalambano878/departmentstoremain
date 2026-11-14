@@ -52,6 +52,16 @@ function salePrice(p: ProductRow): number | null {
     return null;
 }
 
+/** On sale and showing its discount right now (not paused). */
+function isLive(p: ProductRow): boolean {
+    return p.on_sale && p.pausedSalePrice == null;
+}
+
+/** On sale, but switched off: the shop shows the regular price. */
+function isPaused(p: ProductRow): boolean {
+    return p.on_sale && p.pausedSalePrice != null;
+}
+
 function discountPct(p: ProductRow): number {
     const reg = regularPrice(p);
     const sale = salePrice(p);
@@ -66,7 +76,7 @@ export default function AdminSalesPage() {
 
     const [search, setSearch] = useState('');
     const [categoryFilter, setCategoryFilter] = useState('');
-    const [saleFilter, setSaleFilter] = useState<'all' | 'on' | 'off'>('all');
+    const [saleFilter, setSaleFilter] = useState<'all' | 'on' | 'live' | 'paused' | 'off'>('all');
     const [page, setPage] = useState(1);
 
     const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -83,6 +93,8 @@ export default function AdminSalesPage() {
     const [toast, setToast] = useState<{ text: string; ok: boolean } | null>(null);
     const [salesActive, setSalesActive] = useState(true);
     const [togglingActive, setTogglingActive] = useState(false);
+    // A row's switch while its request is running: shows the new position at once.
+    const [switching, setSwitching] = useState<{ id: string; to: boolean } | null>(null);
 
     const fetchSalesActive = useCallback(async () => {
         const { data } = await supabase
@@ -153,6 +165,8 @@ export default function AdminSalesPage() {
             if (term && !p.name.toLowerCase().includes(term)) return false;
             if (categoryFilter && p.category !== categoryFilter) return false;
             if (saleFilter === 'on' && !p.on_sale) return false;
+            if (saleFilter === 'live' && !isLive(p)) return false;
+            if (saleFilter === 'paused' && !isPaused(p)) return false;
             if (saleFilter === 'off' && p.on_sale) return false;
             return true;
         });
@@ -167,6 +181,8 @@ export default function AdminSalesPage() {
     }, [search, categoryFilter, saleFilter]);
 
     const onSaleCount = useMemo(() => products.filter((p) => p.on_sale).length, [products]);
+    const liveCount = useMemo(() => products.filter(isLive).length, [products]);
+    const pausedCount = onSaleCount - liveCount;
 
     const allFilteredSelected =
         filtered.length > 0 && filtered.every((p) => selected.has(p.id));
@@ -209,14 +225,10 @@ export default function AdminSalesPage() {
 
     const toggleSalesActive = async () => {
         const next = !salesActive;
-        if (
-            !next &&
-            !confirm(
-                'Turn OFF all sales? Every product will revert to its normal price and the Sale page will be empty until you turn sales back on. Your sale setup is saved and will return when you switch it on.',
-            )
-        ) {
-            return;
-        }
+        const question = next
+            ? 'Turn ON all sales? Every paused sale goes live, including products you switched off one by one.'
+            : 'Turn OFF all sales? Every product goes back to its normal price, including products you switched on one by one. Each sale price is kept and returns when you switch it on again.';
+        if (!confirm(question)) return;
         setTogglingActive(true);
         try {
             await callApi({ action: 'set_active', active: next });
@@ -226,8 +238,8 @@ export default function AdminSalesPage() {
             await fetchProducts();
             setToast({
                 text: next
-                    ? 'Sales turned ON — discounts are live again.'
-                    : 'Sales turned OFF — all products are at normal prices.',
+                    ? 'All sales are ON. Every sale price is live.'
+                    : 'All sales are OFF. Every product is at its normal price.',
                 ok: true,
             });
         } catch (err: any) {
@@ -237,39 +249,88 @@ export default function AdminSalesPage() {
         }
     };
 
-    /** Optimistically apply the same math the server uses, so the table updates instantly. */
-    const applyLocal = (
-        ids: Set<string>,
-        kind: 'percentage' | 'fixed' | 'remove',
-        value?: number,
-    ) => {
+    /** Put the server's updated rows into the table. */
+    const mergeRows = (rows: any[] | undefined) => {
+        if (!rows?.length) return;
+        const byId = new Map(rows.map((r) => [r.id, r]));
         setProducts((prev) =>
             prev.map((p) => {
-                if (!ids.has(p.id)) return p;
-                if (kind === 'remove') {
-                    if (!p.on_sale) return p;
-                    return {
-                        ...p,
-                        price: p.compare_at_price ?? p.price,
-                        compare_at_price: null,
-                        on_sale: false,
-                    };
-                }
-                const reg = regularPrice(p);
-                if (reg <= 0) return p;
-                if (kind === 'percentage' && value) {
-                    const sale = Math.round(reg * (1 - value / 100) * 100) / 100;
-                    return { ...p, price: sale, compare_at_price: reg, on_sale: true };
-                }
-                if (kind === 'fixed' && value != null) {
-                    // Server only applies a fixed price to variant-free products
-                    // below the regular price; mirror that here.
-                    if (p.variantsCount > 0 || value <= 0 || value >= reg) return p;
-                    return { ...p, price: value, compare_at_price: reg, on_sale: true };
-                }
-                return p;
+                const r = byId.get(p.id);
+                if (!r) return p;
+                return {
+                    ...p,
+                    price: Number(r.price) || 0,
+                    compare_at_price: r.compare_at_price != null ? Number(r.compare_at_price) : null,
+                    on_sale: !!r.on_sale,
+                    pausedSalePrice:
+                        r.metadata?.paused_sale_price != null ? Number(r.metadata.paused_sale_price) : null,
+                };
             }),
         );
+    };
+
+    /** Switch one product's sale on or off. */
+    const toggleProductSale = async (p: ProductRow) => {
+        if (switching) return;
+        const next = !isLive(p);
+        setSwitching({ id: p.id, to: next });
+        try {
+            const json = await callApi({ action: 'set_product_active', active: next, productIds: [p.id] });
+            mergeRows(json?.products);
+            setVariantData((prev) => {
+                const copy = { ...prev };
+                delete copy[p.id];
+                return copy;
+            });
+            if (expandedId === p.id) setExpandedId(null);
+            setToast({
+                text: next ? `${p.name}: sale is on.` : `${p.name}: sale is off. It shows the normal price.`,
+                ok: true,
+            });
+        } catch (err: any) {
+            setToast({ text: err?.message || 'Could not switch the sale', ok: false });
+        } finally {
+            setSwitching(null);
+        }
+    };
+
+    /** Switch the selected products' sales on or off. */
+    const switchSelected = async (active: boolean) => {
+        const ids = Array.from(selected);
+        if (ids.length === 0) {
+            setToast({ text: 'Select at least one product first', ok: false });
+            return;
+        }
+        setBusy(true);
+        try {
+            const json = await callApi({ action: 'set_product_active', active, productIds: ids });
+            mergeRows(json?.products);
+            const changed = active
+                ? json?.result?.products_resumed ?? 0
+                : json?.result?.products_paused ?? 0;
+            setToast({
+                text: active
+                    ? `Switched on ${changed} sale${changed === 1 ? '' : 's'}.`
+                    : `Switched off ${changed} sale${changed === 1 ? '' : 's'}.`,
+                ok: true,
+            });
+            setSelected(new Set());
+            setVariantData({});
+            setExpandedId(null);
+        } catch (err: any) {
+            setToast({ text: err?.message || 'Action failed', ok: false });
+        } finally {
+            setBusy(false);
+        }
+    };
+
+    /** Extra toast text when a change left sales switched off. */
+    const pausedNote = (json: any) => {
+        const n = json?.paused ?? 0;
+        if (!n) return '';
+        return salesActive
+            ? ' Sales that were switched off stay off.'
+            : ' All sales are off, so new sale prices start switched off. Use the Live switch to turn one on.';
     };
 
     const runBulk = async (kind: 'percentage' | 'fixed' | 'remove') => {
@@ -301,18 +362,18 @@ export default function AdminSalesPage() {
         setBusy(true);
         try {
             const json = await callApi(payload);
-            applyLocal(new Set(ids), kind, value);
+            mergeRows(json?.products);
             const n = ids.length;
             if (kind === 'remove') {
                 setToast({ text: `Removed ${n} product${n > 1 ? 's' : ''} from sale`, ok: true });
             } else if (kind === 'percentage') {
-                setToast({ text: `Applied ${value}% off to ${n} product${n > 1 ? 's' : ''}`, ok: true });
+                setToast({ text: `Applied ${value}% off to ${n} product${n > 1 ? 's' : ''}.${pausedNote(json)}`, ok: true });
             } else {
                 const skipped = json?.skipped ?? 0;
                 setToast({
-                    text: skipped
+                    text: (skipped
                         ? `Set sale price on ${n - skipped} product${n - skipped !== 1 ? 's' : ''}. ${skipped} skipped (variant products / price not below regular).`
-                        : `Set sale price on ${n} product${n > 1 ? 's' : ''}`,
+                        : `Set sale price on ${n} product${n > 1 ? 's' : ''}.`) + pausedNote(json),
                     ok: true,
                 });
             }
@@ -341,10 +402,10 @@ export default function AdminSalesPage() {
         }
         setBusy(true);
         try {
-            await callApi({ action: 'apply', mode: 'fixed', value, productIds: [p.id] });
-            applyLocal(new Set([p.id]), 'fixed', value);
+            const json = await callApi({ action: 'apply', mode: 'fixed', value, productIds: [p.id] });
+            mergeRows(json?.products);
             setRowPrice((prev) => ({ ...prev, [p.id]: '' }));
-            setToast({ text: `${p.name} set to ${fmt(value)}`, ok: true });
+            setToast({ text: `${p.name} set to ${fmt(value)}.${pausedNote(json)}`, ok: true });
         } catch (err: any) {
             setToast({ text: err?.message || 'Action failed', ok: false });
         } finally {
@@ -355,8 +416,8 @@ export default function AdminSalesPage() {
     const removeRow = async (p: ProductRow) => {
         setBusy(true);
         try {
-            await callApi({ action: 'remove', productIds: [p.id] });
-            applyLocal(new Set([p.id]), 'remove');
+            const json = await callApi({ action: 'remove', productIds: [p.id] });
+            mergeRows(json?.products);
             // Variants were reverted server-side too — drop the cached rows.
             setVariantData((prev) => {
                 const next = { ...prev };
@@ -443,32 +504,22 @@ export default function AdminSalesPage() {
         }
         setBusy(true);
         try {
-            await callApi({ action: 'variant_prices', items });
-            const priced = new Map(items.map((i) => [i.variantId, i.price]));
-            const newRows = rows.map((v) => (priced.has(v.id) ? { ...v, sale: priced.get(v.id)! } : v));
-            setVariantData((prev) => ({ ...prev, [p.id]: newRows }));
-            // Mirror the server's product-row sync: cheapest charged price + badge.
-            const minCharged = Math.min(...newRows.map((v) => (v.sale != null ? v.sale : v.regular)));
-            setProducts((prev) =>
-                prev.map((row) =>
-                    row.id === p.id
-                        ? {
-                              ...row,
-                              on_sale: true,
-                              compare_at_price: regularPrice(row),
-                              price: minCharged,
-                              pausedSalePrice: null,
-                          }
-                        : row,
-                ),
-            );
+            const json = await callApi({ action: 'variant_prices', items });
+            mergeRows(json?.products);
+            // Reload this product's variants next time it is opened.
+            setVariantData((prev) => {
+                const copy = { ...prev };
+                delete copy[p.id];
+                return copy;
+            });
+            setExpandedId(null);
             setVariantInputs((prev) => {
                 const next = { ...prev };
                 items.forEach((i) => delete next[i.variantId]);
                 return next;
             });
             setToast({
-                text: `Set sale price on ${items.length} variant${items.length > 1 ? 's' : ''} of ${p.name}`,
+                text: `Set sale price on ${items.length} variant${items.length > 1 ? 's' : ''} of ${p.name}.${pausedNote(json)}`,
                 ok: true,
             });
         } catch (err: any) {
@@ -484,7 +535,7 @@ export default function AdminSalesPage() {
                 <div>
                     <h1 className="text-3xl font-bold text-gray-900">Sales</h1>
                     <p className="text-gray-600 mt-1">
-                        Put products on sale in bulk. Pick items, set a discount % or a fixed price, and apply.
+                        Set a discount % or a sale price, then switch each sale on or off, or all of them at once.
                     </p>
                 </div>
                 <Link
@@ -511,12 +562,15 @@ export default function AdminSalesPage() {
                     ></i>
                     <div>
                         <p className="font-semibold text-gray-900">
-                            Sales are currently {salesActive ? 'ON' : 'OFF'}
+                            All sales: {salesActive ? 'ON' : 'OFF'}
+                            <span className="ml-2 text-sm font-normal text-gray-600">
+                                {liveCount} live{pausedCount > 0 ? `, ${pausedCount} switched off` : ''}
+                            </span>
                         </p>
                         <p className="text-sm text-gray-600 mt-0.5 max-w-xl">
                             {salesActive
-                                ? 'Discounts are live on the storefront and the Sale page shows your sale items.'
-                                : 'All products show their normal prices and the Sale page is empty. Your sale setup is saved — turn it back on anytime.'}
+                                ? 'This switch turns every sale on or off at once. To switch one product, use its Live switch in the table.'
+                                : 'Every sale is off. You can still switch on single products with their Live switch in the table, or turn every sale back on here.'}
                         </p>
                     </div>
                 </div>
@@ -543,14 +597,18 @@ export default function AdminSalesPage() {
             </div>
 
             {/* Stats */}
-            <div className="grid grid-cols-3 gap-4">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
                 <div className="bg-white rounded-xl border border-gray-200 p-4">
                     <p className="text-sm text-gray-500">Total products</p>
                     <p className="text-2xl font-bold text-gray-900">{products.length}</p>
                 </div>
                 <div className="bg-white rounded-xl border border-gray-200 p-4">
-                    <p className="text-sm text-gray-500">On sale</p>
-                    <p className="text-2xl font-bold text-red-600">{onSaleCount}</p>
+                    <p className="text-sm text-gray-500">Sale live</p>
+                    <p className="text-2xl font-bold text-red-600">{liveCount}</p>
+                </div>
+                <div className="bg-white rounded-xl border border-gray-200 p-4">
+                    <p className="text-sm text-gray-500">Sale switched off</p>
+                    <p className="text-2xl font-bold text-amber-600">{pausedCount}</p>
                 </div>
                 <div className="bg-white rounded-xl border border-gray-200 p-4">
                     <p className="text-sm text-gray-500">Not on sale</p>
@@ -581,23 +639,18 @@ export default function AdminSalesPage() {
                 </select>
                 <select
                     value={saleFilter}
-                    onChange={(e) => setSaleFilter(e.target.value as 'all' | 'on' | 'off')}
+                    onChange={(e) => setSaleFilter(e.target.value as typeof saleFilter)}
                     className="px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
                 >
                     <option value="all">All products</option>
                     <option value="on">On sale</option>
+                    <option value="live">Sale live</option>
+                    <option value="paused">Sale switched off</option>
                     <option value="off">Not on sale</option>
                 </select>
             </div>
 
-            {/* Bulk action bar — only while sales are ON (editing while paused
-                would create an inconsistent discounted-but-hidden state). */}
-            {!salesActive ? (
-                <div className="bg-gray-50 border border-gray-200 rounded-xl p-4 text-sm text-gray-600 flex items-center gap-2">
-                    <i className="ri-information-line text-gray-400 text-lg"></i>
-                    Editing is disabled while sales are off. Turn sales on above to add or change product sales.
-                </div>
-            ) : (
+            {/* Bulk action bar */}
             <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 sticky top-2 z-20">
                 <div className="flex flex-col lg:flex-row lg:items-center gap-3">
                     <div className="flex items-center gap-2 lg:w-56">
@@ -654,6 +707,21 @@ export default function AdminSalesPage() {
                         </div>
 
                         <button
+                            onClick={() => switchSelected(true)}
+                            disabled={busy || selected.size === 0}
+                            className="px-4 py-2 bg-white border border-green-300 text-green-800 hover:bg-green-50 rounded-lg text-sm font-semibold disabled:opacity-50"
+                        >
+                            Switch on
+                        </button>
+                        <button
+                            onClick={() => switchSelected(false)}
+                            disabled={busy || selected.size === 0}
+                            className="px-4 py-2 bg-white border border-gray-300 text-gray-700 hover:bg-gray-50 rounded-lg text-sm font-semibold disabled:opacity-50"
+                        >
+                            Switch off
+                        </button>
+
+                        <button
                             onClick={() => runBulk('remove')}
                             disabled={busy || selected.size === 0}
                             className="px-4 py-2 bg-white border border-red-300 text-red-700 hover:bg-red-50 rounded-lg text-sm font-semibold disabled:opacity-50"
@@ -668,7 +736,6 @@ export default function AdminSalesPage() {
                     each variant&apos;s own sale price.
                 </p>
             </div>
-            )}
 
             {toast && (
                 <div
@@ -699,6 +766,7 @@ export default function AdminSalesPage() {
                                     <th className="p-3 font-semibold">Regular</th>
                                     <th className="p-3 font-semibold">Sale price</th>
                                     <th className="p-3 font-semibold">Off</th>
+                                    <th className="p-3 font-semibold">Live</th>
                                     <th className="p-3 font-semibold">Set price</th>
                                     <th className="p-3 font-semibold"></th>
                                 </tr>
@@ -716,8 +784,8 @@ export default function AdminSalesPage() {
                                                     type="checkbox"
                                                     checked={selected.has(p.id)}
                                                     onChange={() => toggleOne(p.id)}
-                                                    disabled={!salesActive}
-                                                    className="w-4 h-4 rounded border-gray-300 disabled:opacity-40"
+                                                    aria-label={`Select ${p.name}`}
+                                                    className="w-4 h-4 rounded border-gray-300"
                                                 />
                                             </td>
                                             <td className="p-3">
@@ -744,8 +812,8 @@ export default function AdminSalesPage() {
                                                 {sale != null ? (
                                                     <span className="font-semibold text-red-600">
                                                         {fmt(sale)}
-                                                        {!salesActive && (
-                                                            <span className="ml-1 text-[10px] font-normal text-amber-600">(paused)</span>
+                                                        {isPaused(p) && (
+                                                            <span className="ml-1 text-xs font-normal text-amber-700">(off)</span>
                                                         )}
                                                     </span>
                                                 ) : (
@@ -760,9 +828,35 @@ export default function AdminSalesPage() {
                                                 )}
                                             </td>
                                             <td className="p-3">
-                                                {!salesActive ? (
-                                                    <span className="text-xs text-gray-300">—</span>
-                                                ) : p.variantsCount > 0 ? (
+                                                {p.on_sale ? (() => {
+                                                    const pending = switching?.id === p.id;
+                                                    const on = pending ? switching!.to : isLive(p);
+                                                    return (
+                                                    <button
+                                                        type="button"
+                                                        role="switch"
+                                                        aria-checked={on}
+                                                        aria-busy={pending}
+                                                        aria-label={`Sale for ${p.name}`}
+                                                        onClick={() => toggleProductSale(p)}
+                                                        disabled={busy || togglingActive || !!switching}
+                                                        className={`relative inline-flex h-6 w-11 flex-shrink-0 items-center rounded-full transition-colors duration-200 disabled:cursor-not-allowed focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-green-600 ${
+                                                            on ? 'bg-green-600' : 'bg-gray-300'
+                                                        } ${pending ? 'opacity-60' : !!switching || busy || togglingActive ? 'opacity-50' : ''}`}
+                                                    >
+                                                        <span
+                                                            className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform duration-200 ${
+                                                                on ? 'translate-x-[22px]' : 'translate-x-0.5'
+                                                            }`}
+                                                        />
+                                                    </button>
+                                                    );
+                                                })() : (
+                                                    <span className="text-gray-400">—</span>
+                                                )}
+                                            </td>
+                                            <td className="p-3">
+                                                {p.variantsCount > 0 ? (
                                                     <button
                                                         onClick={() => toggleVariants(p)}
                                                         disabled={busy}
@@ -793,7 +887,7 @@ export default function AdminSalesPage() {
                                                 )}
                                             </td>
                                             <td className="p-3 text-right">
-                                                {salesActive && p.on_sale && (
+                                                {p.on_sale && (
                                                     <button
                                                         onClick={() => removeRow(p)}
                                                         disabled={busy}
@@ -807,7 +901,7 @@ export default function AdminSalesPage() {
                                         {expandedId === p.id && (
                                             <tr className="border-b border-gray-100 bg-blue-50/40">
                                                 <td className="p-0"></td>
-                                                <td colSpan={6} className="p-4">
+                                                <td colSpan={7} className="p-4">
                                                     {variantLoading && !variantData[p.id] ? (
                                                         <div className="text-sm text-gray-500 flex items-center gap-2">
                                                             <i className="ri-loader-4-line animate-spin"></i>

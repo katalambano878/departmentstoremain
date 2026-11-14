@@ -9,6 +9,7 @@ import ScrollToTop from '@/components/ScrollToTop';
 import ErrorBoundary from '@/components/ErrorBoundary';
 import NavigationProgress from '@/components/NavigationProgress';
 import CookieConsent from '@/components/CookieConsent';
+import WhatsAppChatButton from '@/components/WhatsAppChatButton';
 import { AffiliateProvider } from '@/context/AffiliateContext';
 // Lazy-load non-critical components
 import dynamic from 'next/dynamic';
@@ -56,6 +57,7 @@ export default function StoreLayout({
         <NetworkStatusMonitor />
         <UpdatePrompt />
         <LiveSalesNotification />
+        <WhatsAppChatButton />
         <CookieConsent />
       </div>
     </AffiliateProvider>
