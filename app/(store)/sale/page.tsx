@@ -67,18 +67,11 @@ function SaleContent() {
                 /* non-fatal */
             }
         }
-        async function fetchSalesActive() {
-            try {
-                const { data } = await supabase
-                    .from('site_settings')
-                    .select('value')
-                    .eq('key', 'sales_active')
-                    .maybeSingle();
-                // Missing row defaults to ON.
-                setSalesActive(!data ? true : data.value === true || data.value === 'true');
-            } catch {
-                setSalesActive(true);
-            }
+        // Each sale has its own on/off switch, so the page lists every live
+        // sale (switched-off sales have no compare-at price) instead of
+        // following the all-sales switch.
+        function fetchSalesActive() {
+            setSalesActive(true);
         }
         fetchCategories();
         fetchSalesActive();
@@ -108,7 +101,8 @@ function SaleContent() {
                                     { count: 'exact' },
                                 )
                         )
-                            .eq('on_sale', true);
+                            .eq('on_sale', true)
+                            .not('compare_at_price', 'is', null);
 
                         if (selectedCategory !== 'all') {
                             query = query.eq('categories.slug', selectedCategory);

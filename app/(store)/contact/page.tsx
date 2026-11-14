@@ -7,6 +7,7 @@ import PageHero from '@/components/PageHero';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { useRecaptcha } from '@/hooks/useRecaptcha';
 import { PUBLIC_CONTACT_EMAIL, PUBLIC_CONTACT_PHONE } from '@/lib/brand-contact';
+import { toWhatsAppDigits } from '@/components/WhatsAppChatButton';
 
 export default function ContactPage() {
   usePageTitle('Contact Us');
@@ -92,6 +93,8 @@ export default function ContactPage() {
   const contactEmail = getSetting('contact_email') || PUBLIC_CONTACT_EMAIL;
   const contactPhone = getSetting('contact_phone') || PUBLIC_CONTACT_PHONE;
   const contactAddress = getSetting('contact_address') || 'Accra, Ghana';
+  // Settings > WhatsApp chat number, else the contact phone (same as the chat button).
+  const whatsappDigits = toWhatsAppDigits(getSetting('whatsapp_number')) || toWhatsAppDigits(contactPhone);
 
   const heroTitle = pageContent?.title || 'Get In Touch';
   const heroSubtitle = pageContent?.subtitle || 'Have a question or need assistance?';
@@ -115,8 +118,8 @@ export default function ContactPage() {
     {
       icon: 'ri-whatsapp-line',
       title: 'WhatsApp',
-      value: contactPhone,
-      link: `https://wa.me/${contactPhone.replace(/[^0-9]/g, '')}`,
+      value: getSetting('whatsapp_number') || contactPhone,
+      link: `https://wa.me/${whatsappDigits}`,
       description: 'Chat with us instantly'
     },
     {
@@ -312,7 +315,7 @@ export default function ContactPage() {
                 Our customer support team is available Monday to Friday, 8am-6pm GMT. For urgent matters, reach out via WhatsApp.
               </p>
               <a
-                href={`https://wa.me/${contactPhone.replace(/[^0-9]/g, '')}`}
+                href={`https://wa.me/${whatsappDigits}`}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="inline-flex items-center gap-2 bg-white text-emerald-700 px-6 py-3 rounded-full font-medium hover:bg-emerald-50 transition-colors whitespace-nowrap"

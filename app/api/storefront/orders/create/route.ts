@@ -46,10 +46,22 @@ interface CreateOrderPayload {
     total: number;
     affiliate?: AffiliateMeta | null;
     items: IncomingItem[];
+    /** Optional birthday for the yearly birthday message (no year). */
+    birthdayMonth?: number | string | null;
+    birthdayDay?: number | string | null;
 }
 
 function badRequest(message: string, extra?: Record<string, unknown>) {
     return NextResponse.json({ error: message, ...(extra || {}) }, { status: 400 });
+}
+
+/** A real day of the year (Feb 29 allowed), or null. */
+function parseBirthday(rawMonth: unknown, rawDay: unknown): { month: number; day: number } | null {
+    const month = Number(rawMonth);
+    const day = Number(rawDay);
+    if (!Number.isInteger(month) || !Number.isInteger(day) || month < 1 || month > 12 || day < 1) return null;
+    const daysInMonth = [31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31][month - 1];
+    return day <= daysInMonth ? { month, day } : null;
 }
 
 export async function POST(req: Request) {
@@ -250,7 +262,7 @@ export async function POST(req: Request) {
         // --- Upsert the customer record (best-effort) ----------------------
         try {
             const fullName = `${body.shippingData?.firstName || ''} ${body.shippingData?.lastName || ''}`.trim();
-            await supabaseAdmin.rpc('upsert_customer_from_order', {
+            const { data: customerId } = await supabaseAdmin.rpc('upsert_customer_from_order', {
                 p_email: body.email,
                 p_phone: body.phone,
                 p_full_name: fullName,
@@ -259,6 +271,15 @@ export async function POST(req: Request) {
                 p_user_id: body.userId || null,
                 p_address: body.shippingData,
             });
+            // Optional birthday (day and month) for the yearly birthday message.
+            const birthday = parseBirthday(body.birthdayMonth, body.birthdayDay);
+            if (birthday && typeof customerId === 'string') {
+                const { error: bdayErr } = await supabaseAdmin
+                    .from('customers')
+                    .update({ birthday_month: birthday.month, birthday_day: birthday.day })
+                    .eq('id', customerId);
+                if (bdayErr) console.error('[OrdersCreate] birthday save failed (non-fatal):', bdayErr.message);
+            }
         } catch (custErr) {
             console.error('[OrdersCreate] upsert_customer_from_order failed (non-fatal):', custErr);
         }

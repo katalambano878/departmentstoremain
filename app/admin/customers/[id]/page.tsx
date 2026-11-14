@@ -5,6 +5,17 @@ import { supabase } from '@/lib/supabase';
 import { useRouter, useParams } from 'next/navigation';
 import Link from 'next/link';
 
+const MONTHS = [
+    'January', 'February', 'March', 'April', 'May', 'June',
+    'July', 'August', 'September', 'October', 'November', 'December',
+];
+const DAYS_IN_MONTH = [31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+
+function birthdayLabel(month?: number | null, day?: number | null): string | null {
+    if (!month || !day) return null;
+    return `${day} ${MONTHS[month - 1]}`;
+}
+
 export default function CustomerDetailsPage() {
     const router = useRouter();
     const params = useParams();
@@ -15,7 +26,7 @@ export default function CustomerDetailsPage() {
     const [loading, setLoading] = useState(true);
     const [editing, setEditing] = useState(false);
     const [saving, setSaving] = useState(false);
-    const [form, setForm] = useState({ full_name: '', email: '', phone: '' });
+    const [form, setForm] = useState({ full_name: '', email: '', phone: '', birthday_month: '', birthday_day: '' });
 
     useEffect(() => {
         if (customerId) {
@@ -91,17 +102,35 @@ export default function CustomerDetailsPage() {
             full_name: customer.full_name || '',
             email: customer.email || '',
             phone: customer.phone || '',
+            birthday_month: customer.birthday_month ? String(customer.birthday_month) : '',
+            birthday_day: customer.birthday_day ? String(customer.birthday_day) : '',
         });
         setEditing(true);
     };
 
     const saveCustomer = async () => {
+        if (!!form.birthday_month !== !!form.birthday_day) {
+            alert('Choose both the birthday month and day, or leave both empty.');
+            return;
+        }
         setSaving(true);
         try {
             const full_name = form.full_name.trim() || null;
+            const birthdayMonth = form.birthday_month ? Number(form.birthday_month) : null;
+            const birthdayDay = form.birthday_day ? Number(form.birthday_day) : null;
+            const birthdayChanged =
+                birthdayMonth !== (customer.birthday_month ?? null) || birthdayDay !== (customer.birthday_day ?? null);
             const updates =
                 customer.source === 'customers'
-                    ? { full_name, email: form.email.trim().toLowerCase() || null, phone: form.phone.trim() || null }
+                    ? {
+                          full_name,
+                          email: form.email.trim().toLowerCase() || null,
+                          phone: form.phone.trim() || null,
+                          birthday_month: birthdayMonth,
+                          birthday_day: birthdayDay,
+                          // A new date this year may still be ahead, so allow a greeting again.
+                          ...(birthdayChanged ? { birthday_greeted_year: null } : {}),
+                      }
                     : { full_name, phone: form.phone.trim() || null };
             const { error } = await supabase
                 .from(customer.source === 'customers' ? 'customers' : 'profiles')
@@ -143,6 +172,14 @@ export default function CustomerDetailsPage() {
                     <div>
                         <h1 className="text-3xl font-bold text-gray-900">{customer.full_name || 'No Name'}</h1>
                         <p className="text-gray-500">{customer.email}</p>
+                        {customer.source === 'customers' && (
+                            <p className="text-sm text-gray-500 mt-0.5">
+                                <i className="ri-cake-2-line mr-1" aria-hidden="true"></i>
+                                {birthdayLabel(customer.birthday_month, customer.birthday_day)
+                                    ? `Birthday: ${birthdayLabel(customer.birthday_month, customer.birthday_day)}`
+                                    : 'No birthday saved'}
+                            </p>
+                        )}
                     </div>
                 </div>
                 <div className="flex space-x-3">
@@ -197,6 +234,46 @@ export default function CustomerDetailsPage() {
                                     className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg"
                                 />
                             </label>
+                            {customer.source === 'customers' && (
+                                <fieldset>
+                                    <legend className="block text-sm font-semibold text-gray-700 mb-1">Birthday</legend>
+                                    <div className="grid grid-cols-2 gap-3">
+                                        <select
+                                            aria-label="Birthday month"
+                                            value={form.birthday_month}
+                                            onChange={(e) => {
+                                                const month = e.target.value;
+                                                const max = month ? DAYS_IN_MONTH[Number(month) - 1] : 31;
+                                                setForm({
+                                                    ...form,
+                                                    birthday_month: month,
+                                                    birthday_day: form.birthday_day && Number(form.birthday_day) > max ? '' : form.birthday_day,
+                                                });
+                                            }}
+                                            className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg bg-white"
+                                        >
+                                            <option value="">Month</option>
+                                            {MONTHS.map((name, i) => (
+                                                <option key={name} value={String(i + 1)}>{name}</option>
+                                            ))}
+                                        </select>
+                                        <select
+                                            aria-label="Birthday day"
+                                            value={form.birthday_day}
+                                            onChange={(e) => setForm({ ...form, birthday_day: e.target.value })}
+                                            className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg bg-white"
+                                        >
+                                            <option value="">Day</option>
+                                            {Array.from(
+                                                { length: form.birthday_month ? DAYS_IN_MONTH[Number(form.birthday_month) - 1] : 31 },
+                                                (_, i) => (
+                                                    <option key={i + 1} value={String(i + 1)}>{i + 1}</option>
+                                                ),
+                                            )}
+                                        </select>
+                                    </div>
+                                </fieldset>
+                            )}
                         </div>
                         <div className="flex justify-end space-x-3 mt-6">
                             <button

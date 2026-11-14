@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase-admin';
 import { verifyAuth } from '@/lib/auth';
+import { withAuditActor } from '@/lib/db/pool';
 
 /**
  * Admin Sales management endpoint.
@@ -11,6 +12,13 @@ import { verifyAuth } from '@/lib/auth';
  *   { action: 'remove',                                     productIds: string[] }
  *   { action: 'variant_prices', items: [{ variantId, price }] }  // per-variant fixed sale prices
  *   { action: 'set_active', active: boolean }   // master on/off for ALL sales
+ *   { action: 'set_product_active', active: boolean, productIds: string[] } // on/off for chosen products
+ *
+ * Each product's sale has its own on/off state. A paused sale keeps its
+ * discounted price in metadata.paused_sale_price. Changing a sale keeps that
+ * state: a paused sale stays paused, a new sale starts on when the all-sales
+ * switch is on and paused when it is off. The all-sales switch turns every
+ * sale on or off at once.
  *
  * All price math runs server-side in SQL functions (apply_sale_percentage /
  * apply_sale_fixed / remove_sale / pause_all_sales / resume_all_sales) so the
@@ -37,6 +45,68 @@ async function salesAreActive(): Promise<boolean> {
     if (!data) return true;
     // jsonb boolean comes back as a real boolean; tolerate string forms too.
     return data.value === true || data.value === 'true';
+}
+
+class ActionError extends Error {}
+
+/** Throw a Supabase-style error so the surrounding transaction rolls back. */
+function must<T>(res: { data: T; error: any }): T {
+    if (res.error) throw new ActionError(res.error.message || 'Database error');
+    return res.data;
+}
+
+type SaleState = { onSale: boolean; paused: boolean };
+
+/** Current sale state of each product: on sale, and whether that sale is paused. */
+async function saleStates(productIds: string[]): Promise<Map<string, SaleState>> {
+    const rows = must(
+        await supabaseAdmin.from('products').select('id, on_sale, metadata').in('id', productIds),
+    ) as any[];
+    const states = new Map<string, SaleState>();
+    for (const r of rows || []) {
+        states.set(r.id, {
+            onSale: !!r.on_sale,
+            paused: !!r.on_sale && r.metadata?.paused_sale_price != null,
+        });
+    }
+    return states;
+}
+
+/**
+ * Run a sale change on products, keeping each product's on/off state:
+ * paused sales are switched on for the change and paused again afterwards; a
+ * product that had no sale is paused afterwards when all sales are off.
+ */
+async function changeKeepingState(
+    productIds: string[],
+    change: () => Promise<any>,
+    opts: { keepPaused: boolean },
+) {
+    const before = await saleStates(productIds);
+    const pausedIds = productIds.filter((id) => before.get(id)?.paused);
+    if (pausedIds.length) must(await supabaseAdmin.rpc('resume_product_sales', { p_ids: pausedIds }));
+    const result = await change();
+    let pausedAfter: string[] = [];
+    if (opts.keepPaused) {
+        const allOn = await salesAreActive();
+        pausedAfter = productIds.filter((id) => {
+            const s = before.get(id);
+            return s?.paused || (!s?.onSale && !allOn);
+        });
+        if (pausedAfter.length) must(await supabaseAdmin.rpc('pause_product_sales', { p_ids: pausedAfter }));
+    }
+    return { result, pausedAfter };
+}
+
+/** Fresh rows for the dashboard after a change. */
+async function productRows(productIds: string[]) {
+    if (productIds.length === 0) return [];
+    return must(
+        await supabaseAdmin
+            .from('products')
+            .select('id, price, compare_at_price, on_sale, metadata')
+            .in('id', productIds),
+    );
 }
 
 export async function POST(request: Request) {
@@ -85,6 +155,12 @@ export async function POST(request: Request) {
         }
     }
 
+    const actorId = auth.user?.id as string;
+    const errorResponse = (err: any, fallback: string) => {
+        console.error(`[admin/sales] ${action} error:`, err?.message || err);
+        return NextResponse.json({ error: err?.message || fallback }, { status: 500 });
+    };
+
     // Per-variant fixed sale prices (variant products). Validated here, price
     // math + regular-price derivation done in SQL (apply_sale_variant_prices)
     // so a sale price can never exceed the variant's authoritative regular price.
@@ -109,23 +185,31 @@ export async function POST(request: Request) {
             return NextResponse.json({ error: 'No valid variant prices' }, { status: 400 });
         }
 
-        if (!(await salesAreActive())) {
-            return NextResponse.json(
-                { error: 'Sales are turned off. Turn sales on before editing individual product sales.' },
-                { status: 409 },
-            );
-        }
-
         try {
-            const { data, error } = await supabaseAdmin.rpc('apply_sale_variant_prices', {
-                p_items: items,
+            const out = await withAuditActor(actorId, async () => {
+                const variants = must(
+                    await supabaseAdmin
+                        .from('product_variants')
+                        .select('product_id')
+                        .in('id', items.map((i) => i.variant_id)),
+                ) as any[];
+                const productIds = Array.from(new Set((variants || []).map((v) => v.product_id as string)));
+                // Paused variants hold their regular price in `price`, so resuming
+                // first makes the regular-price check below use the right value.
+                const { result, pausedAfter } = await changeKeepingState(
+                    productIds,
+                    async () => must(await supabaseAdmin.rpc('apply_sale_variant_prices', { p_items: items })),
+                    { keepPaused: true },
+                );
+                return { result, pausedAfter, products: await productRows(productIds) };
             });
-            if (error) throw error;
-            const updated = (data as any)?.variants_updated ?? 0;
+            const updated = (out.result as any)?.variants_updated ?? 0;
             return NextResponse.json({
                 success: true,
                 action,
-                result: data,
+                result: out.result,
+                products: out.products,
+                paused: out.pausedAfter.length,
                 skipped: items.length - updated,
                 note:
                     updated < items.length
@@ -133,11 +217,7 @@ export async function POST(request: Request) {
                         : undefined,
             });
         } catch (err: any) {
-            console.error('[admin/sales] variant_prices error:', err?.message || err);
-            return NextResponse.json(
-                { error: err?.message || 'Failed to set variant sale prices' },
-                { status: 500 },
-            );
+            return errorResponse(err, 'Failed to set variant sale prices');
         }
     }
 
@@ -157,82 +237,92 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: 'No valid product IDs' }, { status: 400 });
     }
 
-    // While the campaign is paused, editing individual sales would create an
-    // inconsistent state (a discounted price showing while everything else is
-    // at normal price). Require turning sales on first.
-    if (!(await salesAreActive())) {
-        return NextResponse.json(
-            { error: 'Sales are turned off. Turn sales on before editing individual product sales.' },
-            { status: 409 },
-        );
+    // Turn chosen products' sales on or off, whatever the all-sales switch says.
+    if (action === 'set_product_active') {
+        const active = body?.active === true;
+        try {
+            const out = await withAuditActor(actorId, async () => {
+                const result = must(
+                    await supabaseAdmin.rpc(active ? 'resume_product_sales' : 'pause_product_sales', {
+                        p_ids: productIds,
+                    }),
+                );
+                return { result, products: await productRows(productIds) };
+            });
+            return NextResponse.json({ success: true, action, active, ...out });
+        } catch (err: any) {
+            return errorResponse(err, 'Failed to switch the sale');
+        }
+    }
+
+    if (action === 'remove') {
+        try {
+            const out = await withAuditActor(actorId, async () => {
+                const { result } = await changeKeepingState(
+                    productIds,
+                    async () => must(await supabaseAdmin.rpc('remove_sale', { p_ids: productIds })),
+                    { keepPaused: false },
+                );
+                return { result, products: await productRows(productIds) };
+            });
+            return NextResponse.json({ success: true, action, ...out });
+        } catch (err: any) {
+            return errorResponse(err, 'Failed to update sales');
+        }
+    }
+
+    if (action !== 'apply') {
+        return NextResponse.json({ error: 'Invalid action' }, { status: 400 });
+    }
+
+    const mode = String(body?.mode || '');
+    const value = Number(body?.value);
+    if (!Number.isFinite(value)) {
+        return NextResponse.json({ error: 'Invalid value' }, { status: 400 });
+    }
+    if (mode === 'percentage' && (value <= 0 || value >= 100)) {
+        return NextResponse.json({ error: 'Discount percent must be between 1 and 99' }, { status: 400 });
+    }
+    if (mode === 'fixed' && value <= 0) {
+        return NextResponse.json({ error: 'Sale price must be greater than 0' }, { status: 400 });
+    }
+    if (mode !== 'percentage' && mode !== 'fixed') {
+        return NextResponse.json({ error: 'Invalid mode' }, { status: 400 });
     }
 
     try {
-        if (action === 'remove') {
-            const { data, error } = await supabaseAdmin.rpc('remove_sale', { p_ids: productIds });
-            if (error) throw error;
-            return NextResponse.json({ success: true, action, result: data });
-        }
-
-        if (action === 'apply') {
-            const mode = String(body?.mode || '');
-            const value = Number(body?.value);
-
-            if (!Number.isFinite(value)) {
-                return NextResponse.json({ error: 'Invalid value' }, { status: 400 });
-            }
-
-            if (mode === 'percentage') {
-                if (value <= 0 || value >= 100) {
-                    return NextResponse.json(
-                        { error: 'Discount percent must be between 1 and 99' },
-                        { status: 400 },
-                    );
-                }
-                const { data, error } = await supabaseAdmin.rpc('apply_sale_percentage', {
-                    p_ids: productIds,
-                    p_pct: value,
-                });
-                if (error) throw error;
-                return NextResponse.json({ success: true, action, mode, result: data });
-            }
-
-            if (mode === 'fixed') {
-                if (value <= 0) {
-                    return NextResponse.json(
-                        { error: 'Sale price must be greater than 0' },
-                        { status: 400 },
-                    );
-                }
-                const { data, error } = await supabaseAdmin.rpc('apply_sale_fixed', {
-                    p_ids: productIds,
-                    p_price: Math.round(value * 100) / 100,
-                });
-                if (error) throw error;
-                const updated = (data as any)?.products_updated ?? 0;
-                return NextResponse.json({
-                    success: true,
-                    action,
-                    mode,
-                    result: data,
-                    // Help the UI explain why a fixed price may have skipped some rows.
-                    skipped: productIds.length - updated,
-                    note:
-                        updated < productIds.length
-                            ? 'Some products were skipped: a fixed sale price only applies to products without variants and must be lower than the regular price. Use a percentage for variant products.'
-                            : undefined,
-                });
-            }
-
-            return NextResponse.json({ error: 'Invalid mode' }, { status: 400 });
-        }
-
-        return NextResponse.json({ error: 'Invalid action' }, { status: 400 });
+        const out = await withAuditActor(actorId, async () => {
+            const { result, pausedAfter } = await changeKeepingState(
+                productIds,
+                async () =>
+                    mode === 'percentage'
+                        ? must(await supabaseAdmin.rpc('apply_sale_percentage', { p_ids: productIds, p_pct: value }))
+                        : must(
+                              await supabaseAdmin.rpc('apply_sale_fixed', {
+                                  p_ids: productIds,
+                                  p_price: Math.round(value * 100) / 100,
+                              }),
+                          ),
+                { keepPaused: true },
+            );
+            return { result, pausedAfter, products: await productRows(productIds) };
+        });
+        const updated = (out.result as any)?.products_updated ?? 0;
+        return NextResponse.json({
+            success: true,
+            action,
+            mode,
+            result: out.result,
+            products: out.products,
+            paused: out.pausedAfter.length,
+            // Help the UI explain why a fixed price may have skipped some rows.
+            skipped: mode === 'fixed' ? productIds.length - updated : 0,
+            note:
+                mode === 'fixed' && updated < productIds.length
+                    ? 'Some products were skipped: a fixed sale price only applies to products without variants and must be lower than the regular price. Use a percentage for variant products.'
+                    : undefined,
+        });
     } catch (err: any) {
-        console.error('[admin/sales] Error:', err?.message || err);
-        return NextResponse.json(
-            { error: err?.message || 'Failed to update sales' },
-            { status: 500 },
-        );
+        return errorResponse(err, 'Failed to update sales');
     }
 }

@@ -12,6 +12,11 @@ import { supabase } from '@/lib/supabase';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { useRecaptcha } from '@/hooks/useRecaptcha';
 
+const MONTHS = [
+  'January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December',
+];
+
 export default function CheckoutPage() {
   usePageTitle('Checkout');
   const router = useRouter();
@@ -37,6 +42,12 @@ export default function CheckoutPage() {
     /** ISO date YYYY-MM-DD — optional, shown to staff on order details */
     preferredDate: ''
   });
+
+  // Optional birthday (day and month) for the yearly birthday message.
+  const [birthday, setBirthday] = useState({ month: '', day: '' });
+  const birthdayDays = birthday.month
+    ? [31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31][Number(birthday.month) - 1]
+    : 31;
 
   // Ghana Regions for dropdown
   const ghanaRegions = [
@@ -120,6 +131,7 @@ export default function CheckoutPage() {
     if (!shippingData.address) newErrors.address = 'Address is required';
     if (!shippingData.city) newErrors.city = 'City is required';
     if (!shippingData.region) newErrors.region = 'Region is required';
+    if (!!birthday.month !== !!birthday.day) newErrors.birthday = 'Choose both the month and the day, or leave both empty';
 
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
@@ -187,6 +199,8 @@ export default function CheckoutPage() {
           email: shippingData.email,
           phone: shippingData.phone,
           shippingData,
+          birthdayMonth: birthday.month && birthday.day ? Number(birthday.month) : null,
+          birthdayDay: birthday.month && birthday.day ? Number(birthday.day) : null,
           deliveryMethod,
           paymentMethod,
           currency: 'GHS',
@@ -468,6 +482,44 @@ export default function CheckoutPage() {
                       />
                       {errors.phone && <p className="mt-1 text-sm text-red-600">{errors.phone}</p>}
                     </div>
+
+                    <fieldset>
+                      <legend className={labelClass}>
+                        Birthday <span className="font-normal text-gray-400">(optional)</span>
+                      </legend>
+                      <div className="grid grid-cols-2 gap-4">
+                        <select
+                          aria-label="Birthday month"
+                          value={birthday.month}
+                          onChange={(e) => {
+                            const month = e.target.value;
+                            const max = month ? [31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31][Number(month) - 1] : 31;
+                            setBirthday((b) => ({ month, day: b.day && Number(b.day) > max ? '' : b.day }));
+                          }}
+                          className={`${fieldClass(false)} bg-white`}
+                        >
+                          <option value="">Month</option>
+                          {MONTHS.map((name, i) => (
+                            <option key={name} value={String(i + 1)}>{name}</option>
+                          ))}
+                        </select>
+                        <select
+                          aria-label="Birthday day"
+                          value={birthday.day}
+                          onChange={(e) => setBirthday((b) => ({ ...b, day: e.target.value }))}
+                          className={`${fieldClass(false)} bg-white`}
+                        >
+                          <option value="">Day</option>
+                          {Array.from({ length: birthdayDays }, (_, i) => (
+                            <option key={i + 1} value={String(i + 1)}>{i + 1}</option>
+                          ))}
+                        </select>
+                      </div>
+                      {errors.birthday && <p className="mt-1 text-sm text-red-600">{errors.birthday}</p>}
+                      <p className="mt-1 text-xs text-gray-400">
+                        We&apos;ll send you a birthday message on the day. Just the day and month, no year.
+                      </p>
+                    </fieldset>
 
                     <div>
                       <label className={labelClass}>Street Address *</label>
