@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase-admin';
 import { verifyAuth } from '@/lib/auth';
-import { withAuditActor } from '@/lib/db/pool';
 
 /**
  * Admin Sales management endpoint.
@@ -35,67 +34,31 @@ function isUuid(v: unknown): v is string {
         /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v);
 }
 
-/** Reads the master sales switch. Defaults to ON if the row is missing. */
-async function salesAreActive(): Promise<boolean> {
-    const { data } = await supabaseAdmin
-        .from('site_settings')
-        .select('value')
-        .eq('key', SALES_ACTIVE_KEY)
-        .maybeSingle();
-    if (!data) return true;
-    // jsonb boolean comes back as a real boolean; tolerate string forms too.
-    return data.value === true || data.value === 'true';
-}
-
 class ActionError extends Error {}
 
-/** Throw a Supabase-style error so the surrounding transaction rolls back. */
+/** Turn a Supabase-style { data, error } result into data, or throw. */
 function must<T>(res: { data: T; error: any }): T {
     if (res.error) throw new ActionError(res.error.message || 'Database error');
     return res.data;
 }
 
-type SaleState = { onSale: boolean; paused: boolean };
-
-/** Current sale state of each product: on sale, and whether that sale is paused. */
-async function saleStates(productIds: string[]): Promise<Map<string, SaleState>> {
-    const rows = must(
-        await supabaseAdmin.from('products').select('id, on_sale, metadata').in('id', productIds),
-    ) as any[];
-    const states = new Map<string, SaleState>();
-    for (const r of rows || []) {
-        states.set(r.id, {
-            onSale: !!r.on_sale,
-            paused: !!r.on_sale && r.metadata?.paused_sale_price != null,
-        });
-    }
-    return states;
-}
-
 /**
- * Run a sale change on products, keeping each product's on/off state:
- * paused sales are switched on for the change and paused again afterwards; a
- * product that had no sale is paused afterwards when all sales are off.
+ * One atomic database call (sale_change_keep_state) that changes the sale and
+ * keeps each product's on/off state: switched-off sales stay off, and a new
+ * sale starts off while all sales are off.
  */
-async function changeKeepingState(
-    productIds: string[],
-    change: () => Promise<any>,
-    opts: { keepPaused: boolean },
-) {
-    const before = await saleStates(productIds);
-    const pausedIds = productIds.filter((id) => before.get(id)?.paused);
-    if (pausedIds.length) must(await supabaseAdmin.rpc('resume_product_sales', { p_ids: pausedIds }));
-    const result = await change();
-    let pausedAfter: string[] = [];
-    if (opts.keepPaused) {
-        const allOn = await salesAreActive();
-        pausedAfter = productIds.filter((id) => {
-            const s = before.get(id);
-            return s?.paused || (!s?.onSale && !allOn);
-        });
-        if (pausedAfter.length) must(await supabaseAdmin.rpc('pause_product_sales', { p_ids: pausedAfter }));
-    }
-    return { result, pausedAfter };
+async function changeKeepingState(args: {
+    p_action: 'percentage' | 'fixed' | 'remove' | 'variant_prices';
+    p_ids?: string[];
+    p_value?: number;
+    p_items?: unknown;
+}): Promise<{ result: any; productIds: string[]; paused: number }> {
+    const result: any = must(await supabaseAdmin.rpc('sale_change_keep_state', args));
+    return {
+        result,
+        productIds: Array.isArray(result?.product_ids) ? result.product_ids : args.p_ids || [],
+        paused: Number(result?.paused) || 0,
+    };
 }
 
 /** Fresh rows for the dashboard after a change. */
@@ -155,7 +118,6 @@ export async function POST(request: Request) {
         }
     }
 
-    const actorId = auth.user?.id as string;
     const errorResponse = (err: any, fallback: string) => {
         console.error(`[admin/sales] ${action} error:`, err?.message || err);
         return NextResponse.json({ error: err?.message || fallback }, { status: 500 });
@@ -186,30 +148,15 @@ export async function POST(request: Request) {
         }
 
         try {
-            const out = await withAuditActor(actorId, async () => {
-                const variants = must(
-                    await supabaseAdmin
-                        .from('product_variants')
-                        .select('product_id')
-                        .in('id', items.map((i) => i.variant_id)),
-                ) as any[];
-                const productIds = Array.from(new Set((variants || []).map((v) => v.product_id as string)));
-                // Paused variants hold their regular price in `price`, so resuming
-                // first makes the regular-price check below use the right value.
-                const { result, pausedAfter } = await changeKeepingState(
-                    productIds,
-                    async () => must(await supabaseAdmin.rpc('apply_sale_variant_prices', { p_items: items })),
-                    { keepPaused: true },
-                );
-                return { result, pausedAfter, products: await productRows(productIds) };
-            });
+            const change = await changeKeepingState({ p_action: 'variant_prices', p_items: items });
+            const out = { ...change, products: await productRows(change.productIds) };
             const updated = (out.result as any)?.variants_updated ?? 0;
             return NextResponse.json({
                 success: true,
                 action,
                 result: out.result,
                 products: out.products,
-                paused: out.pausedAfter.length,
+                paused: out.paused,
                 skipped: items.length - updated,
                 note:
                     updated < items.length
@@ -241,14 +188,12 @@ export async function POST(request: Request) {
     if (action === 'set_product_active') {
         const active = body?.active === true;
         try {
-            const out = await withAuditActor(actorId, async () => {
-                const result = must(
-                    await supabaseAdmin.rpc(active ? 'resume_product_sales' : 'pause_product_sales', {
-                        p_ids: productIds,
-                    }),
-                );
-                return { result, products: await productRows(productIds) };
-            });
+            const result = must(
+                await supabaseAdmin.rpc(active ? 'resume_product_sales' : 'pause_product_sales', {
+                    p_ids: productIds,
+                }),
+            );
+            const out = { result, products: await productRows(productIds) };
             return NextResponse.json({ success: true, action, active, ...out });
         } catch (err: any) {
             return errorResponse(err, 'Failed to switch the sale');
@@ -257,14 +202,8 @@ export async function POST(request: Request) {
 
     if (action === 'remove') {
         try {
-            const out = await withAuditActor(actorId, async () => {
-                const { result } = await changeKeepingState(
-                    productIds,
-                    async () => must(await supabaseAdmin.rpc('remove_sale', { p_ids: productIds })),
-                    { keepPaused: false },
-                );
-                return { result, products: await productRows(productIds) };
-            });
+            const { result } = await changeKeepingState({ p_action: 'remove', p_ids: productIds });
+            const out = { result, products: await productRows(productIds) };
             return NextResponse.json({ success: true, action, ...out });
         } catch (err: any) {
             return errorResponse(err, 'Failed to update sales');
@@ -291,22 +230,12 @@ export async function POST(request: Request) {
     }
 
     try {
-        const out = await withAuditActor(actorId, async () => {
-            const { result, pausedAfter } = await changeKeepingState(
-                productIds,
-                async () =>
-                    mode === 'percentage'
-                        ? must(await supabaseAdmin.rpc('apply_sale_percentage', { p_ids: productIds, p_pct: value }))
-                        : must(
-                              await supabaseAdmin.rpc('apply_sale_fixed', {
-                                  p_ids: productIds,
-                                  p_price: Math.round(value * 100) / 100,
-                              }),
-                          ),
-                { keepPaused: true },
-            );
-            return { result, pausedAfter, products: await productRows(productIds) };
+        const change = await changeKeepingState({
+            p_action: mode === 'percentage' ? 'percentage' : 'fixed',
+            p_ids: productIds,
+            p_value: mode === 'percentage' ? value : Math.round(value * 100) / 100,
         });
+        const out = { ...change, products: await productRows(productIds) };
         const updated = (out.result as any)?.products_updated ?? 0;
         return NextResponse.json({
             success: true,
@@ -314,7 +243,7 @@ export async function POST(request: Request) {
             mode,
             result: out.result,
             products: out.products,
-            paused: out.pausedAfter.length,
+            paused: out.paused,
             // Help the UI explain why a fixed price may have skipped some rows.
             skipped: mode === 'fixed' ? productIds.length - updated : 0,
             note:
