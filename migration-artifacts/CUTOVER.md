@@ -49,13 +49,17 @@ the database with a fresh copy. Step 2 moves staging off both before the swap.
    parity check compares like with like). Run each as the database owner:
    ```bash
    for f in supabase/migrations/20261114090000_per_product_sale_switch.sql \
-            supabase/migrations/20261114091000_customer_birthdays.sql; do
+            supabase/migrations/20261114091000_customer_birthdays.sql \
+            supabase/migrations/20261117090000_sale_change_keep_state.sql; do
      (echo 'set role store_departmentstore;'; echo begin; cat "$f"; echo commit) \
        | ssh big-vps 'docker exec -i fleet-postgres psql -v ON_ERROR_STOP=1 -U postgres -d store_departmentstore_new'
    done
    ```
-   The first adds the per-product sale on/off functions, the second the
-   customer birthday columns. Both are safe to run twice.
+   These add the per-product sale on/off functions, the customer birthday
+   columns, and the one-call sale change used by Admin → Sales. All are safe
+   to run twice. If they were already applied on Supabase before the copy
+   (they were added to the live site on 2026-11-17), the copy brings them and
+   this step changes nothing.
 
 4. **Swap the databases** (staging is stopped, so nothing is connected):
    ```sql
