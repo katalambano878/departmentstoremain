@@ -67,7 +67,7 @@ ${body}
 }
 
 // Reusable styled button
-function emailButton(text: string, href: string, color?: string): string {
+export function emailButton(text: string, href: string, color?: string): string {
     const bg = color || BRAND.color;
     return `<table role="presentation" cellpadding="0" cellspacing="0" style="margin:24px auto;"><tr>
 <td style="background-color:${bg};border-radius:8px;"><a href="${href}" target="_blank" style="display:inline-block;padding:14px 32px;color:#ffffff;font-size:15px;font-weight:600;text-decoration:none;letter-spacing:0.3px;">${text}</a></td>
