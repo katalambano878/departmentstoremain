@@ -4,44 +4,17 @@ export default function ShippingPage() {
   const deliveryOptions = [
     {
       type: 'Doorstep Delivery',
-      time: '1-3 Business Days',
-      cost: 'At a Cost',
-      description: 'We deliver straight to your address. Our team will contact you with the exact delivery fee based on your location.',
+      time: 'Within 24–72 hours after payment',
+      cost: 'At cost',
+      description: 'We deliver to your address anywhere in Ghana. The fee depends on your location and the rider tells you the fee. It is not part of the online payment.',
       icon: 'ri-truck-line'
     },
     {
       type: 'Store Pickup',
-      time: 'Ready in 24 hours',
-      cost: 'FREE',
-      description: 'Collect your order from our Accra store at no extra charge.',
+      time: 'Collect after payment',
+      cost: 'Free',
+      description: 'Collect your order from our Accra store at no extra charge. Bring your order number.',
       icon: 'ri-store-2-line'
-    }
-  ];
-
-  const zones = [
-    {
-      zone: 'Zone 1 - Accra Metro',
-      areas: 'East Legon, Osu, Labone, Airport, Dzorwulu, Cantonments, Adabraka, Tema',
-      standard: '1-2 days',
-      express: 'Next day'
-    },
-    {
-      zone: 'Zone 2 - Greater Accra',
-      areas: 'Madina, Legon, Haatso, Achimota, Dansoman, Spintex, Teshie, Kasoa',
-      standard: '2-3 days',
-      express: 'Next day'
-    },
-    {
-      zone: 'Zone 3 - Major Cities',
-      areas: 'Kumasi, Takoradi, Cape Coast, Tamale, Sunyani, Ho, Koforidua',
-      standard: '3-4 days',
-      express: '1-2 days'
-    },
-    {
-      zone: 'Zone 4 - Other Areas',
-      areas: 'All other locations within Ghana',
-      standard: '4-5 days',
-      express: 'Not available'
     }
   ];
 
@@ -50,9 +23,9 @@ export default function ShippingPage() {
       <div className="bg-gradient-to-br from-emerald-50 via-white to-amber-50 py-16">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="max-w-3xl mx-auto text-center">
-            <h1 className="text-5xl font-bold text-gray-900 mb-6">Shipping & Delivery</h1>
+            <h1 className="text-4xl sm:text-5xl font-bold text-gray-900 mb-6">Shipping & Delivery</h1>
             <p className="text-xl text-gray-600 leading-relaxed">
-              Fast, reliable delivery across Ghana. Doorstep delivery is charged based on your location — or pick up free from our Accra store.
+              Orders are delivered within 24–72 hours after payment. Doorstep delivery is charged at cost, or pick up free from our Accra store.
             </p>
           </div>
         </div>
@@ -86,86 +59,47 @@ export default function ShippingPage() {
           </p>
         </div>
 
-        <div className="mb-16">
-          <h2 className="text-3xl font-bold text-gray-900 mb-8">Delivery Zones & Timeframes</h2>
-          <div className="bg-white border border-gray-200 rounded-2xl overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead className="bg-gray-50">
-                  <tr>
-                    <th className="px-6 py-4 text-left text-sm font-bold text-gray-900">Zone</th>
-                    <th className="px-6 py-4 text-left text-sm font-bold text-gray-900">Areas Covered</th>
-                    <th className="px-6 py-4 text-left text-sm font-bold text-gray-900">Standard</th>
-                    <th className="px-6 py-4 text-left text-sm font-bold text-gray-900">Express</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-200">
-                  {zones.map((zone, index) => (
-                    <tr key={index} className="hover:bg-gray-50">
-                      <td className="px-6 py-4 font-medium text-gray-900">{zone.zone}</td>
-                      <td className="px-6 py-4 text-gray-600 text-sm">{zone.areas}</td>
-                      <td className="px-6 py-4 text-gray-900">{zone.standard}</td>
-                      <td className="px-6 py-4 text-gray-900">{zone.express}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </div>
-
         <div className="grid md:grid-cols-2 gap-8 mb-16">
           <div>
-            <h2 className="text-3xl font-bold text-gray-900 mb-6">How Shipping Works</h2>
-            <div className="space-y-6">
-              <div className="flex gap-4">
+            <h2 className="text-3xl font-bold text-gray-900 mb-6">How Delivery Works</h2>
+            <ol className="space-y-6">
+              <li className="flex gap-4">
                 <div className="flex-shrink-0 w-10 h-10 bg-emerald-100 rounded-full flex items-center justify-center">
                   <span className="font-bold text-emerald-700">1</span>
                 </div>
                 <div>
-                  <h3 className="font-bold text-gray-900 mb-2">Order Processing</h3>
-                  <p className="text-gray-600 leading-relaxed">
-                    Orders placed before 2pm are processed same day. We carefully pack your items and prepare them for dispatch.
-                  </p>
+                  <h3 className="font-bold text-gray-900 mb-2">Pay for your order</h3>
+                  <p className="text-gray-600 leading-relaxed">Pay online through Hubtel with mobile money or a card. We start preparing your order once the payment goes through.</p>
                 </div>
-              </div>
-
-              <div className="flex gap-4">
+              </li>
+              <li className="flex gap-4">
                 <div className="flex-shrink-0 w-10 h-10 bg-emerald-100 rounded-full flex items-center justify-center">
                   <span className="font-bold text-emerald-700">2</span>
                 </div>
                 <div>
-                  <h3 className="font-bold text-gray-900 mb-2">Dispatch</h3>
-                  <p className="text-gray-600 leading-relaxed">
-                    Your order is handed to our trusted delivery partner. You'll receive a tracking number via email and SMS.
-                  </p>
+                  <h3 className="font-bold text-gray-900 mb-2">We pack it</h3>
+                  <p className="text-gray-600 leading-relaxed">We check and pack your items at our Accra store.</p>
                 </div>
-              </div>
-
-              <div className="flex gap-4">
+              </li>
+              <li className="flex gap-4">
                 <div className="flex-shrink-0 w-10 h-10 bg-emerald-100 rounded-full flex items-center justify-center">
                   <span className="font-bold text-emerald-700">3</span>
                 </div>
                 <div>
-                  <h3 className="font-bold text-gray-900 mb-2">Track Your Order</h3>
-                  <p className="text-gray-600 leading-relaxed">
-                    Use your tracking number to monitor your delivery in real-time. You'll get updates at each stage.
-                  </p>
+                  <h3 className="font-bold text-gray-900 mb-2">Delivery or pickup</h3>
+                  <p className="text-gray-600 leading-relaxed">For doorstep delivery, a rider brings the order within 24–72 hours after payment and tells you the delivery fee. For pickup, collect it from our store for free.</p>
                 </div>
-              </div>
-
-              <div className="flex gap-4">
+              </li>
+              <li className="flex gap-4">
                 <div className="flex-shrink-0 w-10 h-10 bg-emerald-100 rounded-full flex items-center justify-center">
                   <span className="font-bold text-emerald-700">4</span>
                 </div>
                 <div>
-                  <h3 className="font-bold text-gray-900 mb-2">Delivery</h3>
-                  <p className="text-gray-600 leading-relaxed">
-                    Our delivery partner will contact you before arrival. Sign for your package and enjoy your purchase!
-                  </p>
+                  <h3 className="font-bold text-gray-900 mb-2">Check the status</h3>
+                  <p className="text-gray-600 leading-relaxed">Use the Order Tracking page with your order number, email or phone number to see where your order is.</p>
                 </div>
-              </div>
-            </div>
+              </li>
+            </ol>
           </div>
 
           <div>
@@ -173,52 +107,31 @@ export default function ShippingPage() {
             <div className="bg-gray-50 rounded-2xl p-6 space-y-6">
               <div>
                 <h3 className="font-bold text-gray-900 mb-2 flex items-center gap-2">
-                  <i className="ri-time-line text-emerald-700"></i>
-                  Cut-off Times
+                  <i className="ri-map-pin-line text-emerald-700" aria-hidden="true"></i>
+                  Where we deliver
                 </h3>
-                <p className="text-gray-600 leading-relaxed text-sm">
-                  Orders placed before 2pm are dispatched same day. Orders after 2pm are dispatched next business day.
-                </p>
+                <p className="text-gray-600 leading-relaxed text-sm">Anywhere in Ghana. We do not deliver outside Ghana.</p>
               </div>
-
               <div>
                 <h3 className="font-bold text-gray-900 mb-2 flex items-center gap-2">
-                  <i className="ri-calendar-line text-emerald-700"></i>
-                  Business Days
+                  <i className="ri-money-dollar-circle-line text-emerald-700" aria-hidden="true"></i>
+                  Delivery fee
                 </h3>
-                <p className="text-gray-600 leading-relaxed text-sm">
-                  Delivery timeframes exclude weekends and public holidays. We process orders Monday to Friday.
-                </p>
+                <p className="text-gray-600 leading-relaxed text-sm">Charged at cost for your location. The rider tells you the fee; it is not included in the online payment. Store pickup is free.</p>
               </div>
-
               <div>
                 <h3 className="font-bold text-gray-900 mb-2 flex items-center gap-2">
-                  <i className="ri-phone-line text-emerald-700"></i>
-                  Delivery Contact
+                  <i className="ri-phone-line text-emerald-700" aria-hidden="true"></i>
+                  Keep your phone on
                 </h3>
-                <p className="text-gray-600 leading-relaxed text-sm">
-                  Our delivery partner will call you before arrival. Please ensure your phone number is correct and reachable.
-                </p>
+                <p className="text-gray-600 leading-relaxed text-sm">The rider calls the phone number on your order. Please make sure it is correct and reachable.</p>
               </div>
-
               <div>
                 <h3 className="font-bold text-gray-900 mb-2 flex items-center gap-2">
-                  <i className="ri-home-line text-emerald-700"></i>
-                  Failed Deliveries
+                  <i className="ri-error-warning-line text-emerald-700" aria-hidden="true"></i>
+                  Damaged or wrong item
                 </h3>
-                <p className="text-gray-600 leading-relaxed text-sm">
-                  If you're unavailable, we'll attempt delivery twice. After that, the package is held at a collection point for 5 days.
-                </p>
-              </div>
-
-              <div>
-                <h3 className="font-bold text-gray-900 mb-2 flex items-center gap-2">
-                  <i className="ri-secure-payment-line text-emerald-700"></i>
-                  Package Security
-                </h3>
-                <p className="text-gray-600 leading-relaxed text-sm">
-                  All packages are insured during transit. Report any damage or missing items within 48 hours of delivery.
-                </p>
+                <p className="text-gray-600 leading-relaxed text-sm">Tell us as soon as possible by starting a return or by WhatsApp on 0248615775.</p>
               </div>
             </div>
           </div>
@@ -227,9 +140,9 @@ export default function ShippingPage() {
         <div className="bg-white border border-gray-200 rounded-2xl p-8 mb-16">
           <h2 className="text-3xl font-bold text-gray-900 mb-6">Order Tracking</h2>
           <p className="text-gray-600 mb-6 leading-relaxed">
-            Track your order anytime using your email, order number, or phone number. You'll see real-time updates including:
+            Check your order at any time with your order number, email or phone number. The status moves through these steps:
           </p>
-          <div className="grid md:grid-cols-4 gap-6">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
             <div className="text-center">
               <div className="w-12 h-12 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-3">
                 <i className="ri-checkbox-circle-line text-2xl text-emerald-700"></i>
@@ -269,7 +182,7 @@ export default function ShippingPage() {
         <div className="bg-gradient-to-br from-emerald-700 to-emerald-900 rounded-2xl p-8 text-white text-center">
           <h2 className="text-3xl font-bold mb-4">Need Help with Your Delivery?</h2>
           <p className="text-emerald-100 mb-6 leading-relaxed">
-            Questions about shipping costs, delivery times, or tracking? Our customer service team is here to help.
+            Questions about delivery fees, timing or tracking? Call or WhatsApp us on 0248615775, or send us a message.
           </p>
           <div className="flex flex-wrap gap-4 justify-center">
             <Link

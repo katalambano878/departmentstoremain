@@ -27,14 +27,17 @@ function getAccessToken(request: Request): string | null {
   return null;
 }
 
-async function requireAdmin(request: Request): Promise<{ user: any } | NextResponse> {
+async function requireAdmin(
+  request: Request,
+  allowed: string[] = ['admin', 'staff'],
+): Promise<{ user: any } | NextResponse> {
   const token = getAccessToken(request);
   if (!token) return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
   const { data: { user }, error } = await supabaseAdmin.auth.getUser(token);
   if (error || !user) return NextResponse.json({ error: 'Invalid session' }, { status: 401 });
   const { data: profile } = await supabaseAdmin.from('profiles').select('role').eq('id', user.id).single();
   const role = profile?.role != null ? String(profile.role) : '';
-  if (role !== 'admin' && role !== 'staff') return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  if (!allowed.includes(role)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   return { user };
 }
 
@@ -111,24 +114,29 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     .select()
     .single();
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  if (error) {
+    console.error('[AdminAffiliate] markup update failed:', error.message);
+    return NextResponse.json({ error: 'Could not update this markup.' }, { status: 500 });
+  }
   return NextResponse.json({ markup: data });
 }
 
-// POST — record a manual payout of the affiliate's available balance.
+// POST — pay out the affiliate's matured balance (admin only).
+// Atomic in the database (affiliate_begin_payout / affiliate_finish_payout):
+// one payout at a time per affiliate, active affiliates only, min_payout
+// enforced, balances moved in the same transaction as the payout row.
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
-  const auth = await requireAdmin(request);
+  const auth = await requireAdmin(request, ['admin']);
   if (auth instanceof NextResponse) return auth;
   const { id } = await params;
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) {
+    return NextResponse.json({ error: 'Affiliate not found' }, { status: 404 });
+  }
   const body = await request.json().catch(() => ({}));
 
-  await matureDueCommissions(id);
-
-  const { data: affiliate } = await supabaseAdmin.from('affiliates').select('*').eq('id', id).single();
+  const { data: affiliate } = await supabaseAdmin
+    .from('affiliates').select('id, code, status, payout_number, payout_provider').eq('id', id).maybeSingle();
   if (!affiliate) return NextResponse.json({ error: 'Affiliate not found' }, { status: 404 });
-
-  const amount = round2(affiliate.balance_available);
-  if (amount <= 0) return NextResponse.json({ error: 'No available balance to pay out.' }, { status: 400 });
 
   // Is automatic disbursement enabled + configured?
   let autoDisburse = false;
@@ -139,62 +147,61 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   // `body.manual === true` lets the admin force a manual record even when auto is on.
   const tryAuto = autoDisburse && body.manual !== true && !!process.env.MOOLRE_API_KEY;
 
-  const externalref = `AFFPAY-${id.slice(0, 8)}-${Date.now()}`;
-
-  // Create the payout record first (processing for auto, paid for manual).
-  const { data: payout, error: payoutErr } = await supabaseAdmin
-    .from('affiliate_payouts')
-    .insert({
-      affiliate_id: id,
-      amount,
-      method: 'momo',
-      destination: affiliate.payout_number,
-      provider: affiliate.payout_provider,
-      status: tryAuto ? 'processing' : 'paid',
-      moolre_ref: tryAuto ? externalref : (body.reference || null),
-      processed_by: auth.user.id,
-      processed_at: tryAuto ? null : new Date().toISOString(),
-    })
-    .select()
-    .single();
-  if (payoutErr) return NextResponse.json({ error: payoutErr.message }, { status: 500 });
-
-  // Attempt the automatic Moolre transfer.
-  if (tryAuto) {
-    const result = await disburseViaMoolre({
-      amount,
-      receiver: affiliate.payout_number,
-      provider: affiliate.payout_provider,
-      externalref,
-      reference: `Affiliate ${affiliate.code} commission`,
-    });
-    if (!result.ok) {
-      await supabaseAdmin.from('affiliate_payouts')
-        .update({ status: 'failed', failure_reason: result.message })
-        .eq('id', payout.id);
-      return NextResponse.json({ error: `Payout failed: ${result.message}` }, { status: 502 });
-    }
-    await supabaseAdmin.from('affiliate_payouts')
-      .update({ status: 'paid', moolre_ref: result.transactionid || externalref, processed_at: new Date().toISOString() })
-      .eq('id', payout.id);
+  if (tryAuto && (!affiliate.payout_number || !affiliate.payout_provider)) {
+    return NextResponse.json({ error: 'This affiliate has no mobile money payout details yet.' }, { status: 400 });
   }
 
-  // Mark all matured commissions as paid under this payout.
-  await supabaseAdmin
-    .from('affiliate_commissions')
-    .update({ status: 'paid', payout_id: payout.id, paid_at: new Date().toISOString(), updated_at: new Date().toISOString() })
-    .eq('affiliate_id', id)
-    .eq('status', 'matured');
+  const externalref = `AFFPAY-${id.slice(0, 8)}-${Date.now()}`;
+  const manualRef = typeof body.reference === 'string' ? body.reference.trim().slice(0, 120) || null : null;
 
-  // Move available balance to total paid.
-  await supabaseAdmin
-    .from('affiliates')
-    .update({
-      balance_available: round2(Math.max(0, affiliate.balance_available - amount)),
-      total_paid: round2((affiliate.total_paid || 0) + amount),
-      updated_at: new Date().toISOString(),
-    })
-    .eq('id', id);
+  const { data: payout, error: beginErr } = await supabaseAdmin.rpc('affiliate_begin_payout', {
+    p_affiliate_id: id,
+    p_processed_by: auth.user.id,
+    p_auto: tryAuto,
+    p_reference: tryAuto ? externalref : manualRef,
+  });
+  if (beginErr || !payout) {
+    const msg = String(beginErr?.message || '');
+    const refusal = msg.match(/payout:\s*(.+)$/i);
+    if (refusal) {
+      const text = refusal[1].trim();
+      return NextResponse.json({ error: text.charAt(0).toUpperCase() + text.slice(1) }, { status: 400 });
+    }
+    console.error('[AdminAffiliate] affiliate_begin_payout failed:', msg);
+    return NextResponse.json({ error: 'Could not start the payout.' }, { status: 500 });
+  }
 
-  return NextResponse.json({ success: true, payout, auto: tryAuto });
+  if (!tryAuto) {
+    return NextResponse.json({ success: true, payout, auto: false });
+  }
+
+  // Automatic Moolre transfer for the reserved amount.
+  const result = await disburseViaMoolre({
+    amount: round2(Number(payout.amount)),
+    receiver: affiliate.payout_number,
+    provider: affiliate.payout_provider,
+    externalref,
+    reference: `Affiliate ${affiliate.code} commission`,
+  });
+
+  const { data: finished, error: finishErr } = await supabaseAdmin.rpc('affiliate_finish_payout', {
+    p_payout_id: payout.id,
+    p_success: result.ok,
+    p_moolre_ref: result.ok ? (result.transactionid || externalref) : null,
+    p_failure_reason: result.ok ? null : result.message,
+  });
+  if (finishErr) {
+    // The transfer outcome is known but the ledger update failed: the payout
+    // stays 'processing' (blocking new payouts) until staff resolve it.
+    console.error('[AdminAffiliate] affiliate_finish_payout failed:', finishErr.message, '| payout', payout.id, '| transfer ok:', result.ok);
+    return NextResponse.json(
+      { error: `Transfer ${result.ok ? 'succeeded' : 'failed'} but the payout record could not be updated. Payout ${payout.id} is still marked processing.` },
+      { status: 500 },
+    );
+  }
+
+  if (!result.ok) {
+    return NextResponse.json({ error: `Payout failed: ${result.message}` }, { status: 502 });
+  }
+  return NextResponse.json({ success: true, payout: finished || payout, auto: true });
 }

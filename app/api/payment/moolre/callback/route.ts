@@ -1,8 +1,8 @@
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase-admin';
-import { sendOrderConfirmation, sendPosReceiptSmsByOrderRef, isPosSaleOrder } from '@/lib/notifications';
 import { checkRateLimit, getClientIdentifier, RATE_LIMITS } from '@/lib/rate-limit';
-import { recordAffiliateCommission } from '@/lib/affiliate-server';
+import { expectedChargeAmounts, paidCoversExpected } from '../../_lib/order-charge';
+import { runPaidSideEffects } from '../../_lib/after-paid';
 
 /**
  * Moolre Callback Payload Structure (from their actual API):
@@ -160,7 +160,7 @@ export async function POST(req: Request) {
             // Check if order exists (maybeSingle to avoid throw on zero rows)
             const { data: existingOrder, error: fetchError } = await supabaseAdmin
                 .from('orders')
-                .select('id, order_number, payment_status, total')
+                .select('id, order_number, payment_status, total, metadata')
                 .eq('order_number', merchantOrderRef)
                 .maybeSingle();
 
@@ -187,9 +187,11 @@ export async function POST(req: Request) {
                     message: 'Payment amount missing from callback'
                 }, { status: 400 });
             }
-            const expectedAmount = Number(existingOrder.total);
-            if (Math.abs(callbackAmount - expectedAmount) > 0.01) {
-                console.error('[Callback] AMOUNT MISMATCH — REJECTING! Expected:', expectedAmount, 'Got:', callbackAmount, 'Order:', merchantOrderRef);
+            // Compare with the server-recomputed charge (or the server amount
+            // recorded when the link was created), never a client-written total.
+            const expected = await expectedChargeAmounts(existingOrder);
+            if (!paidCoversExpected(callbackAmount, expected)) {
+                console.error('[Callback] AMOUNT MISMATCH — REJECTING! Expected one of:', expected, 'Got:', callbackAmount, 'Order:', merchantOrderRef);
                 return NextResponse.json({
                     success: false,
                     message: 'Payment amount does not match order total'
@@ -213,37 +215,10 @@ export async function POST(req: Request) {
                 return NextResponse.json({ success: false, message: 'Order not found' }, { status: 404 });
             }
 
-            console.log('[Callback] Order updated! ID:', orderJson.id, '| Status:', orderJson.status);
+            console.log('[Callback] Order updated! ID:', orderJson.id, '| Status:', orderJson.status, '| already_paid:', !!orderJson.already_paid);
 
-            // Update customer stats
-            try {
-                if (orderJson.email) {
-                    await supabaseAdmin.rpc('update_customer_stats', {
-                        p_customer_email: orderJson.email,
-                        p_order_total: orderJson.total
-                    });
-                }
-            } catch (statsError: any) {
-                console.error('[Callback] Customer stats failed:', statsError.message);
-            }
-
-            // Email (and web-order SMS); POS gets receipt SMS after payment here
-            try {
-                console.log('[Callback] Sending notifications for:', orderJson.order_number);
-                await sendOrderConfirmation(orderJson);
-                if (isPosSaleOrder(orderJson.metadata) && orderJson.order_number) {
-                    const receipt = await sendPosReceiptSmsByOrderRef(orderJson.order_number);
-                    if (!receipt.ok) {
-                        console.warn('[Callback] POS receipt SMS:', receipt.error);
-                    }
-                }
-                console.log('[Callback] Notifications sent!');
-            } catch (notifyError: any) {
-                console.error('[Callback] Notification failed:', notifyError.message);
-            }
-
-            // Record affiliate commission (best-effort, idempotent — verify may also fire).
-            await recordAffiliateCommission(merchantOrderRef);
+            // Skipped when mark_order_paid reports already_paid.
+            await runPaidSideEffects(orderJson, 'Callback');
 
             return NextResponse.json({ success: true, message: 'Payment verified and Order Updated' });
 
@@ -265,11 +240,13 @@ export async function POST(req: Request) {
                     metadata: {
                         ...(failedOrder?.metadata || {}),
                         moolre_reference: moolreReference,
-                        failure_reason: body.message || 'Payment failed',
+                        failure_reason: String(body.message || 'Payment failed').slice(0, 300),
                         failure_at: new Date().toISOString(),
                     }
                 })
-                .eq('order_number', merchantOrderRef);
+                .eq('order_number', merchantOrderRef)
+                // Never downgrade an order that is already paid.
+                .neq('payment_status', 'paid');
 
             return NextResponse.json({ success: false, message: 'Payment not successful' });
         }

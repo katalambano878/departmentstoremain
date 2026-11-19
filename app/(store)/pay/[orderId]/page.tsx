@@ -87,12 +87,14 @@ export default function PaymentPage() {
     setRemovedNotice(null);
 
     try {
-      // The server re-reads amount and email from the DB — we only need orderId.
+      // The server re-reads amount and email from the DB. It needs the order
+      // number plus the order's uuid as proof that this page loaded the order.
       const paymentRes = await fetch('/api/payment/hubtel', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           orderId: order.order_number,
+          orderUuid: order.id,
         })
       });
 

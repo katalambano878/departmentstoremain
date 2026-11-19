@@ -1,9 +1,11 @@
 'use client';
 
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import dynamic from 'next/dynamic';
 import { supabase } from '@/lib/supabase';
 import { getPosCodeFromMetadata } from '@/lib/posCode';
+import { toPesewas, POS_WALKIN_EMAIL } from '@/app/api/admin/pos/shared';
 
 const BarcodeScanner = dynamic(() => import('@/components/admin/BarcodeScanner'), { ssr: false });
 
@@ -82,6 +84,23 @@ interface Customer {
     phone?: string;
 }
 
+/** One key per sale attempt; a retry of the same attempt reuses it so the server never sells twice. */
+function newIdempotencyKey() {
+    try {
+        if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') return `pos_${crypto.randomUUID()}`;
+    } catch {
+        /* older browsers */
+    }
+    return `pos_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 12)}`;
+}
+
+/** Strip characters that would break the search filter. */
+function cleanSearchTerm(value: string) {
+    return value.replace(/[,()*%\\"']/g, ' ').trim().slice(0, 60);
+}
+
+const formatCedis = (amount: number) => `GH₵${(Math.round(amount * 100) / 100).toFixed(2)}`;
+
 export default function POSPage() {
     const [products, setProducts] = useState<Product[]>([]);
     const [categories, setCategories] = useState<string[]>([]);
@@ -105,6 +124,9 @@ export default function POSPage() {
     const [processing, setProcessing] = useState(false);
     const [completedOrder, setCompletedOrder] = useState<any>(null);
     const [checkoutError, setCheckoutError] = useState<string | null>(null);
+    const [customerSearching, setCustomerSearching] = useState(false);
+    const [viewerRole, setViewerRole] = useState<string | null>(null);
+    const idempotencyKeyRef = useRef<string | null>(null);
     const [backdateSale, setBackdateSale] = useState(false);
     const [backdateYmd, setBackdateYmd] = useState(OFFLINE_CATCHUP_FROM);
     const catchupDates = useMemo(() => offlineCatchupDates(accraTodayYmd()), []);
@@ -127,7 +149,45 @@ export default function POSPage() {
 
     useEffect(() => {
         fetchData();
+        // Backdating is for managers only; till staff never see the option.
+        (async () => {
+            const { data: { user } } = await supabase.auth.getUser();
+            if (!user) return;
+            const { data } = await supabase.from('profiles').select('role').eq('id', user.id).maybeSingle();
+            setViewerRole((data as { role?: string } | null)?.role || null);
+        })().catch(() => setViewerRole(null));
     }, []);
+
+    // A changed cart or payment method is a new sale attempt.
+    useEffect(() => {
+        idempotencyKeyRef.current = null;
+    }, [cart, paymentMethod]);
+
+    // Search customers in the database (not just the first page) by name, phone or email.
+    useEffect(() => {
+        if (!showCheckoutModal) return;
+        let cancelled = false;
+        const term = cleanSearchTerm(customerSearch);
+        const timer = setTimeout(async () => {
+            setCustomerSearching(true);
+            try {
+                let query = supabase.from('customers').select('id, full_name, email, phone');
+                if (term) {
+                    query = query.or(`full_name.ilike.*${term}*,phone.ilike.*${term}*,email.ilike.*${term}*`).order('full_name');
+                } else {
+                    query = query.order('updated_at', { ascending: false });
+                }
+                const { data, error } = await query.limit(25);
+                if (!cancelled && !error) setCustomers((data as Customer[]) || []);
+            } finally {
+                if (!cancelled) setCustomerSearching(false);
+            }
+        }, term ? 300 : 0);
+        return () => {
+            cancelled = true;
+            clearTimeout(timer);
+        };
+    }, [customerSearch, showCheckoutModal]);
 
     useEffect(() => {
         if (!categories.length) return;
@@ -147,6 +207,7 @@ export default function POSPage() {
           product_images(url, position, variant_id),
           product_variants(id, name, option1, option2, sku, barcode, price, quantity, image_url)
         `)
+                .eq('status', 'active')
                 .order('name');
 
             if (prodData) {
@@ -161,7 +222,7 @@ export default function POSPage() {
                         }
                     }
                     const productLevelUrl =
-                        imgs.find((i) => !i.variant_id)?.url || imgs[0]?.url || 'https://via.placeholder.com/150';
+                        imgs.find((i) => !i.variant_id)?.url || imgs[0]?.url || 'data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 width=%2780%27 height=%2780%27 viewBox=%270 0 80 80%27%3E%3Crect width=%2780%27 height=%2780%27 fill=%27%23f3f4f6%27/%3E%3Cpath d=%27M24 54l10-12 8 9 6-7 8 10z%27 fill=%27%23d1d5db%27/%3E%3Ccircle cx=%2730%27 cy=%2730%27 r=%275%27 fill=%27%23d1d5db%27/%3E%3C/svg%3E';
 
                     return {
                         id: p.id,
@@ -192,15 +253,6 @@ export default function POSPage() {
                 const cats = Array.from(new Set(formatted.map(p => p.category))).sort();
                 setCategories(['All', ...cats]);
             }
-
-            // Fetch Customers from customers table (not profiles)
-            const { data: custData } = await supabase
-                .from('customers')
-                .select('id, full_name, email, phone')
-                .order('full_name')
-                .limit(200);
-
-            if (custData) setCustomers(custData);
 
         } catch (error) {
             console.error('Error fetching POS data:', error);
@@ -337,26 +389,29 @@ export default function POSPage() {
         });
     }, [products, searchQuery, activeCategory]);
 
-    // Filter customers by search
+    // Server search results, keeping the chosen customer in the list.
     const filteredCustomers = useMemo(() => {
-        if (!customerSearch.trim()) return customers;
-        const q = customerSearch.toLowerCase();
-        return customers.filter(c =>
-            c.full_name?.toLowerCase().includes(q) ||
-            c.email?.toLowerCase().includes(q) ||
-            c.phone?.includes(q)
-        );
-    }, [customers, customerSearch]);
+        if (selectedCustomer && !customers.some((c) => c.id === selectedCustomer.id)) {
+            return [selectedCustomer, ...customers];
+        }
+        return customers;
+    }, [customers, selectedCustomer]);
 
-    const cartTotal = cart.reduce((sum, item) => sum + (item.price * item.cartQuantity), 0);
-    const tax = cartTotal * 0.0;
-    const grandTotal = cartTotal + tax;
-    const changeDue = amountTendered ? (parseFloat(amountTendered) - grandTotal) : 0;
+    // Money in pesewas so 12.10 x 3 is exactly 36.30.
+    const cartTotalP = cart.reduce((sum, item) => sum + toPesewas(item.price) * item.cartQuantity, 0);
+    const taxP = 0;
+    const grandTotalP = cartTotalP + taxP;
+    const cartTotal = cartTotalP / 100;
+    const grandTotal = grandTotalP / 100;
+    const tenderedP = amountTendered ? toPesewas(amountTendered) : NaN;
+    const changeDue = Number.isFinite(tenderedP) ? (tenderedP - grandTotalP) / 100 : 0;
+    const canBackdate = viewerRole === 'admin' || viewerRole === 'staff';
+    const backdating = backdateSale && canBackdate;
 
     // Get the customer email and phone for the order
     const getOrderEmail = () => {
         if (selectedCustomer) return selectedCustomer.email;
-        return guestDetails.email || 'pos-walkin@store.local';
+        return guestDetails.email.trim();
     };
 
     /** Typed phone wins (guest field is shown for SMS even when a saved customer is selected). */
@@ -381,11 +436,10 @@ export default function POSPage() {
         }
 
         if (paymentMethod === 'cash') {
-            const tendered = parseFloat(amountTendered || '0');
-            if (tendered < grandTotal) return 'Insufficient amount tendered';
+            if (!Number.isFinite(tenderedP) || tenderedP < grandTotalP) return 'Insufficient amount tendered';
         }
 
-        if (backdateSale) {
+        if (backdating) {
             if (paymentMethod === 'momo') return 'Offline catch-up sales must be Cash or Card. They are recorded as already paid.';
             if (!catchupDates.some((day) => day.ymd === backdateYmd)) {
                 return 'Pick a sale date between Saturday and today.';
@@ -402,7 +456,7 @@ export default function POSPage() {
         return null;
     };
 
-    // Checkout Logic
+    // Checkout Logic: one server call prices, saves and (for cash/card) pays the sale.
     const handleCheckout = async () => {
         const validationError = validateCheckout();
         if (validationError) {
@@ -413,189 +467,98 @@ export default function POSPage() {
         setProcessing(true);
         setCheckoutError(null);
 
+        // Reuse the key when retrying the same attempt (e.g. after a network drop).
+        if (!idempotencyKeyRef.current) idempotencyKeyRef.current = newIdempotencyKey();
+        const idempotencyKey = idempotencyKeyRef.current;
+
         try {
-            const productIds = [...new Set(cart.map((item) => item.productId))];
-            const { data: liveProducts, error: livePriceError } = await supabase
-                .from('products')
-                .select('id, price, product_variants(id, price)')
-                .in('id', productIds);
-            if (livePriceError) throw livePriceError;
-
-            const liveById = new Map((liveProducts || []).map((product) => [product.id, product]));
-            let pricesChanged = false;
-            const pricedCart = cart.map((item) => {
-                const product = liveById.get(item.productId);
-                if (!product) return item;
-                const variant = item.variantId
-                    ? (product.product_variants || []).find((row: { id: string }) => row.id === item.variantId)
-                    : null;
-                const livePrice = Number(variant?.price ?? product.price);
-                if (!Number.isFinite(livePrice) || Math.abs(livePrice - item.price) < 0.001) return item;
-                pricesChanged = true;
-                return { ...item, price: livePrice };
-            });
-            if (pricesChanged) {
-                setCart(pricedCart);
-                setCheckoutError('A product price was updated. The total has been refreshed. Check it, then complete the sale again.');
-                setProcessing(false);
-                return;
-            }
-
-            const orderNumber = `ORD-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
-            const customerName = getCustomerFullName();
-            const customerEmail = getOrderEmail();
-            const customerPhone = getOrderPhone();
-
-            const isCashOrCard = paymentMethod === 'cash' || paymentMethod === 'card';
-            const saleCreatedAt = backdateSale ? `${backdateYmd}T12:00:00.000Z` : null;
-
-            // Build shipping/billing address
-            const addressData = selectedCustomer ? {
-                firstName: selectedCustomer.full_name?.split(' ')[0] || '',
-                lastName: selectedCustomer.full_name?.split(' ').slice(1).join(' ') || '',
-                email: selectedCustomer.email,
-                phone: customerPhone,
-                address: guestDetails.address,
-                city: guestDetails.city,
-                region: guestDetails.region,
-                pos_sale: true
-            } : {
-                firstName: guestDetails.firstName,
-                lastName: guestDetails.lastName,
-                email: guestDetails.email,
-                phone: guestDetails.phone,
-                address: guestDetails.address,
-                city: guestDetails.city,
-                region: guestDetails.region,
-                pos_sale: true
+            const { data: { session } } = await supabase.auth.getSession();
+            const authHeaders = {
+                'Content-Type': 'application/json',
+                Authorization: `Bearer ${session?.access_token ?? ''}`,
             };
 
-            // 1. Create Order
-            const { data: order, error: orderError } = await supabase
-                .from('orders')
-                .insert([{
-                    order_number: orderNumber,
-                    user_id: null,
-                    email: customerEmail,
-                    phone: customerPhone,
-                    status: isCashOrCard ? 'completed' : 'pending',
-                    payment_status: isCashOrCard ? 'paid' : 'pending',
-                    currency: 'GHS',
-                    subtotal: cartTotal,
-                    tax_total: tax,
-                    shipping_total: 0,
-                    discount_total: 0,
-                    total: grandTotal,
-                    shipping_method: deliveryMethod,
-                    payment_method: paymentMethod === 'momo' ? 'moolre' : paymentMethod,
-                    shipping_address: addressData,
-                    billing_address: addressData,
-                    ...(saleCreatedAt ? { created_at: saleCreatedAt } : {}),
-                    metadata: {
-                        pos_sale: true,
-                        first_name: addressData.firstName,
-                        last_name: addressData.lastName,
-                        phone: customerPhone,
-                        ...(saleCreatedAt ? { offline_catchup: true, sale_date: backdateYmd } : {}),
-                    }
-                }])
-                .select()
-                .single();
+            const customerEmail = getOrderEmail();
+            const customerPhone = getOrderPhone();
+            const saleYmd = backdating ? backdateYmd : null;
 
-            if (orderError) throw orderError;
-
-            // 2. Create Order Items (with product_name, unit_price, total_price)
-            const orderItems = pricedCart.map(item => ({
-                order_id: order.id,
-                product_id: item.productId,
-                variant_id: item.variantId || null,
-                product_name: item.name,
-                variant_name: item.variantName || null,
-                sku: item.sku || null,
-                quantity: item.cartQuantity,
-                unit_price: item.price,
-                total_price: item.price * item.cartQuantity,
-                metadata: { image: item.image, pos_sale: true }
-            }));
-
-            const { error: itemsError } = await supabase
-                .from('order_items')
-                .insert(orderItems);
-
-            if (itemsError) throw itemsError;
-
-            // For paid POS checkouts (cash/card), reduce inventory immediately
-            // through the authenticated admin route.  The mark_order_paid RPC
-            // is locked down (no public EXECUTE) so we can only reach it with
-            // a staff access token.
-            if (isCashOrCard) {
-                const { data: { session } } = await supabase.auth.getSession();
-                const res = await fetch('/api/admin/orders/mark-paid', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        Authorization: `Bearer ${session?.access_token ?? ''}`,
+            const res = await fetch('/api/admin/pos/checkout', {
+                method: 'POST',
+                headers: authHeaders,
+                body: JSON.stringify({
+                    idempotencyKey,
+                    items: cart.map((item) => ({
+                        productId: item.productId,
+                        variantId: item.variantId || null,
+                        quantity: item.cartQuantity,
+                    })),
+                    customer: selectedCustomer
+                        ? {
+                            existing: true,
+                            name: selectedCustomer.full_name || '',
+                            email: selectedCustomer.email || '',
+                            phone: customerPhone,
+                        }
+                        : {
+                            name: getCustomerFullName(),
+                            firstName: guestDetails.firstName.trim(),
+                            lastName: guestDetails.lastName.trim(),
+                            email: guestDetails.email.trim(),
+                            phone: customerPhone,
+                        },
+                    paymentMethod,
+                    amountTendered: paymentMethod === 'cash' ? amountTendered : undefined,
+                    saleDate: saleYmd || undefined,
+                    delivery: {
+                        method: deliveryMethod,
+                        address: guestDetails.address,
+                        city: guestDetails.city,
+                        region: guestDetails.region,
                     },
-                    body: JSON.stringify({
-                        orderNumber,
-                        reference: `pos-${paymentMethod}-${Date.now()}`,
-                    }),
-                });
-                if (!res.ok) {
-                    const body = await res.json().catch(() => ({}));
-                    throw new Error(body?.error || 'Stock update failed');
-                }
+                    expectedTotal: grandTotal,
+                }),
+            });
+            const result = await res.json().catch(() => ({} as any));
+
+            if (res.status === 409 && result?.code === 'price_changed' && Array.isArray(result.prices)) {
+                // The saved price differs from the one on screen: refresh the cart and let the cashier confirm.
+                const priceFor = new Map<string, number>(
+                    result.prices.map((p: { productId: string; variantId: string | null; unitPrice: number }) => [
+                        `${p.productId}:${p.variantId || ''}`,
+                        Number(p.unitPrice),
+                    ])
+                );
+                setCart((prev) => prev.map((item) => {
+                    const live = priceFor.get(`${item.productId}:${item.variantId || ''}`);
+                    return live !== undefined && Number.isFinite(live) ? { ...item, price: live } : item;
+                }));
+                setCheckoutError(result.error || 'A product price was updated. Check the total, then complete the sale again.');
+                return;
+            }
+            if (!res.ok || !result?.order) {
+                throw new Error(result?.error || `Checkout failed (${res.status}). Try again.`);
             }
 
-            // 3. Upsert Customer Record (email is required in customers table)
-            const hasRealEmail = customerEmail && customerEmail !== 'pos-walkin@store.local';
-            const guestHasIdentityDetails = !selectedCustomer && (
-                !!guestDetails.firstName.trim() ||
-                !!guestDetails.lastName.trim() ||
-                !!guestDetails.email.trim()
-            );
-            const upsertEmail = hasRealEmail
-                ? customerEmail
-                : guestHasIdentityDetails && customerPhone
-                    ? `${customerPhone.replace(/[^0-9]/g, '')}@pos.local`
-                    : null;
+            const order = result.order;
+            const orderNumber: string = order.order_number;
+            const receiptItems = (result.items || []).map((it: any) => ({
+                name: it.product_name,
+                variantName: it.variant_name || undefined,
+                quantity: Number(it.quantity),
+                unitPrice: Number(it.unit_price),
+                lineTotal: Number(it.total_price),
+            }));
+            const isCashOrCard = paymentMethod === 'cash' || paymentMethod === 'card';
+            const wasBackdated = !!order.metadata?.offline_catchup;
 
-            if (upsertEmail) {
-                try {
-                    await supabase.rpc('upsert_customer_from_order', {
-                        p_email: upsertEmail,
-                        p_phone: customerPhone || null,
-                        p_full_name: customerName || null,
-                        p_first_name: addressData.firstName || null,
-                        p_last_name: addressData.lastName || null,
-                        p_user_id: null,
-                        p_address: addressData
-                    });
-                    // Refresh customer list silently
-                    supabase.from('customers').select('id, full_name, email, phone').order('full_name').limit(200)
-                        .then(({ data }) => { if (data) setCustomers(data); });
-                } catch (custErr) {
-                    console.error('Customer upsert error (non-fatal):', custErr);
-                }
-            }
-
-            // 4. Cash/card already marked as paid above (stock already reduced).
-            //    The RPC is idempotent via metadata.stock_reduced so this
-            //    previous double-call is no longer needed.
             if (isCashOrCard) {
-                setCart([]);
-
                 // Receipt SMS for every POS sale when a customer phone is present
                 let receiptSmsNote: string | null = null;
-                if (customerPhone?.trim() && !saleCreatedAt) {
+                if (customerPhone?.trim() && !wasBackdated) {
                     try {
-                        const { data: { session: smsSession } } = await supabase.auth.getSession();
                         const smsRes = await fetch('/api/notifications', {
                             method: 'POST',
-                            headers: {
-                                'Content-Type': 'application/json',
-                                Authorization: `Bearer ${smsSession?.access_token ?? ''}`,
-                            },
+                            headers: authHeaders,
                             body: JSON.stringify({
                                 type: 'pos_receipt_sms',
                                 payload: { order_number: orderNumber }
@@ -617,65 +580,65 @@ export default function POSPage() {
                 setCompletedOrder({
                     id: order.id,
                     orderNumber,
-                    total: grandTotal,
-                    items: cart,
-                    // Fixed now: the cart (and grandTotal) is cleared right after.
-                    changeDue: paymentMethod === 'cash' ? changeDue : 0,
+                    total: Number(order.total),
+                    subtotal: Number(order.subtotal),
+                    createdAt: order.created_at,
+                    paymentMethod,
+                    items: receiptItems,
+                    customerName: getCustomerFullName(),
+                    amountTendered: result.amountTendered,
+                    changeDue: paymentMethod === 'cash' ? Number(result.changeDue) || 0 : 0,
+                    backdated: wasBackdated,
                     receiptSmsWarning: receiptSmsNote || undefined
                 });
+                setCart([]);
+                idempotencyKeyRef.current = null;
 
-                // Send notification
-                if (!saleCreatedAt && customerEmail && customerEmail !== 'pos-walkin@store.local') {
-                    const { data: { session } } = await supabase.auth.getSession();
+                // Email confirmation (the server looks the order up and skips placeholder addresses)
+                if (!wasBackdated && customerEmail && !customerEmail.endsWith('@pos.local') && customerEmail !== POS_WALKIN_EMAIL) {
                     fetch('/api/notifications', {
                         method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                            ...(session?.access_token && { 'Authorization': `Bearer ${session.access_token}` })
-                        },
+                        headers: authHeaders,
                         body: JSON.stringify({
                             type: 'order_created',
-                            payload: {
-                                ...order,
-                                order_number: orderNumber,
-                                email: customerEmail,
-                                shipping_address: addressData
-                            }
+                            payload: { order_number: orderNumber }
                         })
                     }).catch(err => console.error('POS Notification error:', err));
                 }
+                return;
             }
 
-            // 5. If Momo — initiate Hubtel payment
-            if (paymentMethod === 'momo') {
-                const paymentRes = await fetch('/api/payment/hubtel', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        orderId: orderNumber,
-                        amount: grandTotal,
-                        customerEmail: customerEmail
-                    })
-                });
-
-                const paymentResult = await paymentRes.json();
-
-                if (!paymentResult.success) {
-                    throw new Error(paymentResult.message || 'Failed to initiate Mobile Money payment');
-                }
-
-                // Show completed with payment link
-                setCompletedOrder({
-                    id: order.id,
-                    orderNumber,
-                    total: grandTotal,
-                    items: cart,
-                    paymentUrl: paymentResult.url,
-                    paymentPending: true
-                });
-                setCart([]);
+            // Mobile Money: the order is saved as pending; start the Hubtel payment link.
+            const paymentRes = await fetch('/api/payment/hubtel', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    orderId: orderNumber,
+                    customerEmail: order.email
+                })
+            });
+            const paymentResult = await paymentRes.json().catch(() => ({} as any));
+            if (!paymentResult?.success) {
+                // Keep the key: retrying reuses this saved order instead of making another.
+                throw new Error(
+                    `Order #${orderNumber} is saved but the payment link failed: ${paymentResult?.message || 'unknown error'}. Press the button again to retry.`
+                );
             }
 
+            setCompletedOrder({
+                id: order.id,
+                orderNumber,
+                total: Number(order.total),
+                subtotal: Number(order.subtotal),
+                createdAt: order.created_at,
+                paymentMethod,
+                items: receiptItems,
+                customerName: getCustomerFullName(),
+                paymentUrl: paymentResult.url,
+                paymentPending: true
+            });
+            setCart([]);
+            idempotencyKeyRef.current = null;
         } catch (error: any) {
             console.error('Checkout failed:', error);
             setCheckoutError(error.message || 'Checkout failed. Please try again.');
@@ -685,6 +648,7 @@ export default function POSPage() {
     };
 
     const resetCheckout = () => {
+        idempotencyKeyRef.current = null;
         setShowCheckoutModal(false);
         setCompletedOrder(null);
         setAmountTendered('');
@@ -935,7 +899,7 @@ export default function POSPage() {
                                                 <i className="ri-add-line text-xs"></i>
                                             </button>
                                         </div>
-                                        <p className="text-sm font-bold text-gray-900">GH₵{(item.price * item.cartQuantity).toFixed(2)}</p>
+                                        <p className="text-sm font-bold text-gray-900">{formatCedis((toPesewas(item.price) * item.cartQuantity) / 100)}</p>
                                     </div>
                                 </div>
                             </div>
@@ -1078,7 +1042,7 @@ export default function POSPage() {
                                         {completedOrder.paymentPending ? 'Payment Link Generated!' : 'Payment Successful!'}
                                     </h2>
                                     <p className="text-gray-500 mt-1">Order #{completedOrder.orderNumber}</p>
-                                    {backdateSale && (
+                                    {completedOrder.backdated && (
                                         <p className="mt-2 text-sm font-medium text-amber-800">
                                             Dated {catchupDates.find((day) => day.ymd === backdateYmd)?.label || backdateYmd}. No receipt was sent.
                                         </p>
@@ -1087,7 +1051,7 @@ export default function POSPage() {
                                     {!completedOrder.paymentPending && completedOrder.changeDue > 0 && (
                                         <div className="mt-3 bg-blue-50 border border-blue-200 rounded-lg p-3">
                                             <p className="text-sm text-blue-700">Change Due</p>
-                                            <p className="text-2xl font-bold text-blue-800">GH₵{completedOrder.changeDue.toFixed(2)}</p>
+                                            <p className="text-2xl font-bold text-blue-800">{formatCedis(completedOrder.changeDue)}</p>
                                         </div>
                                     )}
 
@@ -1132,7 +1096,7 @@ export default function POSPage() {
                                 </div>
 
                                 <div className="grid grid-cols-2 gap-4 w-full mt-4">
-                                    <button onClick={() => window.print()} className="py-3 px-4 border border-gray-300 rounded-xl font-semibold hover:bg-gray-50 transition-colors">
+                                    <button onClick={() => window.print()} disabled={completedOrder.paymentPending} title={completedOrder.paymentPending ? 'Print once the customer has paid' : undefined} className="disabled:opacity-50 disabled:cursor-not-allowed py-3 px-4 border border-gray-300 rounded-xl font-semibold hover:bg-gray-50 transition-colors">
                                         <i className="ri-printer-line mr-2"></i>
                                         Print Receipt
                                     </button>
@@ -1166,7 +1130,7 @@ export default function POSPage() {
                                         <p className="text-4xl font-extrabold text-blue-700 mt-1">GH₵{grandTotal.toFixed(2)}</p>
                                     </div>
 
-                                    {catchupDates.length > 0 && (
+                                    {canBackdate && catchupDates.length > 0 && (
                                         <div className="rounded-xl border border-amber-200 bg-amber-50 p-4">
                                             <label className="flex items-start gap-3 cursor-pointer">
                                                 <input
@@ -1218,11 +1182,11 @@ export default function POSPage() {
                                         <select
                                             className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none mb-2"
                                             onChange={(e) => {
-                                                setSelectedCustomer(customers.find(c => c.id === e.target.value) || null);
+                                                setSelectedCustomer(filteredCustomers.find(c => c.id === e.target.value) || null);
                                             }}
                                             value={selectedCustomer?.id || ''}
                                         >
-                                            <option value="">Walk-in Customer / New Guest</option>
+                                            <option value="">{customerSearching ? 'Searching…' : 'Walk-in Customer / New Guest'}</option>
                                             {filteredCustomers.map(c => (
                                                 <option key={c.id} value={c.id}>
                                                     {c.full_name || 'No Name'} — {c.phone || c.email}
@@ -1234,7 +1198,7 @@ export default function POSPage() {
                                             <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-2 flex items-center justify-between">
                                                 <div>
                                                     <p className="font-semibold text-gray-900 text-sm">{selectedCustomer.full_name}</p>
-                                                    <p className="text-xs text-gray-600">{selectedCustomer.email} {selectedCustomer.phone && `| ${selectedCustomer.phone}`}</p>
+                                                    <p className="text-xs text-gray-600">{selectedCustomer.email?.endsWith('@pos.local') ? '' : selectedCustomer.email} {selectedCustomer.phone && `| ${selectedCustomer.phone}`}</p>
                                                 </div>
                                                 <button
                                                     onClick={() => setSelectedCustomer(null)}
@@ -1419,10 +1383,10 @@ export default function POSPage() {
                                             )}
                                             {/* Quick amount buttons */}
                                             <div className="flex flex-wrap gap-2 mt-3">
-                                                {[grandTotal, Math.ceil(grandTotal / 10) * 10, Math.ceil(grandTotal / 50) * 50, Math.ceil(grandTotal / 100) * 100].filter((v, i, a) => a.indexOf(v) === i).map(amount => (
+                                                {[grandTotalP, Math.ceil(grandTotalP / 1000) * 1000, Math.ceil(grandTotalP / 5000) * 5000, Math.ceil(grandTotalP / 10000) * 10000].filter((v, i, a) => a.indexOf(v) === i).map((p) => p / 100).map(amount => (
                                                     <button
                                                         key={amount}
-                                                        onClick={() => setAmountTendered(amount.toString())}
+                                                        onClick={() => setAmountTendered(amount.toFixed(2))}
                                                         className="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 rounded-lg text-sm font-medium text-gray-700 transition-colors"
                                                     >
                                                         GH₵{amount.toFixed(2)}
@@ -1439,7 +1403,7 @@ export default function POSPage() {
                                                 <i className="ri-information-line text-amber-600 mt-0.5"></i>
                                                 <div className="text-sm text-amber-800">
                                                     <p className="font-semibold">Mobile Money Payment</p>
-                                                    <p className="mt-1">A Moolre payment link will be generated. The customer can pay via their phone, or you can open the link on your device.</p>
+                                                    <p className="mt-1">A Mobile Money payment link will be generated. The customer can pay via their phone, or you can open the link on your device.</p>
                                                 </div>
                                             </div>
                                         </div>
@@ -1487,6 +1451,56 @@ export default function POSPage() {
                         )}
                     </div>
                 </div>
+            )}
+
+            {/* Print-only receipt: window.print() prints this and nothing else. */}
+            {completedOrder && !completedOrder.paymentPending && typeof document !== 'undefined' && createPortal(
+                <div id="pos-print-receipt" className="hidden print:block">
+                    <style>{`
+                        @media print {
+                            @page { margin: 6mm; }
+                            body > *:not(#pos-print-receipt) { display: none !important; }
+                            #pos-print-receipt { display: block !important; color: #000; font-family: ui-monospace, Menlo, monospace; font-size: 12px; width: 72mm; }
+                            #pos-print-receipt table { width: 100%; border-collapse: collapse; }
+                            #pos-print-receipt td { padding: 2px 0; vertical-align: top; }
+                        }
+                    `}</style>
+                    <p style={{ textAlign: 'center', fontWeight: 700, fontSize: 14 }}>Discount Discovery Zone</p>
+                    <p style={{ textAlign: 'center' }}>Receipt #{completedOrder.orderNumber}</p>
+                    <p style={{ textAlign: 'center' }}>
+                        {new Date(completedOrder.createdAt || Date.now()).toLocaleString('en-GH', { timeZone: 'Africa/Accra' })}
+                    </p>
+                    {completedOrder.customerName && <p>Customer: {completedOrder.customerName}</p>}
+                    <hr />
+                    <table>
+                        <tbody>
+                            {(completedOrder.items || []).map((it: any, idx: number) => (
+                                <tr key={idx}>
+                                    <td>
+                                        {it.name}{it.variantName ? ` (${it.variantName})` : ''}<br />
+                                        {it.quantity} x {formatCedis(it.unitPrice)}
+                                    </td>
+                                    <td style={{ textAlign: 'right' }}>{formatCedis(it.lineTotal)}</td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                    <hr />
+                    <table>
+                        <tbody>
+                            <tr><td><strong>Total</strong></td><td style={{ textAlign: 'right' }}><strong>{formatCedis(completedOrder.total)}</strong></td></tr>
+                            <tr><td>Paid by</td><td style={{ textAlign: 'right' }}>{completedOrder.paymentMethod === 'card' ? 'Card' : 'Cash'}</td></tr>
+                            {completedOrder.paymentMethod === 'cash' && completedOrder.amountTendered != null && (
+                                <tr><td>Tendered</td><td style={{ textAlign: 'right' }}>{formatCedis(completedOrder.amountTendered)}</td></tr>
+                            )}
+                            {completedOrder.paymentMethod === 'cash' && (
+                                <tr><td>Change</td><td style={{ textAlign: 'right' }}>{formatCedis(completedOrder.changeDue || 0)}</td></tr>
+                            )}
+                        </tbody>
+                    </table>
+                    <p style={{ textAlign: 'center', marginTop: 8 }}>Thank you for shopping with us.</p>
+                </div>,
+                document.body
             )}
         </div>
     );

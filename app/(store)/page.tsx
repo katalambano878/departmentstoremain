@@ -15,6 +15,12 @@ import { usePageTitle } from '@/hooks/usePageTitle';
 import { getOptimizedImageUrl } from '@/lib/imageOptimization';
 import { applyStorefrontProductFilter } from '@/lib/product-visibility';
 
+// Explicit columns only: never select cost fields for the storefront.
+const HOME_PRODUCT_COLUMNS =
+  'id, name, slug, price, compare_at_price, quantity, track_quantity, continue_selling, featured, moq, rating_avg, review_count, created_at, ' +
+  'product_variants(id, name, price, compare_at_price, quantity, option1, option2, image_url), ' +
+  'product_images(id, url, alt_text, position, variant_id), categories(name)';
+
 export default function Home() {
   usePageTitle('');
   const [featuredProducts, setFeaturedProducts] = useState<any[]>([]);
@@ -28,7 +34,7 @@ export default function Home() {
         const { data: productsData, error: productsError } = await applyStorefrontProductFilter(
           supabase
             .from('products')
-            .select('*, product_variants(*), product_images(*), categories(name)')
+            .select(HOME_PRODUCT_COLUMNS)
         )
           .eq('featured', true)
           .order('created_at', { ascending: false })
@@ -40,7 +46,7 @@ export default function Home() {
           const { data: fallbackProducts, error: fallbackError } = await applyStorefrontProductFilter(
             supabase
               .from('products')
-              .select('*, product_variants(*), product_images(*), categories(name)')
+              .select(HOME_PRODUCT_COLUMNS)
           )
             .order('created_at', { ascending: false })
             .limit(8);
@@ -164,7 +170,8 @@ export default function Home() {
                 const hasVariants = variants.length > 0;
                 const minVariantPrice = hasVariants ? Math.min(...variants.map((v: any) => v.price || product.price)) : undefined;
                 const totalVariantStock = hasVariants ? variants.reduce((sum: number, v: any) => sum + (v.quantity || 0), 0) : 0;
-                const effectiveStock = hasVariants ? totalVariantStock : product.quantity;
+                const unlimitedStock = product.track_quantity === false || product.continue_selling === true;
+                const effectiveStock = unlimitedStock ? 999 : (hasVariants ? totalVariantStock : product.quantity);
 
                 // Extract unique colors from option2
                 const colorVariants: ColorVariant[] = [];
@@ -189,12 +196,12 @@ export default function Home() {
                     price={product.price}
                     originalPrice={product.compare_at_price}
                     image={product.product_images?.[0]?.url || ''}
-                    rating={product.rating_avg || 5}
+                    rating={product.rating_avg || 0}
                     reviewCount={product.review_count || 0}
                     badge={product.featured ? 'Featured' : undefined}
                     categoryName={product.categories?.name || undefined}
                     inStock={effectiveStock > 0}
-                    maxStock={effectiveStock || 50}
+                    maxStock={effectiveStock}
                     moq={product.moq || 1}
                     hasVariants={hasVariants}
                     minVariantPrice={minVariantPrice}

@@ -1,19 +1,26 @@
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase-admin';
-import { sendOrderConfirmation, sendPosReceiptSmsByOrderRef, isPosSaleOrder } from '@/lib/notifications';
 import { checkRateLimit, getClientIdentifier, RATE_LIMITS } from '@/lib/rate-limit';
-import { checkHubtelStatus, isHubtelPaid } from '@/lib/hubtel';
-import { recordAffiliateCommission } from '@/lib/affiliate-server';
+import { checkHubtelStatus, isHubtelPaid, stripHubtelReferenceSuffix } from '@/lib/hubtel';
+import {
+    expectedChargeAmounts,
+    hubtelCustomerPaidAmount,
+    hubtelReferenceMatchesOrder,
+    paidCoversExpected,
+} from '../../_lib/order-charge';
+import { runPaidSideEffects } from '../../_lib/after-paid';
 
 /**
  * Server-side Hubtel verification, called from /order-success after the
  * customer returns from the hosted checkout.
  *
- * Unlike Moolre (which had no status API and relied on redirect-trust), Hubtel
- * exposes an RMSC status endpoint, so here we actually re-query Hubtel using
- * the clientReference we stored at initiation time and only mark the order
- * paid when Hubtel confirms "Paid" AND the settlement amount matches the order
- * total. We keep the same IDOR/same-origin guards as the old Moolre verify.
+ * Body: { orderNumber } (an `email` field is accepted and ignored — the order
+ * is only marked paid when Hubtel itself confirms it, so knowing the email
+ * adds nothing, and the success page only has a masked email now).
+ *
+ * The order is marked paid only when Hubtel's status API reports "Paid" for
+ * THIS order's client reference AND the customer-paid amount covers the
+ * server-recomputed charge.
  */
 export async function POST(req: Request) {
     try {
@@ -23,8 +30,7 @@ export async function POST(req: Request) {
             return NextResponse.json({ success: false, message: 'Too many requests' }, { status: 429 });
         }
 
-        // SECURITY: Require same-origin request so a leaked (order_number, email)
-        // pair can't be abused cross-site or by a script on another domain.
+        // Same-origin only.
         const origin = req.headers.get('origin') || '';
         const host = req.headers.get('host') || '';
         const allowedOrigins = [
@@ -38,46 +44,29 @@ export async function POST(req: Request) {
             return NextResponse.json({ success: false, message: 'Cross-origin requests not allowed' }, { status: 403 });
         }
 
-        const body = await req.json();
-        const { orderNumber, email } = body;
+        let body: any;
+        try {
+            body = await req.json();
+        } catch {
+            return NextResponse.json({ success: false, message: 'Invalid request body' }, { status: 400 });
+        }
+        const orderNumber = body?.orderNumber;
 
-        if (!orderNumber || typeof orderNumber !== 'string') {
+        if (!orderNumber || typeof orderNumber !== 'string' || !/^ORD-\d+-\d+$/.test(orderNumber)) {
             return NextResponse.json({ success: false, message: 'Missing or invalid orderNumber' }, { status: 400 });
         }
 
-        // SECURITY: Email is required — without it anyone who knows an order number
-        // could trigger a paid verification for someone else's order.
-        if (!email || typeof email !== 'string' || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
-            return NextResponse.json({ success: false, message: 'Valid email is required' }, { status: 400 });
-        }
-
-        if (!/^ORD-\d+-\d+$/.test(orderNumber)) {
-            return NextResponse.json({ success: false, message: 'Invalid order number format' }, { status: 400 });
-        }
-
-        console.log('[Hubtel Verify] Checking payment for:', orderNumber);
-
         const { data: order, error: fetchError } = await supabaseAdmin
             .from('orders')
-            .select('id, order_number, payment_status, status, total, email, phone, shipping_address, metadata, created_at')
+            .select('id, order_number, payment_status, status, total, metadata')
             .eq('order_number', orderNumber)
-            .single();
+            .maybeSingle();
 
         if (fetchError || !order) {
-            console.error('[Hubtel Verify] Order not found:', orderNumber);
-            return NextResponse.json({ success: false, message: 'Order not found' }, { status: 404 });
-        }
-
-        // SECURITY: Verify the caller knows the order's email — prevents IDOR where
-        // any person who guesses an order number can mark it as paid for free.
-        if (order.email?.toLowerCase() !== email.trim().toLowerCase()) {
-            console.warn('[Hubtel Verify] Email mismatch for order:', orderNumber);
-            // Return 404 (not 403) to avoid confirming the order exists
             return NextResponse.json({ success: false, message: 'Order not found' }, { status: 404 });
         }
 
         if (order.payment_status === 'paid') {
-            console.log('[Hubtel Verify] Order already paid:', orderNumber);
             return NextResponse.json({
                 success: true,
                 status: order.status,
@@ -86,17 +75,19 @@ export async function POST(req: Request) {
             });
         }
 
-        // The order must carry a hubtel_client_reference — this proves a Hubtel
-        // checkout was actually initiated for it (can't be forged by the client).
-        const clientReference = (order.metadata as any)?.hubtel_client_reference as string | undefined;
-        if (!clientReference) {
-            console.warn('[Hubtel Verify] No hubtel_client_reference on order:', orderNumber);
-            return NextResponse.json({
+        const notConfirmed = (message = 'Payment not yet confirmed by payment provider') =>
+            NextResponse.json({
                 success: false,
                 status: order.status,
                 payment_status: order.payment_status,
-                message: 'Payment reference not found',
+                message,
             });
+
+        // The reference must have been written by our init route for THIS order.
+        const clientReference = (order.metadata as any)?.hubtel_client_reference as string | undefined;
+        if (!clientReference || !hubtelReferenceMatchesOrder(clientReference, order.order_number, stripHubtelReferenceSuffix)) {
+            console.warn('[Hubtel Verify] Missing or foreign hubtel_client_reference on order:', orderNumber);
+            return notConfirmed('Payment reference not found');
         }
 
         if (
@@ -115,52 +106,30 @@ export async function POST(req: Request) {
             );
         }
 
-        const expectedAmount = Number(order.total) || 0;
-
-        let verified = false;
-        let settlementAmount: number | null = null;
+        let status;
         try {
-            const status = await checkHubtelStatus(clientReference);
-            const sStatus = String(status?.data?.status || '').toLowerCase();
-            verified = isHubtelPaid(sStatus, status?.responseCode);
-            const settlement = status?.data?.amountAfterCharges ?? status?.data?.amount;
-            if (settlement !== undefined && settlement !== null) {
-                const n = parseFloat(String(settlement));
-                if (Number.isFinite(n)) settlementAmount = n;
-            }
-            console.log(
-                '[Hubtel Verify] ref:',
-                clientReference,
-                '| status:',
-                status?.data?.status,
-                '| amount:',
-                status?.data?.amount,
-                '| amountAfterCharges:',
-                status?.data?.amountAfterCharges,
-                '| expected:',
-                expectedAmount,
-            );
+            status = await checkHubtelStatus(clientReference);
         } catch (e: any) {
             console.warn('[Hubtel Verify] Status API failed:', e?.message || e);
+            return notConfirmed();
         }
 
-        if (verified && settlementAmount !== null && Math.abs(settlementAmount - expectedAmount) > 0.01) {
-            console.error(
-                '[Hubtel Verify] AMOUNT MISMATCH. Expected:',
-                expectedAmount,
-                'Got (settlement):',
-                settlementAmount,
-            );
-            verified = false;
+        if (!isHubtelPaid(String(status?.data?.status || ''), status?.responseCode)) {
+            return notConfirmed();
         }
 
-        if (!verified) {
-            return NextResponse.json({
-                success: false,
-                status: order.status,
-                payment_status: order.payment_status,
-                message: 'Payment not yet confirmed by payment provider',
-            });
+        const returnedRef = status?.data?.clientReference;
+        if (returnedRef && !hubtelReferenceMatchesOrder(String(returnedRef), order.order_number, stripHubtelReferenceSuffix)) {
+            console.error('[Hubtel Verify] Hubtel returned a different client reference:', returnedRef, 'for order', orderNumber);
+            return notConfirmed();
+        }
+
+        const paid = hubtelCustomerPaidAmount(status);
+        const expected = await expectedChargeAmounts(order);
+        if (!paidCoversExpected(paid, expected)) {
+            console.error('[Hubtel Verify] AMOUNT MISMATCH for', orderNumber, '| paid:', paid, '| expected one of:', expected,
+                '| amountAfterCharges:', status?.data?.amountAfterCharges);
+            return notConfirmed('Payment amount does not match this order. Please contact support.');
         }
 
         const { data: orderJson, error: updateError } = await supabaseAdmin.rpc('mark_order_paid', {
@@ -173,39 +142,11 @@ export async function POST(req: Request) {
             return NextResponse.json({ success: false, message: 'Failed to update order' }, { status: 500 });
         }
 
-        console.log('[Hubtel Verify] Order marked as paid:', orderNumber);
-
-        if (orderJson?.email) {
-            try {
-                await supabaseAdmin.rpc('update_customer_stats', {
-                    p_customer_email: orderJson.email,
-                    p_order_total: orderJson.total,
-                });
-            } catch (statsError: any) {
-                console.error('[Hubtel Verify] Customer stats failed:', statsError.message);
-            }
-        }
-
-        if (orderJson) {
-            try {
-                await sendOrderConfirmation(orderJson);
-                if (isPosSaleOrder(orderJson.metadata) && orderJson.order_number) {
-                    const receipt = await sendPosReceiptSmsByOrderRef(orderJson.order_number);
-                    if (!receipt.ok) {
-                        console.warn('[Hubtel Verify] POS receipt SMS:', receipt.error);
-                    }
-                }
-            } catch (notifyError: any) {
-                console.error('[Hubtel Verify] Notification failed:', notifyError.message);
-            }
-        }
-
-        // Record affiliate commission (best-effort, idempotent — webhook may also fire).
-        await recordAffiliateCommission(orderNumber);
+        await runPaidSideEffects(orderJson, 'Hubtel Verify');
 
         return NextResponse.json({
             success: true,
-            status: 'processing',
+            status: orderJson?.status || 'processing',
             payment_status: 'paid',
             message: 'Payment verified and order updated',
         });

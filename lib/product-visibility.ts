@@ -3,9 +3,10 @@
  * - global: shown on the website storefront and in POS
  * - pos_only: walk-in / POS only — hidden from shop, search, sitemap, etc.
  *
- * Stored on `products.metadata.visibility` so it works without a schema
- * migration. When `products.visibility` column exists (see migration
- * 20260810120000_product_visibility.sql), prefer that column.
+ * The source of truth is `products.metadata.visibility`: row-level security
+ * and the storefront filter (applyStorefrontProductFilter) both read it.
+ * The `products.visibility` column exists but is NOT NULL default 'global'
+ * and nothing writes it, so it is only a fallback when metadata has no value.
  */
 export type ProductVisibility = 'global' | 'pos_only';
 
@@ -19,15 +20,16 @@ export function normalizeProductVisibility(value?: string | null): ProductVisibi
   return 'global';
 }
 
-/** Resolve visibility from column and/or metadata. */
+/** Resolve visibility: metadata.visibility first (what RLS and the shop use), then the column. */
 export function getProductVisibility(product: {
   visibility?: string | null;
   metadata?: { visibility?: string | null } | null;
 }): ProductVisibility {
-  if (product.visibility != null && String(product.visibility).trim() !== '') {
-    return normalizeProductVisibility(product.visibility);
+  const fromMeta = product.metadata?.visibility;
+  if (fromMeta != null && String(fromMeta).trim() !== '') {
+    return normalizeProductVisibility(fromMeta);
   }
-  return normalizeProductVisibility(product.metadata?.visibility);
+  return normalizeProductVisibility(product.visibility);
 }
 
 export function isStorefrontVisible(product: {

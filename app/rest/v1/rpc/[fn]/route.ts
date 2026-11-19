@@ -1,12 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/db/supabase-compat";
 import { isPlainPostgres } from "@/lib/db/mode";
-import { PolicyError, asRequester, assertRpcAllowed, resolveRequester } from "@/lib/db/rest-policy";
+import { PolicyError, asRequester, assertRpcAllowed, publicError, resolveRequester } from "@/lib/db/rest-policy";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 const PG_IDENT = /^[a-z_][a-z0-9_]*$/i;
+
+/** PostgREST's `max-rows`: set-returning functions answer with at most 1000 rows. */
+const MAX_ROWS = 1000;
 
 const CORS = {
   "Access-Control-Allow-Origin": "*",
@@ -41,12 +44,14 @@ export async function POST(
   const who = await resolveRequester(req.headers.get("authorization"));
   // Same database roles and RLS context as the table shim; the function's own
   // SECURITY DEFINER setting decides whether it runs with owner rights.
-  const { data, error } = await asRequester(who, () => createClient().rpc(fn, args));
+  const { data, error } = await asRequester(who, () => createClient().rpc(fn, args, { maxRows: MAX_ROWS })).catch(
+    (e: any) => ({ data: null, error: { message: e?.message, code: e?.code ?? null } as any })
+  );
   if (error) {
-    return NextResponse.json(
-      { message: error.message, code: error.code ?? null, details: error.details ?? null, hint: error.hint ?? null },
-      { status: error.code === "42501" ? (who.userId ? 403 : 401) : 400, headers: CORS }
-    );
+    return NextResponse.json(publicError(error, who), {
+      status: error.code === "42501" ? (who.userId ? 403 : 401) : 400,
+      headers: CORS,
+    });
   }
   return NextResponse.json(data, { headers: CORS });
 }

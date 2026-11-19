@@ -74,6 +74,12 @@ export default function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps)
     const [facingMode, setFacingMode] = useState<'environment' | 'user'>('environment');
     const cooldownRef = useRef(false);
     const containerIdRef = useRef(`scanner-${Date.now()}`);
+    // The camera callback is registered once; read the latest onScan through a
+    // ref so scans use the current product list, not the one from when it opened.
+    const onScanRef = useRef(onScan);
+    useEffect(() => {
+        onScanRef.current = onScan;
+    }, [onScan]);
 
     const startScanner = useCallback(async (mode: 'environment' | 'user') => {
         setIsStarting(true);
@@ -107,7 +113,7 @@ export default function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps)
                         if (!ok) setSoundReady(false);
                     });
                     setLastScanned(decodedText);
-                    onScan(decodedText);
+                    onScanRef.current(decodedText);
                     setTimeout(() => { cooldownRef.current = false; }, 1500);
                 },
                 () => { /* ignore scan failures (normal while aiming) */ }
@@ -130,7 +136,7 @@ export default function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps)
                                 if (!ok) setSoundReady(false);
                             });
                             setLastScanned(decodedText);
-                            onScan(decodedText);
+                            onScanRef.current(decodedText);
                             setTimeout(() => { cooldownRef.current = false; }, 1500);
                         },
                         () => {}
@@ -146,7 +152,7 @@ export default function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps)
                 setIsStarting(false);
             }
         }
-    }, [onScan]);
+    }, []);
 
     useEffect(() => {
         startScanner(facingMode);

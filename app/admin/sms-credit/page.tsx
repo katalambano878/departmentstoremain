@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { adminFetch, cedis } from '@/lib/admin-fetch';
 
 type Package = { id: string; amount: string; currency: string; sms: number };
-type Checkout = { id: string; status: string; sms?: number; already_credited?: boolean };
+type Checkout = { id: string; status: string; sms?: number; already_credited?: boolean; error?: string };
 type Billing = {
   configured: boolean;
   sms_left?: number;
@@ -44,31 +44,62 @@ export default function BuySmsPage() {
     return data;
   }, []);
 
+  const [loading, setLoading] = useState(true);
+  const [pendingId, setPendingId] = useState('');
+
+  const refresh = useCallback(async (isCancelled: () => boolean = () => false) => {
+    setLoading(true);
+    setError('');
+    setNotice('');
+    try {
+      const pending = readPending();
+      const data = await load(pending);
+      if (isCancelled()) return;
+      if (!pending || !data.checkout) {
+        setPendingId('');
+        return;
+      }
+      if (data.checkout.status === 'succeeded') {
+        writePending(null);
+        setPendingId('');
+        const added = Number(data.checkout.sms) || 0;
+        setNotice(data.checkout.already_credited ? 'This payment was already added.' : `${added.toLocaleString('en-GH')} SMS added to this store.`);
+      } else if (data.checkout.status === 'failed') {
+        writePending(null);
+        setPendingId('');
+        setError('The payment was not completed. Your balance is unchanged.');
+      } else if (data.checkout.status === 'error') {
+        // Keep the payment id so the user can check again; nothing is lost.
+        setPendingId(pending);
+        setError(`We could not confirm your last payment yet: ${data.checkout.error || 'unknown error'}. If you paid, press Check again in a moment.`);
+      } else {
+        setPendingId(pending);
+        setNotice('Payment is still confirming. Press Check again in a moment and the texts will show here.');
+      }
+    } catch (err) {
+      if (!isCancelled()) {
+        setPendingId(readPending());
+        setError(err instanceof Error ? err.message : 'Could not load SMS packages.');
+      }
+    } finally {
+      if (!isCancelled()) setLoading(false);
+    }
+  }, [load]);
+
   useEffect(() => {
     let cancelled = false;
-    (async () => {
-      try {
-        const pending = readPending();
-        const data = await load(pending);
-        if (cancelled || !pending || !data.checkout) return;
-        if (data.checkout.status === 'succeeded') {
-          writePending(null);
-          const added = Number(data.checkout.sms) || 0;
-          setNotice(data.checkout.already_credited ? 'This payment was already added.' : `${added.toLocaleString('en-GH')} SMS added to this store.`);
-        } else if (data.checkout.status === 'failed') {
-          writePending(null);
-          setError('The payment was not completed. Your balance is unchanged.');
-        } else {
-          setNotice('Payment is still confirming. Refresh this page in a moment and the texts will show here.');
-        }
-      } catch (err) {
-        if (!cancelled) setError(err instanceof Error ? err.message : 'Could not load SMS packages.');
-      }
-    })();
+    void refresh(() => cancelled);
     return () => {
       cancelled = true;
     };
-  }, [load]);
+  }, [refresh]);
+
+  function forgetPending() {
+    writePending(null);
+    setPendingId('');
+    setNotice('');
+    void refresh();
+  }
 
   async function buy(packageId: string) {
     setPaying(true);
@@ -86,7 +117,7 @@ export default function BuySmsPage() {
     }
   }
 
-  if (!billing && !error) {
+  if (!billing && !error && loading) {
     return <div className="py-20 text-center text-gray-500">Loading SMS packages…</div>;
   }
 
@@ -105,7 +136,43 @@ export default function BuySmsPage() {
           {notice}
         </div>
       )}
-      {error && <div className="rounded-lg border border-red-100 bg-red-50 p-4 text-sm text-red-800">{error}</div>}
+      {error && (
+        <div role="alert" className="rounded-lg border border-red-100 bg-red-50 p-4 text-sm text-red-800">
+          <p>{error}</p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => void refresh()}
+              disabled={loading}
+              className="inline-flex h-9 items-center gap-2 rounded-lg bg-red-700 px-3 text-sm font-semibold text-white hover:bg-red-800 disabled:cursor-wait disabled:opacity-60"
+            >
+              <i className={`${loading ? 'ri-loader-4-line animate-spin' : 'ri-refresh-line'}`} />
+              {pendingId ? 'Check again' : 'Try again'}
+            </button>
+            {pendingId && (
+              <button
+                type="button"
+                onClick={forgetPending}
+                disabled={loading}
+                className="inline-flex h-9 items-center rounded-lg border border-red-200 bg-white px-3 text-sm font-semibold text-red-800 hover:border-red-400 disabled:opacity-60"
+              >
+                I did not pay, start over
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+      {!error && pendingId && (
+        <button
+          type="button"
+          onClick={() => void refresh()}
+          disabled={loading}
+          className="inline-flex h-9 items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-800 hover:border-slate-400 disabled:cursor-wait"
+        >
+          <i className={`${loading ? 'ri-loader-4-line animate-spin' : 'ri-refresh-line'}`} />
+          Check again
+        </button>
+      )}
 
       {billing && !billing.configured && (
         <div className="rounded-xl border border-amber-200 bg-amber-50 p-5 text-sm text-amber-900">

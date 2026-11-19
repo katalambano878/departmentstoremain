@@ -69,15 +69,10 @@ type PrintEntry = {
     cells?: { caption: string; barcode: string; price: number }[];
 };
 
-function openPrintWindow(productsToPrint: PrintEntry[]) {
-    const totalLabels = productsToPrint.reduce((sum, p) => sum + (p.cells && p.cells.length ? p.cells.length : p.quantity), 0);
-    const printWindow = window.open('', '_blank');
-    if (!printWindow) return;
-
-    printWindow.document.write(`<!DOCTYPE html>
-<html><head>
-<title>Barcode Labels - Discount Discovery Zone</title>
-<style>
+// Static stylesheet for the print window. No product data is ever placed in
+// HTML strings: every name, SKU and price is set with textContent below, and
+// barcodes are drawn with the bundled JsBarcode (no CDN script to fail).
+const PRINT_CSS = `
 * { margin: 0; padding: 0; box-sizing: border-box; }
 body { font-family: Arial, sans-serif; background: #fff; }
 @media print {
@@ -86,247 +81,213 @@ body { font-family: Arial, sans-serif; background: #fff; }
     .product-section { break-before: page; }
     .product-section:first-of-type { break-before: auto; }
 }
-.toolbar {
-    padding: 12px; text-align: center;
-    background: #f5f5f5; border-bottom: 1px solid #ddd;
-    position: sticky; top: 0; z-index: 10;
-}
-.toolbar button {
-    padding: 10px 24px; background: #2563eb; color: white;
-    border: none; border-radius: 8px; font-size: 14px;
-    font-weight: 600; cursor: pointer; margin: 0 4px;
-}
+.toolbar { padding: 12px; text-align: center; background: #f5f5f5; border-bottom: 1px solid #ddd; position: sticky; top: 0; z-index: 10; }
+.toolbar button { padding: 10px 24px; background: #2563eb; color: white; border: none; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; margin: 0 4px; }
 .toolbar button:hover { background: #1d4ed8; }
-.store-header {
-    padding: 16px; text-align: center;
-    border-bottom: 2px solid #333; margin-bottom: 8px;
-}
+.toolbar .warn { margin-top: 8px; color: #b91c1c; font-size: 13px; font-weight: 600; }
+.store-header { padding: 16px; text-align: center; border-bottom: 2px solid #333; margin-bottom: 8px; }
 .store-header h1 { font-size: 18px; margin-bottom: 2px; }
 .store-header p { font-size: 11px; color: #666; }
-.product-section {
-    border: 2px solid #e5e7eb; border-radius: 12px;
-    margin: 12px; overflow: hidden;
-}
-.product-header {
-    display: flex; align-items: center; gap: 16px;
-    padding: 12px 16px; background: #f9fafb;
-    border-bottom: 2px solid #e5e7eb;
-}
-.product-img {
-    width: 64px; height: 64px; object-fit: cover;
-    border-radius: 8px; border: 1px solid #e5e7eb; flex-shrink: 0;
-}
-.product-img-placeholder {
-    width: 64px; height: 64px; border-radius: 8px;
-    background: #f3f4f6; display: flex; align-items: center;
-    justify-content: center; color: #9ca3af; font-size: 24px; flex-shrink: 0;
-}
+.product-section { border: 2px solid #e5e7eb; border-radius: 12px; margin: 12px; overflow: hidden; }
+.product-header { display: flex; align-items: center; gap: 16px; padding: 12px 16px; background: #f9fafb; border-bottom: 2px solid #e5e7eb; }
+.product-img { width: 64px; height: 64px; object-fit: cover; border-radius: 8px; border: 1px solid #e5e7eb; flex-shrink: 0; }
+.product-img-placeholder { width: 64px; height: 64px; border-radius: 8px; background: #f3f4f6; flex-shrink: 0; }
 .product-info h2 { font-size: 14px; font-weight: 700; margin-bottom: 2px; }
 .product-info .meta { font-size: 11px; color: #6b7280; }
 .product-info .meta span { margin-right: 10px; }
 .product-info .price-tag { font-size: 16px; font-weight: 800; color: #1d4ed8; margin-top: 2px; }
-.qty-badge {
-    display: inline-block; background: #dbeafe; color: #1e40af;
-    font-size: 10px; font-weight: 700; padding: 2px 8px; border-radius: 9999px;
-}
-.stock-badge {
-    display: inline-block; background: #dcfce7; color: #166534;
-    font-size: 10px; font-weight: 700; padding: 2px 8px; border-radius: 9999px;
-    margin-left: 4px;
-}
-.barcode-grid {
-    display: grid; grid-template-columns: repeat(4, 1fr);
-    gap: 3px; padding: 6px;
-}
-.barcode-cell {
-    border: 1px solid #e5e7eb; border-radius: 4px;
-    padding: 4px 3px; text-align: center;
-}
-.barcode-cell .lbl-name {
-    font-size: 7px; font-weight: 700; line-height: 1.1;
-    margin-bottom: 1px; white-space: nowrap;
-    overflow: hidden; text-overflow: ellipsis;
-}
-.barcode-cell .lbl-variant {
-    font-size: 6px; font-weight: 600; color: #4b5563; line-height: 1.1;
-    margin-bottom: 1px; white-space: nowrap;
-    overflow: hidden; text-overflow: ellipsis;
-}
+.qty-badge { display: inline-block; background: #dbeafe; color: #1e40af; font-size: 10px; font-weight: 700; padding: 2px 8px; border-radius: 9999px; }
+.stock-badge { display: inline-block; background: #dcfce7; color: #166534; font-size: 10px; font-weight: 700; padding: 2px 8px; border-radius: 9999px; margin-left: 4px; }
+.barcode-grid, .code-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 3px; padding: 6px; }
+.barcode-cell { border: 1px solid #e5e7eb; border-radius: 4px; padding: 4px 3px; text-align: center; }
+.barcode-cell .lbl-name, .code-cell .lbl-name { font-size: 7px; font-weight: 700; line-height: 1.1; margin-bottom: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.barcode-cell .lbl-variant { font-size: 6px; font-weight: 600; color: #4b5563; line-height: 1.1; margin-bottom: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .barcode-cell svg { max-width: 100%; height: auto; }
+.barcode-cell .lbl-fallback { font-size: 10px; font-family: monospace; padding: 8px 0; color: #b91c1c; }
 .barcode-cell .lbl-price { font-size: 9px; font-weight: 800; margin-top: 1px; }
-</style>
-</head><body>
-<div class="no-print toolbar">
-    <button onclick="window.print()">Print Barcodes</button>
-    <button onclick="window.close()">Close</button>
-</div>
-<div class="store-header">
-    <h1>Discount Discovery Zone</h1>
-    <p>${productsToPrint.length} product${productsToPrint.length !== 1 ? 's' : ''} &middot; ${totalLabels} total labels &middot; ${new Date().toLocaleDateString()}</p>
-</div>
-<div id="c"></div>
-<script src="https://cdn.jsdelivr.net/npm/jsbarcode@3/dist/JsBarcode.all.min.js"><\/script>
-<script>
-const P=${JSON.stringify(productsToPrint)};
-const c=document.getElementById('c');
-function makeCell(name,caption,barcode,price){
-    const d=document.createElement('div');d.className='barcode-cell';
-    const n=document.createElement('div');n.className='lbl-name';n.textContent=name;d.appendChild(n);
-    if(caption){const vn=document.createElement('div');vn.className='lbl-variant';vn.textContent=caption;d.appendChild(vn);}
-    const v=document.createElementNS('http://www.w3.org/2000/svg','svg');d.appendChild(v);
-    try{JsBarcode(v,barcode,{format:'EAN13',width:1.2,height:30,displayValue:true,fontSize:9,margin:1,background:'#fff'});}
-    catch(e){try{JsBarcode(v,barcode,{format:'CODE128',width:1.2,height:30,displayValue:true,fontSize:9,margin:1,background:'#fff'});}catch(e2){}}
-    const pr=document.createElement('div');pr.className='lbl-price';pr.textContent='GH\\u20B5 '+Number(price).toFixed(2);d.appendChild(pr);
-    return d;
-}
-P.forEach(p=>{
-    const hasCells=p.cells&&p.cells.length;
-    const count=hasCells?p.cells.length:p.quantity;
-    const s=document.createElement('div');s.className='product-section';
-    const h=document.createElement('div');h.className='product-header';
-    const badge=hasCells?(count+' variant label'+(count!==1?'s':'')):(count+' label'+(count!==1?'s':''));
-    h.innerHTML=(p.image?'<img class="product-img" src="'+p.image+'" />':'<div class="product-img-placeholder">&#128722;</div>')+
-        '<div class="product-info"><h2>'+p.name+'</h2>'+
-        '<div class="meta"><span>SKU: '+(p.sku||'\\u2014')+'</span><span>Barcode: '+p.barcode+'</span></div>'+
-        '<div class="price-tag">GH\\u20B5 '+Number(p.price).toFixed(2)+'</div>'+
-        '<div style="margin-top:3px"><span class="qty-badge">'+badge+'</span>'+
-        (p.stock!==undefined&&p.stock!==null?'<span class="stock-badge">In stock: '+p.stock+'</span>':'')+
-        '</div></div>';
-    s.appendChild(h);
-    const g=document.createElement('div');g.className='barcode-grid';
-    if(hasCells){
-        p.cells.forEach(cell=>{ g.appendChild(makeCell(p.name,cell.caption,cell.barcode,Number(cell.price))); });
-    }else{
-        for(let i=0;i<p.quantity;i++){ g.appendChild(makeCell(p.name,'',p.barcode,Number(p.price))); }
-    }
-    s.appendChild(g);c.appendChild(s);
-});
-<\/script>
-</body></html>`);
-    printWindow.document.close();
-}
-
-function openPosCodePrintWindow(productsToPrint: { name: string; posCode: string; price: number; quantity: number; sku: string; image: string; stock?: number }[]) {
-    const totalLabels = productsToPrint.reduce((sum, p) => sum + p.quantity, 0);
-    const printWindow = window.open('', '_blank');
-    if (!printWindow) return;
-
-    printWindow.document.write(`<!DOCTYPE html>
-<html><head>
-<title>POS Code Labels - Discount Discovery Zone</title>
-<style>
-* { margin: 0; padding: 0; box-sizing: border-box; }
-body { font-family: Arial, sans-serif; background: #fff; }
-@media print {
-    @page { margin: 5mm; size: A4; }
-    .no-print { display: none !important; }
-    .product-section { break-before: page; }
-    .product-section:first-of-type { break-before: auto; }
-}
-.toolbar {
-    padding: 12px; text-align: center;
-    background: #f5f5f5; border-bottom: 1px solid #ddd;
-    position: sticky; top: 0; z-index: 10;
-}
-.toolbar button {
-    padding: 10px 24px; background: #2563eb; color: white;
-    border: none; border-radius: 8px; font-size: 14px;
-    font-weight: 600; cursor: pointer; margin: 0 4px;
-}
-.toolbar button:hover { background: #1d4ed8; }
-.store-header {
-    padding: 16px; text-align: center;
-    border-bottom: 2px solid #333; margin-bottom: 8px;
-}
-.store-header h1 { font-size: 18px; margin-bottom: 2px; }
-.store-header p { font-size: 11px; color: #666; }
-.product-section {
-    border: 2px solid #e5e7eb; border-radius: 12px;
-    margin: 12px; overflow: hidden;
-}
-.product-header {
-    display: flex; align-items: center; gap: 16px;
-    padding: 12px 16px; background: #f9fafb;
-    border-bottom: 2px solid #e5e7eb;
-}
-.product-img {
-    width: 64px; height: 64px; object-fit: cover;
-    border-radius: 8px; border: 1px solid #e5e7eb; flex-shrink: 0;
-}
-.product-img-placeholder {
-    width: 64px; height: 64px; border-radius: 8px;
-    background: #f3f4f6; display: flex; align-items: center;
-    justify-content: center; color: #9ca3af; font-size: 24px; flex-shrink: 0;
-}
-.product-info h2 { font-size: 14px; font-weight: 700; margin-bottom: 2px; }
-.product-info .meta { font-size: 11px; color: #6b7280; }
-.product-info .meta span { margin-right: 10px; }
-.product-info .price-tag { font-size: 16px; font-weight: 800; color: #1d4ed8; margin-top: 2px; }
-.qty-badge {
-    display: inline-block; background: #dbeafe; color: #1e40af;
-    font-size: 10px; font-weight: 700; padding: 2px 8px; border-radius: 9999px;
-}
-.stock-badge {
-    display: inline-block; background: #dcfce7; color: #166534;
-    font-size: 10px; font-weight: 700; padding: 2px 8px; border-radius: 9999px;
-    margin-left: 4px;
-}
-.code-grid {
-    display: grid; grid-template-columns: repeat(4, 1fr);
-    gap: 4px; padding: 8px;
-}
-.code-cell {
-    border: 1px solid #e5e7eb; border-radius: 6px;
-    padding: 8px 4px; text-align: center;
-}
-.code-cell .lbl-name {
-    font-size: 8px; font-weight: 700; line-height: 1.2;
-    margin-bottom: 2px; white-space: nowrap;
-    overflow: hidden; text-overflow: ellipsis;
-}
-.code-cell .lbl-code {
-    font-size: 24px; line-height: 1; font-weight: 900; letter-spacing: 1px;
-    color: #111827;
-}
+.code-cell { border: 1px solid #e5e7eb; border-radius: 6px; padding: 8px 4px; text-align: center; }
+.code-cell .lbl-name { font-size: 8px; }
+.code-cell .lbl-code { font-size: 24px; line-height: 1; font-weight: 900; letter-spacing: 1px; color: #111827; }
 .code-cell .lbl-price { font-size: 10px; font-weight: 800; margin-top: 2px; }
-</style>
-</head><body>
-<div class="no-print toolbar">
-    <button onclick="window.print()">Print POS Codes</button>
-    <button onclick="window.close()">Close</button>
-</div>
-<div class="store-header">
-    <h1>Discount Discovery Zone</h1>
-    <p>${productsToPrint.length} product${productsToPrint.length !== 1 ? 's' : ''} &middot; ${totalLabels} total labels &middot; ${new Date().toLocaleDateString()}</p>
-</div>
-<div id="c"></div>
-<script>
-const P=${JSON.stringify(productsToPrint)};
-const c=document.getElementById('c');
-P.forEach(p=>{
-    const s=document.createElement('div');s.className='product-section';
-    const h=document.createElement('div');h.className='product-header';
-    h.innerHTML=(p.image?'<img class="product-img" src="'+p.image+'" />':'<div class="product-img-placeholder">&#128722;</div>')+
-        '<div class="product-info"><h2>'+p.name+'</h2>'+
-        '<div class="meta"><span>SKU: '+(p.sku||'\\u2014')+'</span><span>POS Code: '+p.posCode+'</span></div>'+
-        '<div class="price-tag">GH\\u20B5 '+Number(p.price).toFixed(2)+'</div>'+
-        '<div style="margin-top:3px"><span class="qty-badge">'+p.quantity+' labels</span>'+
-        (p.stock!==undefined&&p.stock!==null?'<span class="stock-badge">In stock: '+p.stock+'</span>':'')+
-        '</div></div>';
-    s.appendChild(h);
-    const g=document.createElement('div');g.className='code-grid';
-    for(let i=0;i<p.quantity;i++){
-        const d=document.createElement('div');d.className='code-cell';
-        const n=document.createElement('div');n.className='lbl-name';n.textContent=p.name;d.appendChild(n);
-        const code=document.createElement('div');code.className='lbl-code';code.textContent=p.posCode;d.appendChild(code);
-        const pr=document.createElement('div');pr.className='lbl-price';pr.textContent='GH\\u20B5 '+Number(p.price).toFixed(2);d.appendChild(pr);
-        g.appendChild(d);
+`;
+
+const money = (n: unknown) => `GH₵ ${Number(n || 0).toFixed(2)}`;
+
+function safeImageUrl(url: string): string {
+    if (!url) return '';
+    if (url.startsWith('/') && !url.startsWith('//')) return url;
+    try {
+        const u = new URL(url);
+        return u.protocol === 'https:' || u.protocol === 'http:' ? u.href : '';
+    } catch {
+        return '';
     }
-    s.appendChild(g);c.appendChild(s);
-});
-</script>
-</body></html>`);
-    printWindow.document.close();
+}
+
+/**
+ * Open an empty same-origin window and set up the shell (toolbar, header).
+ * Returns null when the browser blocked the popup.
+ */
+function openLabelWindow(title: string, printLabel: string, summary: string) {
+    const w = window.open('', '_blank');
+    if (!w) return null;
+    const d = w.document;
+    d.open();
+    d.write('<!DOCTYPE html><html><head><meta charset="utf-8"><title></title></head><body></body></html>');
+    d.close();
+    d.title = title;
+    const style = d.createElement('style');
+    style.textContent = PRINT_CSS;
+    d.head.appendChild(style);
+
+    const el = <K extends keyof HTMLElementTagNameMap>(tag: K, className?: string, text?: string) => {
+        const node = d.createElement(tag);
+        if (className) node.className = className;
+        if (text !== undefined) node.textContent = text;
+        return node;
+    };
+
+    const toolbar = el('div', 'no-print toolbar');
+    const printBtn = el('button', undefined, printLabel);
+    printBtn.addEventListener('click', () => w.print());
+    const closeBtn = el('button', undefined, 'Close');
+    closeBtn.addEventListener('click', () => w.close());
+    toolbar.append(printBtn, closeBtn);
+    d.body.appendChild(toolbar);
+
+    const header = el('div', 'store-header');
+    header.append(el('h1', undefined, 'Discount Discovery Zone'), el('p', undefined, summary));
+    d.body.appendChild(header);
+
+    const container = el('div');
+    d.body.appendChild(container);
+    return { w, d, el, toolbar, container };
+}
+
+function productHeader(
+    ui: NonNullable<ReturnType<typeof openLabelWindow>>,
+    p: { name: string; sku: string; image: string; price: number; stock?: number },
+    codeLabel: string,
+    codeValue: string,
+    badgeText: string,
+) {
+    const { el } = ui;
+    const h = el('div', 'product-header');
+    const src = safeImageUrl(p.image);
+    if (src) {
+        const img = el('img', 'product-img');
+        img.src = src;
+        img.alt = '';
+        h.appendChild(img);
+    } else {
+        h.appendChild(el('div', 'product-img-placeholder'));
+    }
+    const info = el('div', 'product-info');
+    info.appendChild(el('h2', undefined, p.name));
+    const meta = el('div', 'meta');
+    meta.append(el('span', undefined, `SKU: ${p.sku || '—'}`), el('span', undefined, `${codeLabel}: ${codeValue}`));
+    info.appendChild(meta);
+    info.appendChild(el('div', 'price-tag', money(p.price)));
+    const badges = el('div');
+    badges.style.marginTop = '3px';
+    badges.appendChild(el('span', 'qty-badge', badgeText));
+    if (p.stock !== undefined && p.stock !== null) badges.appendChild(el('span', 'stock-badge', `In stock: ${p.stock}`));
+    info.appendChild(badges);
+    h.appendChild(info);
+    return h;
+}
+
+/** Draw a barcode into an SVG in this document, then copy it into the print window. */
+function renderBarcodeSvg(targetDoc: Document, value: string): SVGSVGElement | null {
+    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    const opts = { width: 1.2, height: 30, displayValue: true, fontSize: 9, margin: 1, background: '#fff' };
+    try {
+        JsBarcode(svg, value, { ...opts, format: 'EAN13' });
+    } catch {
+        try {
+            JsBarcode(svg, value, { ...opts, format: 'CODE128' });
+        } catch {
+            return null;
+        }
+    }
+    return targetDoc.importNode(svg, true);
+}
+
+/** Returns false when the popup was blocked (nothing was printed). */
+function openPrintWindow(productsToPrint: PrintEntry[]): boolean {
+    const totalLabels = productsToPrint.reduce((sum, p) => sum + (p.cells && p.cells.length ? p.cells.length : p.quantity), 0);
+    const ui = openLabelWindow(
+        'Barcode Labels - Discount Discovery Zone',
+        'Print Barcodes',
+        `${productsToPrint.length} product${productsToPrint.length !== 1 ? 's' : ''} · ${totalLabels} total labels · ${new Date().toLocaleDateString()}`,
+    );
+    if (!ui) return false;
+    const { d, el, container, toolbar } = ui;
+    let failed = 0;
+
+    const makeCell = (name: string, caption: string, barcode: string, price: number) => {
+        const cell = el('div', 'barcode-cell');
+        cell.appendChild(el('div', 'lbl-name', name));
+        if (caption) cell.appendChild(el('div', 'lbl-variant', caption));
+        const svg = renderBarcodeSvg(d, barcode);
+        if (svg) cell.appendChild(svg);
+        else { failed++; cell.appendChild(el('div', 'lbl-fallback', barcode)); }
+        cell.appendChild(el('div', 'lbl-price', money(price)));
+        return cell;
+    };
+
+    for (const p of productsToPrint) {
+        const hasCells = !!(p.cells && p.cells.length);
+        const count = hasCells ? p.cells!.length : p.quantity;
+        const badge = hasCells ? `${count} variant label${count !== 1 ? 's' : ''}` : `${count} label${count !== 1 ? 's' : ''}`;
+        const section = el('div', 'product-section');
+        section.appendChild(productHeader(ui, p, 'Barcode', p.barcode, badge));
+        const grid = el('div', 'barcode-grid');
+        if (hasCells) {
+            for (const c of p.cells!) grid.appendChild(makeCell(p.name, c.caption, c.barcode, Number(c.price)));
+        } else {
+            for (let i = 0; i < p.quantity; i++) grid.appendChild(makeCell(p.name, '', p.barcode, Number(p.price)));
+        }
+        section.appendChild(grid);
+        container.appendChild(section);
+    }
+
+    if (failed > 0) {
+        toolbar.appendChild(el('p', 'warn', `${failed} label${failed !== 1 ? 's' : ''} could not be drawn as a barcode (the number is shown in red instead). Check those barcodes before printing.`));
+    }
+    return true;
+}
+
+/** Returns false when the popup was blocked (nothing was printed). */
+function openPosCodePrintWindow(productsToPrint: { name: string; posCode: string; price: number; quantity: number; sku: string; image: string; stock?: number }[]): boolean {
+    const totalLabels = productsToPrint.reduce((sum, p) => sum + p.quantity, 0);
+    const ui = openLabelWindow(
+        'POS Code Labels - Discount Discovery Zone',
+        'Print POS Codes',
+        `${productsToPrint.length} product${productsToPrint.length !== 1 ? 's' : ''} · ${totalLabels} total labels · ${new Date().toLocaleDateString()}`,
+    );
+    if (!ui) return false;
+    const { el, container } = ui;
+    for (const p of productsToPrint) {
+        const section = el('div', 'product-section');
+        section.appendChild(productHeader(ui, p, 'POS Code', p.posCode, `${p.quantity} labels`));
+        const grid = el('div', 'code-grid');
+        for (let i = 0; i < p.quantity; i++) {
+            const cell = el('div', 'code-cell');
+            cell.append(el('div', 'lbl-name', p.name), el('div', 'lbl-code', p.posCode), el('div', 'lbl-price', money(p.price)));
+            grid.appendChild(cell);
+        }
+        section.appendChild(grid);
+        container.appendChild(section);
+    }
+    return true;
+}
+
+const POPUP_BLOCKED = 'The print window was blocked by the browser. Allow pop-ups for this site and try again. Nothing was marked as printed.';
+
+/** Postgres unique_violation, as returned through the API layer. */
+function isUniqueViolation(error: any): boolean {
+    return error?.code === '23505' || /duplicate key|unique/i.test(error?.message || '');
 }
 
 export default function BarcodesPage() {
@@ -340,6 +301,7 @@ export default function BarcodesPage() {
     const [statusFilter, setStatusFilter] = useState<'active' | 'draft' | 'all'>('active');
     const [labelCounts, setLabelCounts] = useState<Record<string, number>>({});
     const [currentPage, setCurrentPage] = useState(1);
+    const [notice, setNotice] = useState<{ kind: 'ok' | 'error'; text: string } | null>(null);
 
     const fetchProducts = useCallback(async () => {
         setLoading(true);
@@ -384,73 +346,136 @@ export default function BarcodesPage() {
 
     const markAsPrinted = async (productIds: string[]) => {
         const now = new Date().toISOString();
+        const done: string[] = [];
+        let failures = 0;
         for (const id of productIds) {
-            const { data } = await supabase.from('products').select('metadata').eq('id', id).single();
+            const { data, error } = await supabase.from('products').select('metadata').eq('id', id).single();
+            if (error) { failures++; continue; }
             const existing = data?.metadata || {};
-            await supabase.from('products').update({
+            const { error: upErr } = await supabase.from('products').update({
                 metadata: { ...existing, barcode_printed_at: now }
             }).eq('id', id);
+            if (upErr) failures++; else done.push(id);
         }
         setProducts(prev => prev.map(p =>
-            productIds.includes(p.id) ? { ...p, barcode_printed_at: now } : p
+            done.includes(p.id) ? { ...p, barcode_printed_at: now } : p
         ));
+        if (failures > 0) {
+            setNotice({ kind: 'error', text: `Labels opened, but ${failures} product${failures !== 1 ? 's' : ''} could not be marked as printed.` });
+        }
+    };
+
+    /** Save a value, retrying with a fresh code when it collides with the unique index. */
+    const saveUniqueCode = async (
+        productId: string,
+        kind: 'barcode' | 'pos_code',
+        used: Set<string>,
+        nextCode: () => string,
+    ): Promise<string | null> => {
+        for (let attempt = 0; attempt < 25; attempt++) {
+            const code = nextCode();
+            used.add(code);
+            let error: any;
+            if (kind === 'barcode') {
+                ({ error } = await supabase.from('products').update({ barcode: code }).eq('id', productId));
+            } else {
+                const { data, error: readErr } = await supabase.from('products').select('metadata').eq('id', productId).single();
+                if (readErr) throw readErr;
+                ({ error } = await supabase.from('products').update({
+                    metadata: { ...(data?.metadata || {}), pos_code: code }
+                }).eq('id', productId));
+            }
+            if (!error) return code;
+            if (!isUniqueViolation(error)) throw error;
+            // Taken by a product not in our list (or saved by someone else just now): try the next one.
+            if (kind === 'barcode') await new Promise(r => setTimeout(r, 5));
+        }
+        return null;
+    };
+
+    const reportGeneration = (label: string, total: number, failed: string[]) => {
+        if (failed.length === 0) {
+            setNotice({ kind: 'ok', text: `${label} created for ${total} product${total !== 1 ? 's' : ''}.` });
+        } else {
+            setNotice({
+                kind: 'error',
+                text: `${label} created for ${total - failed.length} of ${total}. Failed: ${failed.slice(0, 10).join('; ')}${failed.length > 10 ? ` and ${failed.length - 10} more` : ''}.`,
+            });
+        }
     };
 
     const generateForAll = async () => {
         const missing = products.filter(p => !p.barcode);
         if (missing.length === 0) return;
         setGenerating(true);
+        setNotice(null);
         const used = new Set(products.filter(p => p.barcode).map(p => p.barcode!));
+        const failed: string[] = [];
         for (const product of missing) {
-            let code: string;
-            do { code = generateBarcode(); } while (used.has(code));
-            used.add(code);
-            await supabase.from('products').update({ barcode: code }).eq('id', product.id);
-            await new Promise(r => setTimeout(r, 50));
+            try {
+                const code = await saveUniqueCode(product.id, 'barcode', used, () => {
+                    let c: string;
+                    do { c = generateBarcode(); } while (used.has(c));
+                    return c;
+                });
+                if (!code) failed.push(`${product.name}: no free barcode found`);
+            } catch (err: any) {
+                failed.push(`${product.name}: ${err?.message || 'failed'}`);
+            }
+            await new Promise(r => setTimeout(r, 20));
         }
         await fetchProducts();
         setGenerating(false);
+        reportGeneration('Barcodes', missing.length, failed);
     };
 
     const generatePosCodesForAll = async () => {
         const missing = products.filter(p => !p.pos_code);
         if (missing.length === 0) return;
         setGenerating(true);
-        try {
-            const used = new Set(products.filter(p => p.pos_code).map(p => p.pos_code));
-            for (const product of missing) {
-                const code = generateNextPosCode(used);
-                used.add(code);
-                const existingMeta = (await supabase.from('products').select('metadata').eq('id', product.id).single()).data?.metadata || {};
-                await supabase.from('products').update({
-                    metadata: { ...existingMeta, pos_code: code }
-                }).eq('id', product.id);
-                await new Promise(r => setTimeout(r, 40));
+        setNotice(null);
+        const used = new Set(products.filter(p => p.pos_code).map(p => p.pos_code));
+        const failed: string[] = [];
+        for (const product of missing) {
+            try {
+                const code = await saveUniqueCode(product.id, 'pos_code', used, () => generateNextPosCode(used));
+                if (!code) failed.push(`${product.name}: no free POS code found`);
+            } catch (err: any) {
+                failed.push(`${product.name}: ${err?.message || 'failed'}`);
             }
-            await fetchProducts();
-        } catch (error) {
-            console.error('Failed to generate POS codes:', error);
-            alert('Could not finish generating POS codes. Please try again.');
-        } finally {
-            setGenerating(false);
         }
+        await fetchProducts();
+        setGenerating(false);
+        reportGeneration('POS codes', missing.length, failed);
     };
 
     const generateForOne = async (productId: string) => {
+        const product = products.find(p => p.id === productId);
         const used = new Set(products.filter(p => p.barcode).map(p => p.barcode!));
-        let code: string;
-        do { code = generateBarcode(); } while (used.has(code));
-        await supabase.from('products').update({ barcode: code }).eq('id', productId);
+        setNotice(null);
+        try {
+            const code = await saveUniqueCode(productId, 'barcode', used, () => {
+                let c: string;
+                do { c = generateBarcode(); } while (used.has(c));
+                return c;
+            });
+            if (!code) setNotice({ kind: 'error', text: `Could not find a free barcode for ${product?.name || 'this product'}.` });
+        } catch (err: any) {
+            setNotice({ kind: 'error', text: `Barcode not saved: ${err?.message || 'unknown error'}` });
+        }
         await fetchProducts();
     };
 
     const generatePosCodeForOne = async (productId: string) => {
+        const product = products.find(p => p.id === productId);
         const used = new Set(products.filter(p => p.pos_code).map(p => p.pos_code));
-        const code = generateNextPosCode(used);
-        const existingMeta = (await supabase.from('products').select('metadata').eq('id', productId).single()).data?.metadata || {};
-        await supabase.from('products').update({
-            metadata: { ...existingMeta, pos_code: code }
-        }).eq('id', productId);
+        setNotice(null);
+        try {
+            const code = await saveUniqueCode(productId, 'pos_code', used, () => generateNextPosCode(used));
+            if (!code) setNotice({ kind: 'error', text: `Could not find a free POS code for ${product?.name || 'this product'}.` });
+        } catch (err: any) {
+            setNotice({ kind: 'error', text: `POS code not saved: ${err?.message || 'unknown error'}` });
+        }
         await fetchProducts();
     };
 
@@ -524,11 +549,15 @@ export default function BarcodesPage() {
 
         // If this is a variant product, print one label per variant so the
         // shelf shows one of each option instead of N copies for the stock.
-        const { data: variants } = await supabase
+        const { data: variants, error: variantsError } = await supabase
             .from('product_variants')
             .select('id, name, option1, option2, option3, price, barcode')
             .eq('product_id', product.id)
             .order('created_at', { ascending: true });
+        if (variantsError) {
+            setNotice({ kind: 'error', text: `Could not load variants: ${variantsError.message}` });
+            return;
+        }
 
         if (variants && variants.length > 0) {
             const cells = variants
@@ -544,7 +573,7 @@ export default function BarcodesPage() {
                 // Repeat each variant `copies` times if more than one copy requested.
                 .flatMap(c => Array.from({ length: copies }, () => c));
 
-            openPrintWindow([{
+            const opened = openPrintWindow([{
                 name: product.name,
                 barcode: product.barcode,
                 price: product.price,
@@ -554,11 +583,12 @@ export default function BarcodesPage() {
                 stock: product.quantity,
                 cells,
             }]);
+            if (!opened) { setNotice({ kind: 'error', text: POPUP_BLOCKED }); return; }
             await markAsPrinted([product.id]);
             return;
         }
 
-        openPrintWindow([{
+        const opened = openPrintWindow([{
             name: product.name,
             barcode: product.barcode,
             price: product.price,
@@ -567,6 +597,7 @@ export default function BarcodesPage() {
             image: product.image_url || '',
             stock: product.quantity,
         }]);
+        if (!opened) { setNotice({ kind: 'error', text: POPUP_BLOCKED }); return; }
         await markAsPrinted([product.id]);
     };
 
@@ -580,7 +611,7 @@ export default function BarcodesPage() {
             return;
         }
 
-        openPrintWindow(toPrint.map(p => ({
+        const opened = openPrintWindow(toPrint.map(p => ({
             name: p.name,
             barcode: p.barcode!,
             price: p.price,
@@ -589,13 +620,14 @@ export default function BarcodesPage() {
             image: p.image_url || '',
             stock: p.quantity,
         })));
+        if (!opened) { setNotice({ kind: 'error', text: POPUP_BLOCKED }); return; }
         await markAsPrinted(toPrint.map(p => p.id));
     };
 
     const printSinglePosCode = (product: Product) => {
         if (!product.pos_code) return;
         const qty = labelCounts[product.id] || Math.min(Math.max(product.quantity, 1), 50);
-        openPosCodePrintWindow([{
+        const opened = openPosCodePrintWindow([{
             name: product.name,
             posCode: product.pos_code,
             price: product.price,
@@ -604,6 +636,7 @@ export default function BarcodesPage() {
             image: product.image_url || '',
             stock: product.quantity,
         }]);
+        if (!opened) setNotice({ kind: 'error', text: POPUP_BLOCKED.replace(' Nothing was marked as printed.', '') });
     };
 
     const handlePrintPosCodes = () => {
@@ -616,7 +649,7 @@ export default function BarcodesPage() {
             return;
         }
 
-        openPosCodePrintWindow(toPrint.map(p => ({
+        const opened = openPosCodePrintWindow(toPrint.map(p => ({
             name: p.name,
             posCode: p.pos_code,
             price: p.price,
@@ -625,6 +658,7 @@ export default function BarcodesPage() {
             image: p.image_url || '',
             stock: p.quantity,
         })));
+        if (!opened) setNotice({ kind: 'error', text: POPUP_BLOCKED.replace(' Nothing was marked as printed.', '') });
     };
 
     const missingCount = products.filter(p => !p.barcode).length;
@@ -643,6 +677,13 @@ export default function BarcodesPage() {
 
     return (
         <div className="space-y-6">
+            {notice && (
+                <div className={`flex items-start gap-2 px-4 py-3 rounded-lg border ${notice.kind === 'ok' ? 'bg-green-50 border-green-200 text-green-800' : 'bg-red-50 border-red-200 text-red-800'}`} role="status">
+                    <i className={`${notice.kind === 'ok' ? 'ri-checkbox-circle-line' : 'ri-error-warning-line'} mt-0.5`}></i>
+                    <span className="flex-1">{notice.text}</span>
+                    <button onClick={() => setNotice(null)} aria-label="Dismiss" className="opacity-70 hover:opacity-100"><i className="ri-close-line"></i></button>
+                </div>
+            )}
             {/* Header */}
             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                 <div className="flex items-center gap-4">

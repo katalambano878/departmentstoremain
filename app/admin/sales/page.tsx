@@ -91,17 +91,22 @@ export default function AdminSalesPage() {
     const [variantFillAll, setVariantFillAll] = useState('');
     const [busy, setBusy] = useState(false);
     const [toast, setToast] = useState<{ text: string; ok: boolean } | null>(null);
-    const [salesActive, setSalesActive] = useState(true);
+    // null until the real value has loaded, so the banner never shows a guess.
+    const [salesActive, setSalesActive] = useState<boolean | null>(null);
     const [togglingActive, setTogglingActive] = useState(false);
     // A row's switch while its request is running: shows the new position at once.
     const [switching, setSwitching] = useState<{ id: string; to: boolean } | null>(null);
 
     const fetchSalesActive = useCallback(async () => {
-        const { data } = await supabase
+        const { data, error } = await supabase
             .from('site_settings')
             .select('value')
             .eq('key', 'sales_active')
             .maybeSingle();
+        if (error) {
+            setToast({ text: `Could not load the sales switch: ${error.message}`, ok: false });
+            return;
+        }
         // Missing row defaults to ON. jsonb boolean comes back as a real boolean.
         if (!data) setSalesActive(true);
         else setSalesActive(data.value === true || data.value === 'true');
@@ -133,7 +138,7 @@ export default function AdminSalesPage() {
                 image:
                     p.product_images?.find((i: any) => i.position === 0)?.url ||
                     p.product_images?.[0]?.url ||
-                    'https://via.placeholder.com/80?text=No+Image',
+                    'data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 width=%2780%27 height=%2780%27 viewBox=%270 0 80 80%27%3E%3Crect width=%2780%27 height=%2780%27 fill=%27%23f3f4f6%27/%3E%3Cpath d=%27M24 54l10-12 8 9 6-7 8 10z%27 fill=%27%23d1d5db%27/%3E%3Ccircle cx=%2730%27 cy=%2730%27 r=%275%27 fill=%27%23d1d5db%27/%3E%3C/svg%3E',
                 variantsCount: p.product_variants?.[0]?.count || 0,
                 pausedSalePrice:
                     p.metadata?.paused_sale_price != null ? Number(p.metadata.paused_sale_price) : null,
@@ -178,6 +183,8 @@ export default function AdminSalesPage() {
 
     useEffect(() => {
         setPage(1);
+        // A selection made under one filter must not silently apply to rows now hidden.
+        setSelected(new Set());
     }, [search, categoryFilter, saleFilter]);
 
     const onSaleCount = useMemo(() => products.filter((p) => p.on_sale).length, [products]);
@@ -224,6 +231,7 @@ export default function AdminSalesPage() {
     };
 
     const toggleSalesActive = async () => {
+        if (salesActive === null) return;
         const next = !salesActive;
         const question = next
             ? 'Turn ON all sales? Every paused sale goes live, including products you switched off one by one.'
@@ -328,7 +336,7 @@ export default function AdminSalesPage() {
     const pausedNote = (json: any) => {
         const n = json?.paused ?? 0;
         if (!n) return '';
-        return salesActive
+        return salesActive !== false
             ? ' Sales that were switched off stay off.'
             : ' All sales are off, so new sale prices start switched off. Use the Live switch to turn one on.';
     };
@@ -342,6 +350,7 @@ export default function AdminSalesPage() {
         let payload: Record<string, unknown>;
         let value: number | undefined;
         if (kind === 'remove') {
+            if (!confirm(`Remove ${ids.length} product${ids.length > 1 ? 's' : ''} from sale? Their sale prices are cleared and they go back to the regular price.`)) return;
             payload = { action: 'remove', productIds: ids };
         } else if (kind === 'percentage') {
             value = Number(bulkPercent);
@@ -414,6 +423,7 @@ export default function AdminSalesPage() {
     };
 
     const removeRow = async (p: ProductRow) => {
+        if (!confirm(`Remove "${p.name}" from sale? Its sale price is cleared and it goes back to the regular price.`)) return;
         setBusy(true);
         try {
             const json = await callApi({ action: 'remove', productIds: [p.id] });
@@ -551,24 +561,26 @@ export default function AdminSalesPage() {
             {/* Master on/off switch */}
             <div
                 className={`rounded-xl border p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 ${
-                    salesActive ? 'bg-green-50 border-green-200' : 'bg-amber-50 border-amber-200'
+                    salesActive === null ? 'bg-gray-50 border-gray-200' : salesActive ? 'bg-green-50 border-green-200' : 'bg-amber-50 border-amber-200'
                 }`}
             >
                 <div className="flex items-start gap-3">
                     <i
                         className={`text-2xl mt-0.5 ${
-                            salesActive ? 'ri-flashlight-fill text-green-600' : 'ri-pause-circle-line text-amber-600'
+                            salesActive === null ? 'ri-loader-4-line animate-spin text-gray-400' : salesActive ? 'ri-flashlight-fill text-green-600' : 'ri-pause-circle-line text-amber-600'
                         }`}
                     ></i>
                     <div>
                         <p className="font-semibold text-gray-900">
-                            All sales: {salesActive ? 'ON' : 'OFF'}
+                            {salesActive === null ? 'Loading sale status...' : `All sales: ${salesActive ? 'ON' : 'OFF'}`}
                             <span className="ml-2 text-sm font-normal text-gray-600">
                                 {liveCount} live{pausedCount > 0 ? `, ${pausedCount} switched off` : ''}
                             </span>
                         </p>
                         <p className="text-sm text-gray-600 mt-0.5 max-w-xl">
-                            {salesActive
+                            {salesActive === null
+                                ? 'Checking whether sales are switched on.'
+                                : salesActive
                                 ? 'This switch turns every sale on or off at once. To switch one product, use its Live switch in the table.'
                                 : 'Every sale is off. You can still switch on single products with their Live switch in the table, or turn every sale back on here.'}
                         </p>
@@ -576,9 +588,9 @@ export default function AdminSalesPage() {
                 </div>
                 <button
                     onClick={toggleSalesActive}
-                    disabled={togglingActive || busy}
+                    disabled={togglingActive || busy || salesActive === null}
                     role="switch"
-                    aria-checked={salesActive}
+                    aria-checked={salesActive === true}
                     className={`relative inline-flex h-9 w-16 flex-shrink-0 items-center rounded-full transition-colors disabled:opacity-50 ${
                         salesActive ? 'bg-green-600' : 'bg-gray-300'
                     }`}

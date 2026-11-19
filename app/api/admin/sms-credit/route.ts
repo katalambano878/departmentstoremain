@@ -8,9 +8,11 @@ const PACKAGE_ID = /^[a-z0-9-]{1,40}$/;
 const PAYMENT_ID = /^pay_[A-Za-z0-9]+$/;
 
 async function requireAdmin(request: NextRequest) {
-  const auth = await verifyAuth(request, { requireAdmin: true });
+  // Buying SMS spends store money: admin and full staff only, never till-only staff.
+  const auth = await verifyAuth(request, { requireRole: ['admin', 'staff'] });
   if (!auth.authenticated) {
-    return NextResponse.json({ error: auth.error || 'Unauthorized' }, { status: 401 });
+    const forbidden = Boolean(auth.role);
+    return NextResponse.json({ error: auth.error || 'Unauthorized' }, { status: forbidden ? 403 : 401 });
   }
   return null;
 }
@@ -23,9 +25,22 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const billing = await getSmsBilling();
     const checkoutId = request.nextUrl.searchParams.get('checkout') || '';
-    const checkout = PAYMENT_ID.test(checkoutId) ? await confirmSmsCheckout(checkoutId) : null;
+    // Confirm the pending payment first (it may add texts), but never let a
+    // failed confirmation hide the balance and packages.
+    let checkout: Awaited<ReturnType<typeof confirmSmsCheckout>> | { id: string; status: string; error: string } | null = null;
+    if (PAYMENT_ID.test(checkoutId)) {
+      try {
+        checkout = await confirmSmsCheckout(checkoutId);
+      } catch (err) {
+        checkout = {
+          id: checkoutId,
+          status: 'error',
+          error: err instanceof Error ? err.message : 'Could not confirm the payment.',
+        };
+      }
+    }
+    const billing = await getSmsBilling();
     return NextResponse.json({ configured: true, ...billing, checkout });
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Could not load SMS packages.';

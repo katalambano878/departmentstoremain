@@ -1,6 +1,13 @@
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase-admin';
 import { checkRateLimit, getClientIdentifier } from '@/lib/rate-limit';
+import { maskEmail } from '@/lib/sanitize';
+
+function maskPhone(phone: unknown): string | null {
+    const digits = String(phone || '').replace(/\D+/g, '');
+    if (digits.length < 4) return null;
+    return `${'*'.repeat(Math.max(0, digits.length - 3))}${digits.slice(-3)}`;
+}
 
 const LOOKUP_RATE_LIMIT = { maxRequests: 30, windowSeconds: 60 };
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -69,11 +76,22 @@ export async function GET(_req: Request, ctx: { params: Promise<{ orderId: strin
             return NextResponse.json({ error: 'Order not found' }, { status: 404 });
         }
 
-        // The order-success page needs the email to call /api/payment/hubtel/verify
-        // when the Moolre callback has not yet fired.  The URL bearer
-        // (order_number) is already unguessable, and the verify endpoint
-        // itself re-checks same-origin + order age + externalref.
-        return NextResponse.json({ order });
+        // Email and phone are masked: the order number in the URL is the only
+        // credential here. /api/payment/hubtel/verify no longer needs the email
+        // (it asks Hubtel directly), so nothing downstream needs the raw value.
+        const shipping = (order.shipping_address ?? {}) as Record<string, any>;
+        return NextResponse.json({
+            order: {
+                ...order,
+                email: order.email ? maskEmail(String(order.email)) : null,
+                phone: maskPhone(order.phone),
+                shipping_address: {
+                    ...shipping,
+                    ...(shipping.email ? { email: maskEmail(String(shipping.email)) } : {}),
+                    ...(shipping.phone ? { phone: maskPhone(shipping.phone) } : {}),
+                },
+            },
+        });
     } catch (err: any) {
         console.error('[OrderSummary] Error:', err?.message);
         return NextResponse.json({ error: 'Internal server error' }, { status: 500 });

@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useMemo, Suspense, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { useSearchParams, useRouter, usePathname } from 'next/navigation';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import ProductCard, { type ColorVariant } from '@/components/ProductCard';
@@ -15,7 +16,27 @@ import { isRangeNotSatisfiable } from '@/lib/supabase-paginate';
 
 function coverImage(images: { url?: string; position?: number }[] | null | undefined) {
   const sorted = [...(images || [])].sort((a, b) => (a.position ?? 0) - (b.position ?? 0));
-  return sorted[0]?.url || 'https://via.placeholder.com/800x800?text=No+Image';
+  return sorted[0]?.url || PLACEHOLDER_IMAGE;
+}
+
+const PLACEHOLDER_IMAGE =
+  "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 800 800'><rect width='800' height='800' fill='%23f3f4f6'/><path d='M260 520l120-150 90 105 70-85 120 130z' fill='%23d1d5db'/><circle cx='320' cy='300' r='45' fill='%23d1d5db'/></svg>";
+
+// Explicit columns only: never select cost fields for the storefront.
+const LIST_COLUMNS = `
+  id, name, slug, price, compare_at_price, quantity, track_quantity, continue_selling,
+  moq, rating_avg, review_count, created_at,
+  CATEGORY_EMBED,
+  product_images!product_id(url, position),
+  product_variants(id, name, price, quantity, option1, option2, image_url)
+`;
+
+const MAX_PRICE = 5000;
+const SORTS = ['popular', 'new', 'price-low', 'price-high', 'rating'];
+
+function sellable(stock: number, p: { track_quantity?: boolean | null; continue_selling?: boolean | null }) {
+  if (p.track_quantity === false || p.continue_selling === true) return 999;
+  return Math.max(0, Number(stock) || 0);
 }
 
 function ShopContent() {
@@ -26,17 +47,33 @@ function ShopContent() {
 
   // State
   const [products, setProducts] = useState<any[]>([]);
-  const [categories, setCategories] = useState<any[]>([{ id: 'all', name: 'All Products', count: 0 }]);
+  const [categories, setCategories] = useState<any[]>([]);
+  const [categoriesReady, setCategoriesReady] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
+  const [reloadKey, setReloadKey] = useState(0);
   const [totalProducts, setTotalProducts] = useState(0);
-
-  // Filters
-  const [selectedCategory, setSelectedCategory] = useState('all');
-  const [priceRange, setPriceRange] = useState([0, 5000]);
-  const [selectedRating, setSelectedRating] = useState(0);
-  const [sortBy, setSortBy] = useState('popular');
   const [isFilterOpen, setIsFilterOpen] = useState(false);
+  const [mounted, setMounted] = useState(false);
   const productsPerPage = 9;
+
+  // Filters live in the URL so Back, links and the header "Shop" link all
+  // show exactly what the address says.
+  const selectedCategory = searchParams.get('category') || 'all';
+  const sortParam = searchParams.get('sort') || 'popular';
+  // 'new' is the same order as the default; keep old links working.
+  const sortBy = SORTS.includes(sortParam) ? (sortParam === 'new' ? 'popular' : sortParam) : 'popular';
+  const maxPrice = useMemo(() => {
+    const v = parseInt(searchParams.get('max') || '', 10);
+    return Number.isFinite(v) && v >= 0 && v < MAX_PRICE ? v : MAX_PRICE;
+  }, [searchParams]);
+  const selectedRating = useMemo(() => {
+    const v = parseInt(searchParams.get('rating') || '', 10);
+    return v >= 1 && v <= 4 ? v : 0;
+  }, [searchParams]);
+  const priceRange = useMemo(() => [0, maxPrice], [maxPrice]);
+  // Slider position while dragging; written to the URL after a short pause.
+  const [priceDraft, setPriceDraft] = useState(maxPrice);
 
   const page = useMemo(() => {
     const p = parseInt(searchParams.get('page') || '1', 10);
@@ -56,25 +93,49 @@ function ShopContent() {
     [pathname, router, searchParams]
   );
 
-  const resetPageInUrl = useCallback(() => {
-    goToPage(1, false);
-  }, [goToPage]);
+  /** Update filter params (and drop the page number) in one URL change. */
+  const setParam = useCallback(
+    (updates: Record<string, string | null>, scroll = false) => {
+      const params = new URLSearchParams(searchParams.toString());
+      for (const [k, v] of Object.entries(updates)) {
+        if (v === null || v === '' || v === 'all') params.delete(k);
+        else params.set(k, v);
+      }
+      params.delete('page');
+      const qs = params.toString();
+      router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll });
+    },
+    [pathname, router, searchParams]
+  );
+
+  useEffect(() => setMounted(true), []);
+
+  useEffect(() => {
+    setPriceDraft(maxPrice);
+  }, [maxPrice]);
+
+  useEffect(() => {
+    if (priceDraft === maxPrice) return;
+    const t = setTimeout(() => {
+      setParam({ max: priceDraft >= MAX_PRICE ? null : String(priceDraft) });
+    }, 350);
+    return () => clearTimeout(t);
+  }, [priceDraft, maxPrice, setParam]);
+
+  // Lock page scroll while the mobile filter panel is open.
+  useEffect(() => {
+    if (!isFilterOpen) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = prev;
+    };
+  }, [isFilterOpen]);
 
   useEffect(() => {
     const qs = searchParams.toString();
     rememberShopListingPath(qs ? `${pathname}?${qs}` : pathname);
   }, [pathname, searchParams]);
-
-  // Initialize from URL params
-  useEffect(() => {
-    const category = searchParams.get('category');
-    const sort = searchParams.get('sort');
-    const search = searchParams.get('search');
-
-    if (category) setSelectedCategory(category);
-    if (sort) setSortBy(sort);
-    // Search is handled in the fetch function via searchParams directly or we could add a state for it
-  }, [searchParams]);
 
   // Fetch Categories from cached API
   useEffect(() => {
@@ -83,24 +144,43 @@ function ShopContent() {
         const res = await fetch('/api/storefront/categories');
         if (res.ok) {
           const data = await res.json();
-          if (data) setCategories(data);
+          if (Array.isArray(data)) setCategories(data);
         }
       } catch (err) {
         console.error('Error fetching categories:', err);
+      } finally {
+        // Even on failure, let the product query run (it falls back to the
+        // exact category slug).
+        setCategoriesReady(true);
       }
     }
     fetchCategories();
   }, []);
 
+  /** The chosen category plus its sub-categories, once categories are known. */
+  const categorySlugs = useMemo(() => {
+    if (selectedCategory === 'all') return [] as string[];
+    const categoryObj = categories.find((c) => c.slug === selectedCategory);
+    const slugs = [selectedCategory];
+    if (categoryObj) {
+      categories.filter((c) => c.parent_id === categoryObj.id).forEach((c) => slugs.push(c.slug));
+    }
+    return slugs;
+  }, [categories, selectedCategory]);
+
   // Fetch Products
+  const search = searchParams.get('search') || '';
   useEffect(() => {
+    // A parent category needs the category list to include its children;
+    // querying before that would show (and cache) an empty result.
+    if (selectedCategory !== 'all' && !categoriesReady) return;
+    let cancelled = false;
     async function fetchProducts() {
       setLoading(true);
+      setLoadError(false);
       try {
-        const search = searchParams.get('search');
-
-        // Build cache key from all filter params
-        const cacheKey = `shop:${selectedCategory}:${search || ''}:${priceRange.join('-')}:${selectedRating}:${sortBy}:${page}`;
+        // Build cache key from all filter params, including the resolved category set
+        const cacheKey = `shop:${categorySlugs.join(',') || 'all'}:${search}:${priceRange.join('-')}:${selectedRating}:${sortBy}:${page}`;
 
         const { data, count, error } = await cachedQuery<{ data: any; count: any; error: any }>(
           cacheKey,
@@ -126,17 +206,12 @@ function ShopContent() {
               let rowsQuery = applyStorefrontProductFilter(
                 supabase
                   .from('products')
-                  .select(`
-                  *,
-                  categories(name, slug),
-                  product_images!product_id(url, position),
-                  product_variants(id, name, price, quantity, option1, option2, image_url)
-                `)
+                  .select(LIST_COLUMNS.replace('CATEGORY_EMBED', 'categories(name, slug)'))
               )
                 .in('id', hits.map((h: any) => h.id));
 
               // Price / rating filters still apply on top of search results
-              if (priceRange[1] < 5000) {
+              if (priceRange[1] < MAX_PRICE) {
                 rowsQuery = rowsQuery.gte('price', priceRange[0]).lte('price', priceRange[1]);
               }
               if (selectedRating > 0) {
@@ -149,14 +224,8 @@ function ShopContent() {
               // Category filter (incl. subcategories) applied client-side so
               // searched products keep their relevance ranking.
               let filtered = rows || [];
-              if (selectedCategory !== 'all') {
-                const categoryObj = categories.find(c => c.slug === selectedCategory);
-                const targetSlugs = new Set([selectedCategory]);
-                if (categoryObj) {
-                  categories
-                    .filter(c => c.parent_id === categoryObj.id)
-                    .forEach(c => targetSlugs.add(c.slug));
-                }
+              if (categorySlugs.length > 0) {
+                const targetSlugs = new Set(categorySlugs);
                 filtered = filtered.filter((r: any) => r.categories?.slug && targetSlugs.has(r.categories.slug));
               }
 
@@ -195,32 +264,18 @@ function ShopContent() {
             let query = applyStorefrontProductFilter(
               supabase
                 .from('products')
-                .select(`
-                *,
-                categories!inner(name, slug),
-                product_images!product_id(url, position),
-                product_variants(id, name, price, quantity, option1, option2, image_url)
-              `, { count: 'exact' })
+                .select(LIST_COLUMNS.replace('CATEGORY_EMBED', 'categories!inner(name, slug)'), { count: 'exact' })
             );
 
             // Category Filter with Subcategories
-            if (selectedCategory !== 'all') {
-              const categoryObj = categories.find(c => c.slug === selectedCategory);
-
-              if (categoryObj) {
-                const targetSlugs = [selectedCategory];
-                const childSlugs = categories
-                  .filter(c => c.parent_id === categoryObj.id)
-                  .map(c => c.slug);
-                targetSlugs.push(...childSlugs);
-                query = query.in('categories.slug', targetSlugs);
-              } else {
-                query = query.eq('categories.slug', selectedCategory);
-              }
+            if (categorySlugs.length > 1) {
+              query = query.in('categories.slug', categorySlugs);
+            } else if (categorySlugs.length === 1) {
+              query = query.eq('categories.slug', categorySlugs[0]);
             }
 
             // Price Filter
-            if (priceRange[1] < 5000) {
+            if (priceRange[1] < MAX_PRICE) {
               query = query.gte('price', priceRange[0]).lte('price', priceRange[1]);
             }
 
@@ -262,6 +317,7 @@ function ShopContent() {
           2 * 60 * 1000 // Cache for 2 minutes
         );
 
+        if (cancelled) return;
         if (error) throw error;
 
         if (data) {
@@ -270,7 +326,7 @@ function ShopContent() {
             const hasVariants = variants.length > 0;
             const minVariantPrice = hasVariants ? Math.min(...variants.map((v: any) => v.price || p.price)) : undefined;
             const totalVariantStock = hasVariants ? variants.reduce((sum: number, v: any) => sum + (v.quantity || 0), 0) : 0;
-            const effectiveStock = hasVariants ? totalVariantStock : p.quantity;
+            const effectiveStock = sellable(hasVariants ? totalVariantStock : p.quantity, p);
             // Extract unique colors from option2
             const colorVariants: ColorVariant[] = [];
             const seenColors = new Set<string>();
@@ -293,10 +349,10 @@ function ShopContent() {
               originalPrice: p.compare_at_price,
               image: coverImage(p.product_images),
               rating: p.rating_avg || 0,
-              reviewCount: 0, // Need to implement reviews relation
+              reviewCount: p.review_count || 0,
               badge: p.compare_at_price > p.price ? 'Sale' : undefined, // Simple badge logic
               inStock: effectiveStock > 0,
-              maxStock: effectiveStock || 50,
+              maxStock: effectiveStock,
               moq: p.moq || 1,
               category: p.categories?.name,
               categoryName: p.categories?.name,
@@ -314,22 +370,187 @@ function ShopContent() {
         }
       } catch (err) {
         console.error('Error fetching products:', err);
+        if (!cancelled) {
+          setLoadError(true);
+          setProducts([]);
+          setTotalProducts(0);
+        }
       } finally {
-        setLoading(false);
+        if (!cancelled) setLoading(false);
       }
     }
 
     fetchProducts();
-  }, [selectedCategory, priceRange, selectedRating, sortBy, page, searchParams, goToPage]);
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedCategory, categoriesReady, categorySlugs, search, priceRange, selectedRating, sortBy, page, goToPage, reloadKey]);
 
   const totalPages = Math.ceil(totalProducts / productsPerPage);
 
   // If ?page= is past the last page (e.g. after filters shrink results), clamp the URL
   useEffect(() => {
-    if (loading || page <= 1) return;
+    if (loading || loadError || page <= 1) return;
     if (totalPages >= 1 && page <= totalPages) return;
     goToPage(totalPages >= 1 ? totalPages : 1, false);
-  }, [loading, totalPages, page, goToPage]);
+  }, [loading, loadError, totalPages, page, goToPage]);
+
+  const clearFilters = () => {
+    setParam({ category: null, max: null, rating: null });
+  };
+
+  const renderFilters = (inDrawer: boolean) => (
+    <div className="bg-white lg:bg-transparent p-6 lg:p-0">
+      {inDrawer && (
+        <div className="flex items-center justify-between mb-6">
+          <h2 className="text-xl font-bold text-gray-900">Filters</h2>
+          <button
+            type="button"
+            onClick={() => setIsFilterOpen(false)}
+            aria-label="Close filters"
+            className="w-10 h-10 flex items-center justify-center text-gray-700"
+          >
+            <i className="ri-close-line text-2xl" aria-hidden="true"></i>
+          </button>
+        </div>
+      )}
+
+      <div className="space-y-8">
+        {/* Categories */}
+        <div>
+          <h3 className="font-semibold text-gray-900 mb-4">Categories</h3>
+          <div className="space-y-1">
+            <button
+              type="button"
+              onClick={() => {
+                setParam({ category: null });
+                setIsFilterOpen(false);
+              }}
+              aria-pressed={selectedCategory === 'all'}
+              className={`w-full text-left px-4 py-2 rounded-lg transition-colors ${selectedCategory === 'all'
+                ? 'bg-emerald-100 text-emerald-700 font-medium'
+                : 'text-gray-700 hover:bg-gray-100'
+                }`}
+            >
+              All Products
+            </button>
+
+            {/* Parent Categories */}
+            {categories.filter(c => !c.parent_id && c.id !== 'all').map(parent => {
+              const subcategories = categories.filter(c => c.parent_id === parent.id);
+              const isSelected = selectedCategory === parent.slug;
+
+              return (
+                <div key={parent.id} className="space-y-1">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setParam({ category: parent.slug });
+                      // Don't close filter immediately if exploring hierarchy
+                    }}
+                    aria-pressed={isSelected}
+                    className={`w-full text-left px-4 py-2 rounded-lg transition-colors flex justify-between items-center ${isSelected
+                      ? 'bg-emerald-50 text-emerald-700 font-medium'
+                      : 'text-gray-700 hover:bg-gray-100'
+                      }`}
+                  >
+                    <span>{parent.name}</span>
+                  </button>
+
+                  {/* Subcategories */}
+                  {subcategories.length > 0 && (
+                    <div className="ml-4 border-l-2 border-gray-100 pl-2 space-y-1">
+                      {subcategories.map(child => (
+                        <button
+                          key={child.id}
+                          type="button"
+                          onClick={() => {
+                            setParam({ category: child.slug });
+                            setIsFilterOpen(false);
+                          }}
+                          aria-pressed={selectedCategory === child.slug}
+                          className={`w-full text-left px-4 py-1.5 rounded-lg text-sm transition-colors ${selectedCategory === child.slug
+                            ? 'text-emerald-700 font-medium bg-emerald-50'
+                            : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+                            }`}
+                        >
+                          {child.name}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Price Range */}
+        <div className="border-t border-gray-200 pt-8">
+          <label htmlFor={inDrawer ? 'shop-max-price-mobile' : 'shop-max-price'} className="block font-semibold text-gray-900 mb-4">
+            Max Price: {priceDraft >= MAX_PRICE ? 'Any' : `GH₵${priceDraft}`}
+          </label>
+          <div className="space-y-4">
+            <input
+              id={inDrawer ? 'shop-max-price-mobile' : 'shop-max-price'}
+              type="range"
+              min="0"
+              max={MAX_PRICE}
+              step="50"
+              value={priceDraft}
+              onChange={(e) => setPriceDraft(parseInt(e.target.value, 10))}
+              aria-valuetext={priceDraft >= MAX_PRICE ? 'Any price' : `Up to GH₵${priceDraft}`}
+              className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-emerald-700"
+            />
+            <div className="flex items-center justify-between text-sm text-gray-600" aria-hidden="true">
+              <span>GH₵0</span>
+              <span>GH₵{MAX_PRICE}+</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Rating */}
+        <div className="border-t border-gray-200 pt-8">
+          <h3 className="font-semibold text-gray-900 mb-4">Rating</h3>
+          <div className="space-y-2">
+            {[4, 3, 2, 1].map(rating => (
+              <button
+                key={rating}
+                type="button"
+                onClick={() => setParam({ rating: rating === selectedRating ? null : String(rating) })}
+                aria-pressed={selectedRating === rating}
+                aria-label={`${rating} stars and up`}
+                className={`w-full text-left px-4 py-2 rounded-lg transition-colors ${selectedRating === rating
+                  ? 'bg-emerald-100 text-emerald-700'
+                  : 'text-gray-700 hover:bg-gray-100'
+                  }`}
+              >
+                <div className="flex items-center space-x-2" aria-hidden="true">
+                  {[1, 2, 3, 4, 5].map(star => (
+                    <i
+                      key={star}
+                      className={`${star <= rating ? 'ri-star-fill text-amber-400' : 'ri-star-line text-gray-300'} text-sm`}
+                    ></i>
+                  ))}
+                  <span className="text-sm">& Up</span>
+                </div>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {inDrawer && (
+          <button
+            type="button"
+            onClick={() => setIsFilterOpen(false)}
+            className="w-full bg-gray-900 hover:bg-emerald-700 text-white py-3 rounded-lg font-medium transition-colors whitespace-nowrap"
+          >
+            Show Results
+          </button>
+        )}
+      </div>
+    </div>
+  );
 
   return (
     <main className="min-h-screen bg-white">
@@ -342,10 +563,12 @@ function ShopContent() {
       <div className="lg:hidden bg-white border-b border-gray-200 py-4 px-4 sticky top-[72px] z-20">
         <div className="flex justify-between items-center">
           <button
+            type="button"
             onClick={() => setIsFilterOpen(!isFilterOpen)}
+            aria-expanded={isFilterOpen}
             className="flex items-center space-x-2 text-gray-900 font-medium"
           >
-            <i className="ri-filter-3-line text-xl"></i>
+            <i className="ri-filter-3-line text-xl" aria-hidden="true"></i>
             <span>Filters & Sort</span>
           </button>
           <span className="text-sm text-gray-500">{totalProducts} Products</span>
@@ -355,154 +578,22 @@ function ShopContent() {
       <section className="py-12">
         <div className="max-w-7xl mx-auto px-4 sm:px-6">
           <div className="flex flex-col lg:flex-row gap-8">
-            <aside className={`${isFilterOpen ? 'fixed inset-0 z-50 bg-white overflow-y-auto' : 'hidden'} lg:block lg:w-64 lg:flex-shrink-0`}>
-              <div className="lg:sticky lg:top-24">
-                <div className="bg-white lg:bg-transparent p-6 lg:p-0">
-                  <div className="flex items-center justify-between mb-6 lg:hidden">
-                    <h2 className="text-xl font-bold text-gray-900">Filters</h2>
-                    <button
-                      onClick={() => setIsFilterOpen(false)}
-                      className="w-10 h-10 flex items-center justify-center text-gray-700"
-                    >
-                      <i className="ri-close-line text-2xl"></i>
-                    </button>
-                  </div>
-
-                  <div className="space-y-8">
-                    {/* Categories */}
-                    <div>
-                      <h3 className="font-semibold text-gray-900 mb-4">Categories</h3>
-                      <div className="space-y-1">
-                        <button
-                          onClick={() => {
-                            setSelectedCategory('all');
-                            resetPageInUrl();
-                            setIsFilterOpen(false);
-                          }}
-                          className={`w-full text-left px-4 py-2 rounded-lg transition-colors ${selectedCategory === 'all'
-                            ? 'bg-emerald-100 text-emerald-700 font-medium'
-                            : 'text-gray-700 hover:bg-gray-100'
-                            }`}
-                        >
-                          All Products
-                        </button>
-
-                        {/* Parent Categories */}
-                        {categories.filter(c => !c.parent_id && c.id !== 'all').map(parent => {
-                          const subcategories = categories.filter(c => c.parent_id === parent.id);
-                          const isSelected = selectedCategory === parent.slug;
-                          const isChildSelected = subcategories.some(sub => sub.slug === selectedCategory);
-                          const isOpen = isSelected || isChildSelected; // Auto-expand if selected
-
-                          return (
-                            <div key={parent.id} className="space-y-1">
-                              <button
-                                onClick={() => {
-                                  setSelectedCategory(parent.slug);
-                                  resetPageInUrl();
-                                  // Don't close filter immediately if exploring hierarchy
-                                }}
-                                className={`w-full text-left px-4 py-2 rounded-lg transition-colors flex justify-between items-center ${isSelected
-                                  ? 'bg-emerald-50 text-emerald-700 font-medium'
-                                  : 'text-gray-700 hover:bg-gray-100'
-                                  }`}
-                              >
-                                <span>{parent.name}</span>
-                              </button>
-
-                              {/* Subcategories */}
-                              {subcategories.length > 0 && (
-                                <div className="ml-4 border-l-2 border-gray-100 pl-2 space-y-1">
-                                  {subcategories.map(child => (
-                                    <button
-                                      key={child.id}
-                                      onClick={() => {
-                                        setSelectedCategory(child.slug);
-                                        resetPageInUrl();
-                                        setIsFilterOpen(false);
-                                      }}
-                                      className={`w-full text-left px-4 py-1.5 rounded-lg text-sm transition-colors ${selectedCategory === child.slug
-                                        ? 'text-emerald-700 font-medium bg-emerald-50'
-                                        : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
-                                        }`}
-                                    >
-                                      {child.name}
-                                    </button>
-                                  ))}
-                                </div>
-                              )}
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-
-                    {/* Price Range */}
-                    <div className="border-t border-gray-200 pt-8">
-                      <h3 className="font-semibold text-gray-900 mb-4">Max Price: GH₵{priceRange[1]}</h3>
-                      <div className="space-y-4">
-                        <input
-                          type="range"
-                          min="0"
-                          max="5000"
-                          step="50"
-                          value={priceRange[1]}
-                          onChange={(e) => {
-                            setPriceRange([0, parseInt(e.target.value)]);
-                            resetPageInUrl();
-                          }}
-                          className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-emerald-700"
-                        />
-                        <div className="flex items-center justify-between text-sm text-gray-600">
-                          <span>GH₵0</span>
-                          <span>GH₵5000+</span>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Rating */}
-                    <div className="border-t border-gray-200 pt-8">
-                      <h3 className="font-semibold text-gray-900 mb-4">Rating</h3>
-                      <div className="space-y-2">
-                        {[4, 3, 2, 1].map(rating => (
-                          <button
-                            key={rating}
-                            onClick={() => {
-                              setSelectedRating(rating === selectedRating ? 0 : rating);
-                              resetPageInUrl();
-                            }}
-                            className={`w-full text-left px-4 py-2 rounded-lg transition-colors ${selectedRating === rating
-                              ? 'bg-emerald-100 text-emerald-700'
-                              : 'text-gray-700 hover:bg-gray-100'
-                              }`}
-                          >
-                            <div className="flex items-center space-x-2">
-                              {[1, 2, 3, 4, 5].map(star => (
-                                <i
-                                  key={star}
-                                  className={`${star <= rating ? 'ri-star-fill text-amber-400' : 'ri-star-line text-gray-300'} text-sm`}
-                                ></i>
-                              ))}
-                              <span className="text-sm">& Up</span>
-                            </div>
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-
-                    <button
-                      onClick={() => {
-                        // Re-fetch handled by effect dependencies
-                        setIsFilterOpen(false);
-                      }}
-                      className="w-full bg-gray-900 hover:bg-emerald-700 text-white py-3 rounded-lg font-medium transition-colors whitespace-nowrap"
-                    >
-                      Show Results
-                    </button>
-                  </div>
-                </div>
-              </div>
+            <aside className="hidden lg:block lg:w-64 lg:flex-shrink-0">
+              <div className="lg:sticky lg:top-24">{renderFilters(false)}</div>
             </aside>
+
+            {/* Mobile filters: portalled to <body> so no transformed ancestor can push it off-screen */}
+            {mounted && isFilterOpen && createPortal(
+              <div
+                className="fixed inset-0 z-50 bg-white overflow-y-auto lg:hidden"
+                role="dialog"
+                aria-modal="true"
+                aria-label="Filters"
+              >
+                {renderFilters(true)}
+              </div>,
+              document.body
+            )}
 
             <div className="flex-1">
               <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-8 gap-4">
@@ -511,17 +602,14 @@ function ShopContent() {
                 </p>
 
                 <div className="flex items-center space-x-3">
-                  <label className="text-sm text-gray-600 whitespace-nowrap">Sort by:</label>
+                  <label htmlFor="shop-sort" className="text-sm text-gray-600 whitespace-nowrap">Sort by:</label>
                   <select
+                    id="shop-sort"
                     value={sortBy}
-                    onChange={(e) => {
-                      setSortBy(e.target.value);
-                      resetPageInUrl();
-                    }}
+                    onChange={(e) => setParam({ sort: e.target.value === 'popular' ? null : e.target.value })}
                     className="px-4 py-2 pr-8 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 text-sm bg-white cursor-pointer"
                   >
-                    <option value="popular">Most Popular</option>
-                    <option value="new">Newest</option>
+                    <option value="popular">Newest</option>
                     <option value="price-low">Price: Low to High</option>
                     <option value="price-high">Price: High to Low</option>
                     <option value="rating">Highest Rated</option>
@@ -534,6 +622,21 @@ function ShopContent() {
                   {[...Array(6)].map((_, i) => (
                     <ProductCardSkeleton key={i} />
                   ))}
+                </div>
+              ) : loadError ? (
+                <div className="text-center py-20" role="alert">
+                  <div className="w-20 h-20 flex items-center justify-center mx-auto mb-6 bg-gray-100 rounded-full">
+                    <i className="ri-wifi-off-line text-4xl text-gray-400" aria-hidden="true"></i>
+                  </div>
+                  <h3 className="text-2xl font-bold text-gray-900 mb-2">Couldn&apos;t load products</h3>
+                  <p className="text-gray-600 mb-8">Check your connection and try again.</p>
+                  <button
+                    type="button"
+                    onClick={() => setReloadKey((k) => k + 1)}
+                    className="inline-flex items-center bg-gray-900 hover:bg-emerald-700 text-white px-6 py-3 rounded-lg font-medium transition-colors whitespace-nowrap"
+                  >
+                    Try again
+                  </button>
                 </div>
               ) : (
                 <>
@@ -551,12 +654,8 @@ function ShopContent() {
                       <h3 className="text-2xl font-bold text-gray-900 mb-2">No Products Found</h3>
                       <p className="text-gray-600 mb-8">Try adjusting your filters to find what you're looking for</p>
                       <button
-                        onClick={() => {
-                          setSelectedCategory('all');
-                          setPriceRange([0, 5000]);
-                          setSelectedRating(0);
-                          resetPageInUrl();
-                        }}
+                        type="button"
+                        onClick={clearFilters}
                         className="inline-flex items-center bg-gray-900 hover:bg-emerald-700 text-white px-6 py-3 rounded-lg font-medium transition-colors whitespace-nowrap"
                       >
                         Clear All Filters
@@ -567,15 +666,17 @@ function ShopContent() {
               )}
 
               {/* Pagination */}
-              {totalPages > 1 && (
+              {!loadError && totalPages > 1 && (
                 <div className="mt-16 flex justify-center">
                   <div className="flex items-center space-x-2">
                     <button
+                      type="button"
                       onClick={() => goToPage(page - 1)}
                       disabled={page === 1}
+                      aria-label="Previous page"
                       className="w-10 h-10 flex items-center justify-center border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                     >
-                      <i className="ri-arrow-left-s-line text-xl text-gray-700"></i>
+                      <i className="ri-arrow-left-s-line text-xl text-gray-700" aria-hidden="true"></i>
                     </button>
 
                     {/* Simple page numbers - condensed for brevity */}
@@ -584,11 +685,13 @@ function ShopContent() {
                     </span>
 
                     <button
+                      type="button"
                       onClick={() => goToPage(page + 1)}
                       disabled={page === totalPages}
+                      aria-label="Next page"
                       className="w-10 h-10 flex items-center justify-center border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                     >
-                      <i className="ri-arrow-right-s-line text-xl text-gray-700"></i>
+                      <i className="ri-arrow-right-s-line text-xl text-gray-700" aria-hidden="true"></i>
                     </button>
                   </div>
                 </div>

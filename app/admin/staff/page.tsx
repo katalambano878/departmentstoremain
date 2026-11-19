@@ -126,7 +126,10 @@ export default function AdminStaffPage() {
     });
   }, [staff, search, roleFilter]);
 
-  const canAssignAdmin = viewerRole === 'admin';
+  // Only an admin may add, edit, reset or remove staff. Other staff can only view the list.
+  const isAdmin = viewerRole === 'admin';
+  const canAssignAdmin = isAdmin;
+  const [notice, setNotice] = useState('');
 
   const openAdd = () => {
     setAddForm({
@@ -161,6 +164,11 @@ export default function AdminStaffPage() {
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || 'Could not create staff');
       setAddOpen(false);
+      setNotice(
+        json.promoted
+          ? `${addForm.email} now has ${roleLabel(addForm.role)} access. ${json.message || 'This person keeps their existing password.'}`
+          : `${addForm.email} was added as ${roleLabel(addForm.role)}.`
+      );
       await loadStaff();
     } catch (err: any) {
       setError(err.message || 'Could not create staff');
@@ -172,14 +180,24 @@ export default function AdminStaffPage() {
   const handleEdit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editOpen) return;
+    // Send only what changed, so editing a name never touches the role.
+    const changes: Partial<typeof editForm> = {};
+    if (editForm.full_name.trim() !== (editOpen.full_name || '')) changes.full_name = editForm.full_name.trim();
+    if (editForm.phone.trim() !== (editOpen.phone || '')) changes.phone = editForm.phone.trim();
+    if (editForm.role !== editOpen.role && editOpen.id !== viewerId) changes.role = editForm.role;
+    if (Object.keys(changes).length === 0) {
+      setEditOpen(null);
+      return;
+    }
     setSaving(true);
     setError('');
+    setNotice('');
     try {
       const res = await fetch(`/api/admin/staff/${editOpen.id}`, {
         method: 'PATCH',
         headers: await authHeaders(),
         credentials: 'include',
-        body: JSON.stringify(editForm),
+        body: JSON.stringify(changes),
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || 'Could not update staff');
@@ -253,6 +271,7 @@ export default function AdminStaffPage() {
             Add, edit, and manage staff accounts. Existing roles stay the same.
           </p>
         </div>
+        {isAdmin && (
         <button
           type="button"
           onClick={openAdd}
@@ -261,7 +280,14 @@ export default function AdminStaffPage() {
           <i className="ri-user-add-line text-lg"></i>
           Add Staff
         </button>
+        )}
       </div>
+
+      {!loading && !isAdmin && (
+        <div className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-700">
+          You can view the staff list. Only an admin can add, edit or remove staff.
+        </div>
+      )}
 
       {counts && (
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
@@ -311,6 +337,12 @@ export default function AdminStaffPage() {
         </div>
       </div>
 
+      {notice && (
+        <div role="status" className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+          {notice}
+        </div>
+      )}
+
       {error && (
         <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
           {error}
@@ -342,7 +374,7 @@ export default function AdminStaffPage() {
                   <th className="text-left px-5 py-3 text-xs font-bold text-gray-500 uppercase hidden lg:table-cell">
                     Created
                   </th>
-                  <th className="text-right px-5 py-3 text-xs font-bold text-gray-500 uppercase">Actions</th>
+                  {isAdmin && <th className="text-right px-5 py-3 text-xs font-bold text-gray-500 uppercase">Actions</th>}
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
@@ -373,6 +405,7 @@ export default function AdminStaffPage() {
                     <td className="px-5 py-4 text-sm text-gray-600 hidden lg:table-cell">
                       {formatDate(member.created_at)}
                     </td>
+                    {isAdmin && (
                     <td className="px-5 py-4">
                       <div className="flex items-center justify-end gap-1.5">
                         <button
@@ -405,6 +438,7 @@ export default function AdminStaffPage() {
                         </button>
                       </div>
                     </td>
+                    )}
                   </tr>
                 ))}
               </tbody>
@@ -414,7 +448,7 @@ export default function AdminStaffPage() {
       </div>
 
       {/* Add modal */}
-      {addOpen && (
+      {isAdmin && addOpen && (
         <div className="fixed inset-0 z-[80] flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-black/40" onClick={() => !saving && setAddOpen(false)} />
           <form
@@ -444,14 +478,13 @@ export default function AdminStaffPage() {
             <div>
               <label className="block text-sm font-semibold text-gray-800 mb-1">Temporary password</label>
               <input
-                required
                 type="text"
                 minLength={6}
                 value={addForm.password}
                 onChange={(e) => setAddForm((f) => ({ ...f, password: e.target.value }))}
                 className="w-full px-4 py-2.5 border-2 border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
               />
-              <p className="text-xs text-gray-500 mt-1">At least 6 characters. Share this securely with the staff member.</p>
+              <p className="text-xs text-gray-500 mt-1">At least 6 characters. Share this securely with the staff member. If the email already has a customer account, it is not used: they keep their own password.</p>
             </div>
             <div>
               <label className="block text-sm font-semibold text-gray-800 mb-2">Role</label>
@@ -500,7 +533,7 @@ export default function AdminStaffPage() {
       )}
 
       {/* Edit modal */}
-      {editOpen && (
+      {isAdmin && editOpen && (
         <div className="fixed inset-0 z-[80] flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-black/40" onClick={() => !saving && setEditOpen(null)} />
           <form
@@ -526,6 +559,11 @@ export default function AdminStaffPage() {
                 className="w-full px-4 py-2.5 border-2 border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
               />
             </div>
+            {editOpen.id === viewerId ? (
+              <p className="text-sm text-gray-600">
+                Role: <strong>{roleLabel(editOpen.role)}</strong>. You cannot change your own role; ask another admin.
+              </p>
+            ) : (
             <div>
               <label className="block text-sm font-semibold text-gray-800 mb-2">Role</label>
               <div className="space-y-2">
@@ -554,6 +592,7 @@ export default function AdminStaffPage() {
                 )}
               </div>
             </div>
+            )}
             <div className="flex justify-end gap-2 pt-2">
               <button
                 type="button"
@@ -576,7 +615,7 @@ export default function AdminStaffPage() {
       )}
 
       {/* Password modal */}
-      {passwordOpen && (
+      {isAdmin && passwordOpen && (
         <div className="fixed inset-0 z-[80] flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-black/40" onClick={() => !saving && setPasswordOpen(null)} />
           <form

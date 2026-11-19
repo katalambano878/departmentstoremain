@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
+import { useStaffRole } from '../_lib/useStaffRole';
 
 /** coupons.type (discount_type enum) -> label shown in the table. */
 const TYPE_LABELS: Record<string, string> = {
@@ -16,6 +17,12 @@ export default function AdminCouponsPage() {
   const [editingCoupon, setEditingCoupon] = useState<any>(null);
   const [coupons, setCoupons] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'Active' | 'Scheduled' | 'Expired' | 'Used up' | 'Disabled'>('all');
+  const [sortBy, setSortBy] = useState<'date' | 'usage' | 'value'>('date');
+  const { role } = useStaffRole();
+  // Coupon writes are admin-only in the database; staff can view.
+  const canEdit = role === 'admin';
 
   useEffect(() => {
     fetchCoupons();
@@ -30,8 +37,9 @@ export default function AdminCouponsPage() {
         .order('created_at', { ascending: false });
 
       if (error) {
-        console.warn('Coupons table might not exist or error fetching:', error);
+        setLoadError(`Could not load coupons: ${error.message}`);
       } else if (data) {
+        setLoadError('');
         setCoupons(data.map((c: any) => ({
           id: c.id,
           code: c.code,
@@ -40,12 +48,14 @@ export default function AdminCouponsPage() {
           minPurchase: Number(c.minimum_purchase) || 0,
           usageLimit: c.usage_limit || null,
           usedCount: c.usage_count || 0,
+          rawValue: Number(c.value) || 0,
+          createdAt: c.created_at,
           startDate: c.start_date ? new Date(c.start_date).toLocaleDateString() : 'N/A',
           endDate: c.end_date ? new Date(c.end_date).toLocaleDateString() : null,
           // yyyy-mm-dd for the edit form's date input
           endDateInput: c.end_date ? String(c.end_date).slice(0, 10) : '',
           isActive: c.is_active !== false,
-          status: isCouponActive(c) ? 'Active' : 'Expired' // Derive status
+          status: couponStatus(c),
         })));
       }
     } catch (err) {
@@ -55,17 +65,20 @@ export default function AdminCouponsPage() {
     }
   };
 
-  const isCouponActive = (c: any) => {
-    // Simple check
-    if (!c.is_active) return false;
-    if (c.end_date && new Date(c.end_date) < new Date()) return false;
-    return true;
+  const couponStatus = (c: any): string => {
+    const now = new Date();
+    if (c.is_active === false) return 'Disabled';
+    if (c.end_date && new Date(c.end_date) < now) return 'Expired';
+    if (c.usage_limit && (c.usage_count || 0) >= c.usage_limit) return 'Used up';
+    if (c.start_date && new Date(c.start_date) > now) return 'Scheduled';
+    return 'Active';
   };
 
   const statusColors: any = {
     'Active': 'bg-blue-100 text-blue-700',
     'Scheduled': 'bg-blue-100 text-blue-700',
     'Expired': 'bg-gray-100 text-gray-700',
+    'Used up': 'bg-amber-100 text-amber-800',
     'Disabled': 'bg-red-100 text-red-700'
   };
 
@@ -109,7 +122,9 @@ export default function AdminCouponsPage() {
       value: freeShipping ? 0 : couponForm.discount_value,
       minimum_purchase: couponForm.min_purchase_amount || 0,
       usage_limit: couponForm.usage_limit || null,
-      end_date: couponForm.end_date || null,
+      // A date input gives yyyy-mm-dd; the code stays valid to the END of that day
+      // in Ghana (UTC+0 all year), not midnight at its start.
+      end_date: couponForm.end_date ? `${couponForm.end_date}T23:59:59Z` : null,
       is_active: couponForm.is_active
     };
 
@@ -139,6 +154,14 @@ export default function AdminCouponsPage() {
   };
 
   const activeCoupons = coupons.filter(c => c.status === 'Active');
+  const disabledCount = coupons.filter(c => c.status === 'Disabled').length;
+  const visibleCoupons = coupons
+    .filter(c => statusFilter === 'all' || c.status === statusFilter)
+    .sort((a, b) => {
+      if (sortBy === 'usage') return b.usedCount - a.usedCount;
+      if (sortBy === 'value') return b.rawValue - a.rawValue;
+      return new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime();
+    });
   const totalUses = coupons.reduce((sum, c) => sum + c.usedCount, 0);
 
   return (
@@ -148,6 +171,7 @@ export default function AdminCouponsPage() {
           <h1 className="text-3xl font-bold text-gray-900">Coupons & Promotions</h1>
           <p className="text-gray-600 mt-1">Create and manage discount codes</p>
         </div>
+        {canEdit && (
         <button
           onClick={() => { resetForm(); setShowAddModal(true); }}
           className="bg-blue-700 hover:bg-blue-800 text-white px-6 py-3 rounded-lg font-semibold transition-colors whitespace-nowrap cursor-pointer"
@@ -155,7 +179,22 @@ export default function AdminCouponsPage() {
           <i className="ri-add-line mr-2"></i>
           Create Coupon
         </button>
+        )}
       </div>
+
+      {role && role !== 'admin' && (
+        <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 text-amber-900 px-4 py-3 rounded-lg">
+          <i className="ri-lock-line text-amber-600 mt-0.5"></i>
+          <span>Only an admin can create, edit or delete coupons. You can view them here.</span>
+        </div>
+      )}
+
+      {loadError && (
+        <div className="flex items-start gap-2 bg-red-50 border border-red-200 text-red-800 px-4 py-3 rounded-lg" role="alert">
+          <i className="ri-error-warning-line text-red-600 mt-0.5"></i>
+          <span>{loadError}</span>
+        </div>
+      )}
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <div className="bg-white rounded-xl border-2 border-gray-200 p-4">
@@ -171,8 +210,8 @@ export default function AdminCouponsPage() {
           <p className="text-2xl font-bold text-gray-900">{totalUses}</p>
         </div>
         <div className="bg-white rounded-xl border-2 border-gray-200 p-4">
-          <p className="text-sm text-gray-600 mb-1">Total Discount</p>
-          <p className="text-2xl font-bold text-purple-700">--</p>
+          <p className="text-sm text-gray-600 mb-1">Disabled</p>
+          <p className="text-2xl font-bold text-gray-700">{disabledCount}</p>
         </div>
       </div>
 
@@ -181,16 +220,28 @@ export default function AdminCouponsPage() {
           <div className="flex items-center justify-between">
             <h2 className="text-lg font-bold text-gray-900">All Coupons</h2>
             <div className="flex items-center space-x-3">
-              <select className="px-4 py-2 pr-8 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 font-medium cursor-pointer">
-                <option>All Status</option>
-                <option>Active</option>
-                <option>Scheduled</option>
-                <option>Expired</option>
+              <select
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value as typeof statusFilter)}
+                aria-label="Filter by status"
+                className="px-4 py-2 pr-8 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 font-medium cursor-pointer"
+              >
+                <option value="all">All Status</option>
+                <option value="Active">Active</option>
+                <option value="Scheduled">Scheduled</option>
+                <option value="Expired">Expired</option>
+                <option value="Used up">Used up</option>
+                <option value="Disabled">Disabled</option>
               </select>
-              <select className="px-4 py-2 pr-8 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 font-medium cursor-pointer">
-                <option>Sort by Date</option>
-                <option>Sort by Usage</option>
-                <option>Sort by Value</option>
+              <select
+                value={sortBy}
+                onChange={(e) => setSortBy(e.target.value as typeof sortBy)}
+                aria-label="Sort coupons"
+                className="px-4 py-2 pr-8 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 font-medium cursor-pointer"
+              >
+                <option value="date">Sort by Date</option>
+                <option value="usage">Sort by Usage</option>
+                <option value="value">Sort by Value</option>
               </select>
             </div>
           </div>
@@ -213,10 +264,10 @@ export default function AdminCouponsPage() {
             <tbody>
               {loading ? (
                 <tr><td colSpan={8} className="p-8 text-center text-gray-500">Loading coupons...</td></tr>
-              ) : coupons.length === 0 ? (
-                <tr><td colSpan={8} className="p-8 text-center text-gray-500">No coupons found.</td></tr>
+              ) : visibleCoupons.length === 0 ? (
+                <tr><td colSpan={8} className="p-8 text-center text-gray-500">{coupons.length === 0 ? 'No coupons yet.' : 'No coupons match this filter.'}</td></tr>
               ) : (
-                coupons.map((coupon) => (
+                visibleCoupons.map((coupon) => (
                   <tr key={coupon.id} className="border-b border-gray-100 hover:bg-gray-50 transition-colors">
                     <td className="py-4 px-6">
                       <div className="flex items-center space-x-2">
@@ -262,9 +313,11 @@ export default function AdminCouponsPage() {
                       </span>
                     </td>
                     <td className="py-4 px-4">
+                      {canEdit ? (
                       <div className="flex items-center space-x-2">
                         <button
                           onClick={() => handleEdit(coupon)}
+                          title="Edit coupon"
                           className="w-8 h-8 flex items-center justify-center text-gray-600 hover:text-blue-700 hover:bg-blue-50 rounded-lg transition-colors cursor-pointer"
                         >
                           <i className="ri-edit-line text-lg"></i>
@@ -277,6 +330,9 @@ export default function AdminCouponsPage() {
                           <i className="ri-delete-bin-line text-lg"></i>
                         </button>
                       </div>
+                      ) : (
+                        <span className="text-xs text-gray-400">View only</span>
+                      )}
                     </td>
                   </tr>
                 ))
@@ -352,14 +408,21 @@ export default function AdminCouponsPage() {
                 </div>
               </div>
               <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-1">Expiry Date (optional)</label>
+                <label className="block text-sm font-semibold text-gray-700 mb-1">Last day valid (optional)</label>
                 <input
                   type="date"
                   value={couponForm.end_date}
                   onChange={(e) => setCouponForm({ ...couponForm, end_date: e.target.value })}
                   className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg"
                 />
+                <p className="text-xs text-gray-500 mt-1">The code works until 23:59 Ghana time on this day.</p>
               </div>
+              {showEditModal && editingCoupon && (
+                <p className="text-sm text-gray-600">
+                  Used {editingCoupon.usedCount} time{editingCoupon.usedCount === 1 ? '' : 's'}
+                  {editingCoupon.usageLimit ? ` of ${editingCoupon.usageLimit}` : ' (no limit)'}.
+                </p>
+              )}
               <label className="flex items-center space-x-3 cursor-pointer">
                 <input
                   type="checkbox"

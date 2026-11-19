@@ -1,6 +1,8 @@
 'use client';
 
-import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
+import { createContext, useCallback, useContext, useEffect, useRef, useState, ReactNode } from 'react';
+import { supabase } from '@/lib/supabase';
+import { applyStorefrontProductFilter } from '@/lib/product-visibility';
 
 export type CartItem = {
     id: string;
@@ -16,6 +18,17 @@ export type CartItem = {
     moq?: number; // Minimum Order Quantity
 };
 
+/** One thing that changed when the bag was checked against the live catalogue. */
+export type CartChange = {
+    id: string;
+    variantId?: string;
+    kind: 'removed' | 'price' | 'quantity';
+    message: string;
+};
+
+/** Large cap used when stock is not tracked or the shop keeps selling at zero. */
+const UNLIMITED_STOCK = 999;
+
 type CartContextType = {
     cart: CartItem[];
     addToCart: (item: CartItem) => void;
@@ -26,6 +39,14 @@ type CartContextType = {
     subtotal: number;
     isCartOpen: boolean;
     setIsCartOpen: (isOpen: boolean) => void;
+    /** True once the saved bag has been read from this browser. */
+    ready: boolean;
+    /**
+     * Re-read current prices and stock for everything in the bag and update it.
+     * Resolves to the list of changes, or null if the catalogue could not be
+     * reached (the bag is then left as it was).
+     */
+    refreshCart: () => Promise<CartChange[] | null>;
 };
 
 const CartContext = createContext<CartContextType | undefined>(undefined);
@@ -147,6 +168,87 @@ export function CartProvider({ children }: { children: ReactNode }) {
         setCart([]);
     };
 
+    const cartRef = useRef<CartItem[]>(cart);
+    cartRef.current = cart;
+
+    const refreshCart = useCallback(async (): Promise<CartChange[] | null> => {
+        const current = cartRef.current;
+        if (current.length === 0) return [];
+        const ids = Array.from(new Set(current.map((i) => i.id)));
+        let rows: any[] | null = null;
+        try {
+            const { data, error } = await applyStorefrontProductFilter(
+                supabase
+                    .from('products')
+                    .select('id, name, price, quantity, track_quantity, continue_selling, moq, product_variants(id, name, price, quantity)')
+            ).in('id', ids);
+            if (error) return null;
+            rows = data || [];
+        } catch {
+            return null;
+        }
+
+        const byId = new Map<string, any>((rows || []).map((p: any) => [p.id, p]));
+        const changes: CartChange[] = [];
+        const fmt = (n: number) => `GH₵${n.toFixed(2)}`;
+        const next: CartItem[] = [];
+
+        for (const item of current) {
+            const label = item.variant ? `${item.name} (${item.variant})` : item.name;
+            const product = byId.get(item.id);
+            const variant = item.variantId
+                ? (product?.product_variants || []).find((v: any) => v.id === item.variantId)
+                : null;
+            if (!product || (item.variantId && !variant)) {
+                changes.push({ id: item.id, variantId: item.variantId, kind: 'removed', message: `${label} is no longer available and was removed.` });
+                continue;
+            }
+            const unlimited = product.track_quantity === false || product.continue_selling === true;
+            const rawStock = Number((variant ? variant.quantity : product.quantity) ?? 0) || 0;
+            const stock = unlimited ? UNLIMITED_STOCK : Math.max(0, rawStock);
+            const moq = Math.max(1, Number(product.moq) || 1);
+            const price = Number(variant ? (variant.price ?? product.price) : product.price);
+
+            if (stock < moq) {
+                changes.push({ id: item.id, variantId: item.variantId, kind: 'removed', message: `${label} has sold out and was removed.` });
+                continue;
+            }
+            let quantity = Math.max(item.quantity, moq);
+            if (quantity > stock) {
+                quantity = stock;
+                changes.push({ id: item.id, variantId: item.variantId, kind: 'quantity', message: `Only ${stock} of ${label} left, so we changed the quantity to ${stock}.` });
+            }
+            if (Number.isFinite(price) && Math.abs(price - item.price) > 0.001) {
+                changes.push({ id: item.id, variantId: item.variantId, kind: 'price', message: `The price of ${label} changed from ${fmt(item.price)} to ${fmt(price)}.` });
+            }
+            next.push({
+                ...item,
+                price: Number.isFinite(price) ? price : item.price,
+                quantity,
+                maxStock: stock,
+                moq,
+            });
+        }
+
+        const changedAnything =
+            next.length !== current.length ||
+            next.some((n, i) => n !== current[i] && (n.price !== current[i]?.price || n.quantity !== current[i]?.quantity || n.maxStock !== current[i]?.maxStock || n.moq !== current[i]?.moq));
+        if (changedAnything) {
+            // Apply against the latest bag so lines added meanwhile are kept.
+            setCart((prev) =>
+                prev
+                    .map((line) => {
+                        const fresh = next.find((n) => sameCartLine(n, line));
+                        if (fresh) return { ...line, price: fresh.price, quantity: Math.min(Math.max(line.quantity, fresh.moq || 1), fresh.maxStock), maxStock: fresh.maxStock, moq: fresh.moq };
+                        const removed = changes.some((c) => c.kind === 'removed' && c.id === line.id && c.variantId === line.variantId);
+                        return removed ? null : line;
+                    })
+                    .filter((l): l is CartItem => l !== null)
+            );
+        }
+        return changes;
+    }, []);
+
     const cartCount = cart.reduce((sum, item) => sum + item.quantity, 0);
     const subtotal = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
 
@@ -160,7 +262,9 @@ export function CartProvider({ children }: { children: ReactNode }) {
             cartCount,
             subtotal,
             isCartOpen,
-            setIsCartOpen
+            setIsCartOpen,
+            ready: isInitialized,
+            refreshCart,
         }}>
             {children}
         </CartContext.Provider>

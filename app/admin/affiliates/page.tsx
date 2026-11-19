@@ -68,6 +68,9 @@ export default function AdminAffiliatesPage() {
   const [saving, setSaving] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [copied, setCopied] = useState<string | null>(null);
+  const [actionError, setActionError] = useState('');
+  const [editError, setEditError] = useState('');
+  const [settingsError, setSettingsError] = useState('');
 
   // Program settings
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -88,11 +91,16 @@ export default function AdminAffiliatesPage() {
       const headers = await authHeaders();
       const url = filter ? `/api/admin/affiliates?status=${filter}` : '/api/admin/affiliates';
       const res = await fetch(url, { headers, credentials: 'include' });
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setActionError(`Could not load affiliates: ${data?.error || `request failed (${res.status})`}`);
+        return;
+      }
       if (data.affiliates) setAffiliates(data.affiliates);
       if (data.stats) setStats(data.stats);
-    } catch (e) {
+    } catch (e: any) {
       console.error('Error loading affiliates:', e);
+      setActionError(`Could not load affiliates: ${e?.message || 'network error'}`);
     } finally {
       setLoading(false);
     }
@@ -110,32 +118,44 @@ export default function AdminAffiliatesPage() {
 
   useEffect(() => { loadSettings(); }, [loadSettings]);
 
-  async function patch(id: string, body: Record<string, any>) {
-    const headers = await authHeaders();
-    const res = await fetch('/api/admin/affiliates', {
-      method: 'PATCH',
-      headers,
-      credentials: 'include',
-      body: JSON.stringify({ id, ...body }),
-    });
-    return res.ok;
+  /** PATCH an affiliate. Returns null on success, or the server's error message. */
+  async function patch(id: string, body: Record<string, any>): Promise<string | null> {
+    try {
+      const headers = await authHeaders();
+      const res = await fetch('/api/admin/affiliates', {
+        method: 'PATCH',
+        headers,
+        credentials: 'include',
+        body: JSON.stringify({ id, ...body }),
+      });
+      if (res.ok) return null;
+      const data = await res.json().catch(() => ({}));
+      return data?.error || `Request failed (${res.status})`;
+    } catch (e: any) {
+      return e?.message || 'Network error';
+    }
   }
 
   async function setStatus(a: Affiliate, status: string) {
     setBusyId(a.id);
-    const ok = await patch(a.id, { status });
-    if (ok) await fetchAffiliates();
+    setActionError('');
+    const err = await patch(a.id, { status });
+    if (err) setActionError(`${a.full_name || a.email}: status not changed. ${err}`);
+    else await fetchAffiliates();
     setBusyId(null);
   }
 
   async function commissionAction(a: Affiliate, action: 'approve' | 'reject') {
     setBusyId(a.id);
-    const ok = await patch(a.id, { commission_action: action });
-    if (ok) await fetchAffiliates();
+    setActionError('');
+    const err = await patch(a.id, { commission_action: action });
+    if (err) setActionError(`${a.full_name || a.email}: commission request not ${action === 'approve' ? 'approved' : 'rejected'}. ${err}`);
+    else await fetchAffiliates();
     setBusyId(null);
   }
 
   function openEdit(a: Affiliate) {
+    setEditError('');
     setEditing(a);
     setForm({
       commission_pct: String(a.commission_pct ?? ''),
@@ -149,21 +169,28 @@ export default function AdminAffiliatesPage() {
   async function saveEdit(e: React.FormEvent) {
     e.preventDefault();
     if (!editing) return;
+    // Send only what changed: the server clears a pending commission request
+    // whenever commission_pct is sent, even if it is the same value.
+    const changes: Record<string, any> = {};
+    if (form.commission_pct !== String(editing.commission_pct ?? '')) changes.commission_pct = Number(form.commission_pct);
+    if (form.payout_provider !== (editing.payout_provider || '')) changes.payout_provider = form.payout_provider;
+    if (form.payout_number !== (editing.payout_number || '')) changes.payout_number = form.payout_number;
+    if (form.payout_name !== (editing.payout_name || '')) changes.payout_name = form.payout_name;
+    if (form.notes !== (editing.notes || '')) changes.notes = form.notes;
+    if (Object.keys(changes).length === 0) { setEditing(null); return; }
     setSaving(true);
-    const ok = await patch(editing.id, {
-      commission_pct: Number(form.commission_pct),
-      payout_provider: form.payout_provider,
-      payout_number: form.payout_number,
-      payout_name: form.payout_name,
-      notes: form.notes,
-    });
+    setEditError('');
+    const err = await patch(editing.id, changes);
     setSaving(false);
-    if (ok) { setEditing(null); await fetchAffiliates(); }
+    if (err) { setEditError(err); return; }
+    setEditing(null);
+    await fetchAffiliates();
   }
 
   async function saveSettings(e: React.FormEvent) {
     e.preventDefault();
     setSavingSettings(true);
+    setSettingsError('');
     try {
       const res = await fetch('/api/admin/affiliates/settings', {
         method: 'PUT',
@@ -171,12 +198,16 @@ export default function AdminAffiliatesPage() {
         credentials: 'include',
         body: JSON.stringify(settingsForm),
       });
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
       if (res.ok && data.settings) {
         setSettings(data.settings);
         setSettingsForm(data.settings);
         setSettingsOpen(false);
+      } else {
+        setSettingsError(data?.error || `Settings not saved (${res.status})`);
       }
+    } catch (e: any) {
+      setSettingsError(e?.message || 'Network error, settings not saved');
     } finally {
       setSavingSettings(false);
     }
@@ -240,6 +271,13 @@ export default function AdminAffiliatesPage() {
 
   return (
     <div className="space-y-6">
+      {actionError && (
+        <div className="flex items-start gap-2 bg-red-50 border border-red-200 text-red-800 px-4 py-3 rounded-lg text-sm" role="alert">
+          <i className="ri-error-warning-line text-red-600 mt-0.5"></i>
+          <span className="flex-1">{actionError}</span>
+          <button onClick={() => setActionError('')} aria-label="Dismiss" className="opacity-70 hover:opacity-100"><i className="ri-close-line"></i></button>
+        </div>
+      )}
       {/* Header */}
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
@@ -504,6 +542,7 @@ export default function AdminAffiliatesPage() {
                 className="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2" rows={2} />
             </label>
 
+            {editError && <p className="text-sm text-red-700" role="alert">Not saved: {editError}</p>}
             <div className="flex justify-end gap-2 pt-2">
               <button type="button" onClick={() => setEditing(null)} className="px-4 py-2 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50">Cancel</button>
               <button type="submit" disabled={saving} className="px-4 py-2 rounded-lg bg-gray-900 text-white hover:bg-gray-800 disabled:opacity-50">{saving ? 'Saving…' : 'Save'}</button>
@@ -572,6 +611,7 @@ export default function AdminAffiliatesPage() {
               </label>
             </div>
 
+            {settingsError && <p className="text-sm text-red-700" role="alert">{settingsError}</p>}
             <div className="flex justify-end gap-2 pt-2">
               <button type="button" onClick={() => setSettingsOpen(false)} className="px-4 py-2 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50">Cancel</button>
               <button type="submit" disabled={savingSettings} className="px-4 py-2 rounded-lg bg-gray-900 text-white hover:bg-gray-800 disabled:opacity-50">{savingSettings ? 'Saving…' : 'Save settings'}</button>

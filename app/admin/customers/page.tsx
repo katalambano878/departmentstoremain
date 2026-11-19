@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useState, useEffect, useMemo } from 'react';
 import { supabase } from '@/lib/supabase';
 import { fetchAllPaged } from '@/lib/supabase-paginate';
+import { downloadCsv, csvMoney } from '@/lib/csv';
 
 export default function AdminCustomersPage() {
   const [searchQuery, setSearchQuery] = useState('');
@@ -218,12 +219,17 @@ export default function AdminCustomersPage() {
     'Inactive': 'bg-gray-100 text-gray-700'
   };
 
+  /** Select-all covers the rows currently shown (search + status filter), not the whole list. */
   const handleSelectAll = () => {
-    if (selectedCustomers.length === customers.length) {
-      setSelectedCustomers([]);
-    } else {
-      setSelectedCustomers(customers.map(c => c.id));
-    }
+    const visibleIds = filteredCustomers.map(c => c.id);
+    const allVisibleSelected = visibleIds.length > 0 && visibleIds.every(id => selectedCustomers.includes(id));
+    setSelectedCustomers(allVisibleSelected ? [] : visibleIds);
+  };
+
+  /** Selected customers that are still visible under the current search/filter. */
+  const visibleSelectedCustomers = () => {
+    const visible = new Set(filteredCustomers.map(c => c.id));
+    return customers.filter(c => selectedCustomers.includes(c.id) && visible.has(c.id));
   };
 
   const handleSelectCustomer = (customerId: string) => {
@@ -235,19 +241,22 @@ export default function AdminCustomersPage() {
   };
 
   const handleExportCustomers = (subset?: any[]) => {
-    const data = subset || customers;
-    const csvContent = `Name,Email,Phone,Orders,Total Spent,Status,Joined\n${data.map(c =>
-      `"${c.name}","${c.email}","${c.phone}",${c.orders},${c.totalSpent.toFixed(2)},${c.status},"${c.joined}"`
-    ).join('\n')}`;
-    const blob = new Blob([csvContent], { type: 'text/csv' });
-    const url = window.URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'customers.csv';
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    window.URL.revokeObjectURL(url);
+    const data = subset || filteredCustomers;
+    downloadCsv(
+      `customers-${new Date().toISOString().slice(0, 10)}.csv`,
+      ['Name', 'Email', 'Phone', 'Orders', 'Total Spent (GHS)', 'Status', 'Type', 'Joined', 'Last Order'],
+      data.map(c => [
+        c.name,
+        c.email,
+        c.phone === 'N/A' ? '' : c.phone,
+        c.orders,
+        csvMoney(c.totalSpent),
+        c.status,
+        c.isGuest ? 'Guest' : 'Registered',
+        c.joined,
+        c.rawLastOrder ? new Date(c.rawLastOrder).toLocaleDateString() : '',
+      ])
+    );
   };
 
   const handleDeleteCustomer = async (customerId: string) => {
@@ -269,8 +278,7 @@ export default function AdminCustomersPage() {
   };
 
   const handleBulkExport = () => {
-    const subset = customers.filter(c => selectedCustomers.includes(c.id));
-    handleExportCustomers(subset);
+    handleExportCustomers(visibleSelectedCustomers());
   };
 
   // Memoized filter and sort
@@ -304,6 +312,11 @@ export default function AdminCustomersPage() {
     return result;
   }, [customers, searchQuery, sortOption, filterStatus]);
 
+  // Hidden customers must not stay selected after the search or filter changes.
+  useEffect(() => {
+    setSelectedCustomers([]);
+  }, [searchQuery, filterStatus]);
+
   // Derived Stats
   const stats = useMemo(() => ({
     total: customers.length,
@@ -328,7 +341,7 @@ export default function AdminCustomersPage() {
           className="bg-blue-700 hover:bg-blue-800 text-white px-6 py-3 rounded-lg font-semibold transition-colors whitespace-nowrap cursor-pointer"
         >
           <i className="ri-download-line mr-2"></i>
-          Export Customers
+          Export Customers ({filteredCustomers.length})
         </button>
       </div>
 
@@ -401,9 +414,16 @@ export default function AdminCustomersPage() {
             <div className="flex items-center space-x-2">
               <button
                 onClick={() => {
-                  const selected = customers.filter(c => selectedCustomers.includes(c.id));
-                  const emails = selected.map(c => c.email).filter(Boolean).join(',');
-                  window.open(`mailto:${emails}?subject=Hello from Discount Discovery Zone`);
+                  // Bcc so customers never see each other's addresses.
+                  const emails = Array.from(new Set(
+                    visibleSelectedCustomers().map(c => String(c.email || '').trim()).filter(e => e.includes('@'))
+                  ));
+                  if (emails.length === 0) {
+                    alert('None of the selected customers has an email address.');
+                    return;
+                  }
+                  const bcc = emails.map(e => encodeURIComponent(e)).join(',');
+                  window.open(`mailto:?bcc=${bcc}&subject=${encodeURIComponent('Hello from Discount Discovery Zone')}`);
                 }}
                 className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors whitespace-nowrap cursor-pointer"
               >
@@ -428,7 +448,7 @@ export default function AdminCustomersPage() {
                 <th className="py-4 px-6">
                   <input
                     type="checkbox"
-                    checked={selectedCustomers.length === filteredCustomers.length && filteredCustomers.length > 0}
+                    checked={filteredCustomers.length > 0 && filteredCustomers.every(c => selectedCustomers.includes(c.id))}
                     onChange={handleSelectAll}
                     className="w-4 h-4 text-blue-700 border-gray-300 rounded focus:ring-blue-500 cursor-pointer"
                   />

@@ -14,7 +14,15 @@ import { isRangeNotSatisfiable } from '@/lib/supabase-paginate';
 
 function coverImage(images: { url?: string; position?: number }[] | null | undefined) {
     const sorted = [...(images || [])].sort((a, b) => (a.position ?? 0) - (b.position ?? 0));
-    return sorted[0]?.url || 'https://via.placeholder.com/800x800?text=No+Image';
+    return sorted[0]?.url || PLACEHOLDER_IMAGE;
+}
+
+const PLACEHOLDER_IMAGE =
+    "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 800 800'><rect width='800' height='800' fill='%23f3f4f6'/><path d='M260 520l120-150 90 105 70-85 120 130z' fill='%23d1d5db'/><circle cx='320' cy='300' r='45' fill='%23d1d5db'/></svg>";
+
+function sellable(stock: number, p: { track_quantity?: boolean | null; continue_selling?: boolean | null }) {
+    if (p.track_quantity === false || p.continue_selling === true) return 999;
+    return Math.max(0, Number(stock) || 0);
 }
 
 const PRODUCTS_PER_PAGE = 12;
@@ -28,6 +36,8 @@ function SaleContent() {
     const [products, setProducts] = useState<any[]>([]);
     const [categories, setCategories] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
+    const [loadError, setLoadError] = useState(false);
+    const [reloadKey, setReloadKey] = useState(0);
     const [totalProducts, setTotalProducts] = useState(0);
     // null = still checking; controls whether the whole campaign is live.
     const [salesActive, setSalesActive] = useState<boolean | null>(null);
@@ -88,16 +98,17 @@ function SaleContent() {
         }
         async function fetchProducts() {
             setLoading(true);
+            setLoadError(false);
             try {
                 const cacheKey = `sale:${selectedCategory}:${sortBy}:${page}`;
-                const { data, count } = await cachedQuery<{ data: any; count: any; error: any }>(
+                const { data, count, error } = await cachedQuery<{ data: any; count: any; error: any }>(
                     cacheKey,
                     async () => {
                         let query = applyStorefrontProductFilter(
                             supabase
                                 .from('products')
                                 .select(
-                                    `*, categories!inner(name, slug), product_images!product_id(url, position), product_variants(id, name, price, quantity, option1, option2, image_url)`,
+                                    `id, name, slug, price, compare_at_price, quantity, track_quantity, continue_selling, moq, rating_avg, review_count, created_at, categories!inner(name, slug), product_images!product_id(url, position), product_variants(id, name, price, quantity, option1, option2, image_url)`,
                                     { count: 'exact' },
                                 )
                         )
@@ -120,6 +131,7 @@ function SaleContent() {
                         return result;
                     },
                 );
+                if (error) throw error;
 
                 const formatted = (data || []).map((p: any) => {
                     const variants = p.product_variants || [];
@@ -130,7 +142,7 @@ function SaleContent() {
                     const totalVariantStock = hasVariants
                         ? variants.reduce((sum: number, v: any) => sum + (v.quantity || 0), 0)
                         : 0;
-                    const effectiveStock = hasVariants ? totalVariantStock : p.quantity;
+                    const effectiveStock = sellable(hasVariants ? totalVariantStock : p.quantity, p);
 
                     const colorVariants: ColorVariant[] = [];
                     const seen = new Set<string>();
@@ -153,9 +165,9 @@ function SaleContent() {
                         originalPrice: p.compare_at_price,
                         image: coverImage(p.product_images),
                         rating: p.rating_avg || 0,
-                        reviewCount: 0,
+                        reviewCount: p.review_count || 0,
                         inStock: effectiveStock > 0,
-                        maxStock: effectiveStock || 50,
+                        maxStock: effectiveStock,
                         moq: p.moq || 1,
                         categoryName: p.categories?.name || undefined,
                         hasVariants,
@@ -172,20 +184,23 @@ function SaleContent() {
                 setTotalProducts(count || 0);
             } catch (err) {
                 console.error('Error fetching sale products:', err);
+                setLoadError(true);
+                setProducts([]);
+                setTotalProducts(0);
             } finally {
                 setLoading(false);
             }
         }
         fetchProducts();
-    }, [selectedCategory, sortBy, page, salesActive, setParam]);
+    }, [selectedCategory, sortBy, page, salesActive, setParam, reloadKey]);
 
     const totalPages = Math.ceil(totalProducts / PRODUCTS_PER_PAGE);
 
     useEffect(() => {
-        if (loading || salesActive !== true || page <= 1) return;
+        if (loading || loadError || salesActive !== true || page <= 1) return;
         if (totalPages >= 1 && page <= totalPages) return;
         setParam({ page: totalPages > 1 ? String(totalPages) : null }, false);
-    }, [loading, salesActive, totalPages, page, setParam]);
+    }, [loading, loadError, salesActive, totalPages, page, setParam]);
 
     return (
         <main className="min-h-screen bg-white">
@@ -200,6 +215,8 @@ function SaleContent() {
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
                         <div className="flex items-center gap-2 overflow-x-auto pb-1">
                             <button
+                                type="button"
+                                aria-pressed={selectedCategory === 'all'}
                                 onClick={() => setParam({ category: null, page: null }, false)}
                                 className={`px-4 py-2 rounded-full text-sm whitespace-nowrap transition-colors ${
                                     selectedCategory === 'all'
@@ -214,6 +231,8 @@ function SaleContent() {
                                 .map((c: any) => (
                                     <button
                                         key={c.id || c.slug}
+                                        type="button"
+                                        aria-pressed={selectedCategory === c.slug}
                                         onClick={() => setParam({ category: c.slug, page: null }, false)}
                                         className={`px-4 py-2 rounded-full text-sm whitespace-nowrap transition-colors ${
                                             selectedCategory === c.slug
@@ -228,7 +247,9 @@ function SaleContent() {
 
                         <div className="flex items-center gap-3 flex-shrink-0">
                             <span className="text-sm text-gray-500 whitespace-nowrap">{totalProducts} items</span>
+                            <label htmlFor="sale-sort" className="sr-only">Sort sale items</label>
                             <select
+                                id="sale-sort"
                                 value={sortBy}
                                 onChange={(e) => setParam({ sort: e.target.value, page: null }, false)}
                                 className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500"
@@ -245,6 +266,21 @@ function SaleContent() {
                             {Array.from({ length: 8 }).map((_, i) => (
                                 <ProductCardSkeleton key={i} />
                             ))}
+                        </div>
+                    ) : loadError ? (
+                        <div className="text-center py-20" role="alert">
+                            <div className="w-20 h-20 mx-auto mb-6 bg-gray-50 rounded-full flex items-center justify-center">
+                                <i className="ri-wifi-off-line text-4xl text-gray-300" aria-hidden="true"></i>
+                            </div>
+                            <h2 className="text-xl font-semibold text-gray-900 mb-2">Couldn&apos;t load sale items</h2>
+                            <p className="text-gray-500 mb-6">Check your connection and try again.</p>
+                            <button
+                                type="button"
+                                onClick={() => setReloadKey((k) => k + 1)}
+                                className="inline-flex items-center bg-gray-900 hover:bg-emerald-700 text-white px-6 py-3 rounded-lg font-medium transition-colors"
+                            >
+                                Try again
+                            </button>
                         </div>
                     ) : products.length === 0 ? (
                         <div className="text-center py-20">
@@ -263,11 +299,13 @@ function SaleContent() {
                     )}
 
                     {/* Pagination */}
-                    {!loading && totalPages > 1 && (
+                    {!loading && !loadError && totalPages > 1 && (
                         <div className="flex items-center justify-center gap-2 mt-12">
                             <button
+                                type="button"
                                 onClick={() => setParam({ page: String(page - 1) })}
                                 disabled={page <= 1}
+                                aria-label="Previous page"
                                 className="w-10 h-10 flex items-center justify-center border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
                             >
                                 <i className="ri-arrow-left-s-line text-xl text-gray-700"></i>
@@ -276,8 +314,10 @@ function SaleContent() {
                                 Page {page} of {totalPages}
                             </span>
                             <button
+                                type="button"
                                 onClick={() => setParam({ page: String(page + 1) })}
                                 disabled={page >= totalPages}
+                                aria-label="Next page"
                                 className="w-10 h-10 flex items-center justify-center border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
                             >
                                 <i className="ri-arrow-right-s-line text-xl text-gray-700"></i>

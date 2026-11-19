@@ -369,6 +369,7 @@ export default function HeaderModern() {
                 { label: 'Track Order', href: '/order-tracking' },
                 { label: 'Wishlist', href: '/wishlist' },
                 { label: 'My Account', href: '/account' },
+                { label: 'Help', href: '/help' },
               ].map((link) => (
                 <Link
                   key={link.href}

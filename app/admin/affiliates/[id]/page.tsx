@@ -46,6 +46,14 @@ export default function AdminAffiliateDetailPage() {
   const [busyMarkup, setBusyMarkup] = useState<string | null>(null);
   const [paying, setPaying] = useState(false);
   const [confirmPay, setConfirmPay] = useState(false);
+  const [error, setError] = useState('');
+  const [payError, setPayError] = useState('');
+
+  /** The server's error message from a failed response. */
+  const errorFrom = async (res: Response) => {
+    const data = await res.json().catch(() => ({}));
+    return data?.error || `Request failed (${res.status})`;
+  };
 
   const authHeaders = useCallback(async (): Promise<HeadersInit> => {
     const { data: { session } } = await supabase.auth.getSession();
@@ -57,14 +65,21 @@ export default function AdminAffiliateDetailPage() {
   const load = useCallback(async () => {
     try {
       const res = await fetch(`/api/admin/affiliates/${id}`, { headers: await authHeaders(), credentials: 'include' });
-      const data = await res.json();
+      if (!res.ok && res.status !== 404) {
+        setError(`Could not load this affiliate: ${await errorFrom(res)}`);
+        setLoading(false);
+        return;
+      }
+      const data = await res.json().catch(() => ({}));
       if (data.affiliate) {
         setAffiliate(data.affiliate);
         setCommissions(data.commissions || []);
         setPayouts(data.payouts || []);
         setMarkups(data.markups || []);
       }
-    } catch { /* noop */ }
+    } catch (e: any) {
+      setError(`Could not load this affiliate: ${e?.message || 'network error'}`);
+    }
     setLoading(false);
   }, [id, authHeaders]);
 
@@ -72,12 +87,16 @@ export default function AdminAffiliateDetailPage() {
 
   async function markupAction(markupId: string, action: 'approve' | 'reject') {
     setBusyMarkup(markupId);
+    setError('');
     try {
       const res = await fetch(`/api/admin/affiliates/${id}`, {
         method: 'PATCH', headers: await authHeaders(), credentials: 'include',
         body: JSON.stringify({ markup_id: markupId, action }),
       });
       if (res.ok) await load();
+      else setError(`Price not ${action === 'approve' ? 'approved' : 'rejected'}: ${await errorFrom(res)}`);
+    } catch (e: any) {
+      setError(`Price not updated: ${e?.message || 'network error'}`);
     } finally {
       setBusyMarkup(null);
     }
@@ -85,9 +104,13 @@ export default function AdminAffiliateDetailPage() {
 
   async function payNow() {
     setPaying(true);
+    setPayError('');
     try {
       const res = await fetch(`/api/admin/affiliates/${id}`, { method: 'POST', headers: await authHeaders(), credentials: 'include', body: JSON.stringify({}) });
       if (res.ok) { setConfirmPay(false); await load(); }
+      else setPayError(`Payout not recorded: ${await errorFrom(res)}`);
+    } catch (e: any) {
+      setPayError(`Payout not recorded: ${e?.message || 'network error'}`);
     } finally {
       setPaying(false);
     }
@@ -97,12 +120,20 @@ export default function AdminAffiliateDetailPage() {
     return <div className="p-12 text-center text-gray-400"><i className="ri-loader-4-line animate-spin text-2xl" /></div>;
   }
   if (!affiliate) {
+    if (error) return <div className="p-12 text-center text-red-700">{error} <Link href="/admin/affiliates" className="text-gray-900 underline">Back</Link></div>;
     return <div className="p-12 text-center text-gray-400">Affiliate not found. <Link href="/admin/affiliates" className="text-gray-900 underline">Back</Link></div>;
   }
 
   return (
     <div className="p-6 max-w-5xl mx-auto">
       <Link href="/admin/affiliates" className="text-sm text-gray-500 hover:text-gray-900">← All affiliates</Link>
+      {error && (
+        <div className="mt-3 flex items-start gap-2 bg-red-50 border border-red-200 text-red-800 px-4 py-3 rounded-lg text-sm" role="alert">
+          <i className="ri-error-warning-line text-red-600 mt-0.5"></i>
+          <span className="flex-1">{error}</span>
+          <button onClick={() => setError('')} aria-label="Dismiss" className="opacity-70 hover:opacity-100"><i className="ri-close-line"></i></button>
+        </div>
+      )}
       <div className="flex flex-wrap items-start justify-between gap-4 mt-2 mb-6">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">{affiliate.full_name || affiliate.email}</h1>
@@ -114,7 +145,7 @@ export default function AdminAffiliateDetailPage() {
           </p>
         </div>
         <button
-          onClick={() => setConfirmPay(true)}
+          onClick={() => { setPayError(''); setConfirmPay(true); }}
           disabled={Number(affiliate.balance_available) <= 0}
           className="px-4 py-2 rounded-lg bg-green-600 text-white font-medium hover:bg-green-700 disabled:opacity-40 disabled:cursor-not-allowed"
         >
@@ -258,6 +289,7 @@ export default function AdminAffiliateDetailPage() {
             <p className="text-xs text-gray-400 mb-4">
               Send the mobile money transfer first, then confirm here. This marks all matured commissions as paid.
             </p>
+            {payError && <p className="text-sm text-red-700 mb-3" role="alert">{payError}</p>}
             <div className="flex justify-end gap-2">
               <button onClick={() => setConfirmPay(false)} className="px-4 py-2 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50">Cancel</button>
               <button onClick={payNow} disabled={paying} className="px-4 py-2 rounded-lg bg-green-600 text-white hover:bg-green-700 disabled:opacity-50">

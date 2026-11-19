@@ -146,28 +146,28 @@ export default function TermsPage() {
               <ul className="space-y-2 text-gray-600">
                 <li className="flex items-center gap-2">
                   <i className="ri-smartphone-line text-emerald-700"></i>
-                  <span>Mobile Money (MTN, Vodafone, AirtelTigo) via Moolre</span>
+                  <span>Mobile money (MTN, Telecel, AirtelTigo) through Hubtel</span>
                 </li>
                 <li className="flex items-center gap-2">
                   <i className="ri-bank-card-line text-emerald-700"></i>
-                  <span>Credit/Debit Cards (Visa, Mastercard) via Moolre</span>
+                  <span>Bank cards (Visa, Mastercard) through Hubtel</span>
                 </li>
               </ul>
             </div>
             <p className="text-gray-600 leading-relaxed">
-              Payment must be received in full before order dispatch. By providing payment information, you confirm that you are authorised to use the payment method and that there are sufficient funds available.
+              All payments are made online through Hubtel. We do not accept cash on delivery or payment in instalments. Payment must be received in full before the order is sent out. By providing payment information, you confirm that you are authorised to use the payment method and that there are sufficient funds available.
             </p>
 
             <h3 className="text-xl font-bold text-gray-900 mb-4 mt-8">4.3 Order Modifications</h3>
             <p className="text-gray-600 leading-relaxed">
-              You may modify or cancel your order within 1 hour of placement. After this time, orders enter processing and cannot be changed. Contact customer service immediately if you need to make changes.
+              Contact us as soon as possible if you need to change or cancel an order. We can usually make changes until the order leaves our store; after that it cannot be changed.
             </p>
           </section>
 
           <section className="mb-12">
             <h2 className="text-3xl font-bold text-gray-900 mb-6">5. Shipping & Delivery</h2>
             <p className="text-gray-600 leading-relaxed mb-4">
-              Delivery times and costs vary by location and shipping method selected. See our Shipping Policy for detailed information.
+              Orders are delivered within Ghana within 24–72 hours after payment. Doorstep delivery is charged at cost: the rider tells you the fee for your location, and it is not part of the online payment. Store pickup is free. See our Shipping Policy for details.
             </p>
             <p className="text-gray-600 leading-relaxed mb-4">
               Risk of loss and title for products pass to you upon delivery to the carrier. We are not responsible for delays caused by the shipping carrier or circumstances beyond our control (weather, strikes, customs, etc.).
@@ -183,7 +183,7 @@ export default function TermsPage() {
               We offer a 14-day return policy for most products. See our Returns Policy for complete details on eligibility, process, and conditions.
             </p>
             <p className="text-gray-600 leading-relaxed">
-              Refunds are processed within 5-7 business days of receiving your return. Refunds are issued to the original payment method.
+              Every return request is reviewed by our team. If a refund is agreed, we tell you the amount, how it will be paid and when to expect it.
             </p>
           </section>
 

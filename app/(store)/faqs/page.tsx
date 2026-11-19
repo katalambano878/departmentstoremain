@@ -25,112 +25,97 @@ export default function FAQsPage() {
     {
       category: 'orders',
       question: 'How do I place an order?',
-      answer: 'Browse our products, add items to your cart, proceed to checkout, provide your delivery address, select payment method, and confirm your order. You\'ll receive an email confirmation with your order details and tracking number.'
+      answer: 'Add items to your bag, go to checkout, enter your name, phone and email, choose doorstep delivery or free store pickup, then pay through Hubtel with mobile money or a card. You get your order number by email once the payment goes through.'
     },
     {
       category: 'orders',
-      question: 'Can I modify or cancel my order?',
-      answer: `You can modify or cancel your order within 1 hour of placing it. Contact our customer service immediately via WhatsApp at ${PUBLIC_CONTACT_PHONE_DISPLAY} or email ${PUBLIC_CONTACT_EMAIL}. Once an order is processed, modifications may not be possible.`
+      question: 'Can I change or cancel my order?',
+      answer: `Contact us as soon as possible on WhatsApp ${PUBLIC_CONTACT_PHONE_DISPLAY} or by email at ${PUBLIC_CONTACT_EMAIL} with your order number. If the order has not left the store yet, we can usually change or cancel it.`
     },
     {
       category: 'orders',
       question: 'How do I track my order?',
-      answer: 'After your order is confirmed, you\'ll receive details via email and SMS. Visit our Order Tracking page and enter your email, order number, or phone number to see updates on your delivery status.'
+      answer: 'Open the Order Tracking page and enter your order number, or the email or phone number you used at checkout, to see the current status.'
     },
     {
       category: 'orders',
       question: 'What if I receive the wrong item?',
-      answer: 'We sincerely apologise if you receive the wrong item. Contact us within 48 hours with photos of the item received. We\'ll arrange for the correct item to be sent immediately and collect the wrong item at no cost to you.'
+      answer: 'Start a return on the Returns page and choose "Wrong item received", or WhatsApp us with your order number and a photo. We will contact you within 2 working days to put it right.'
     },
     {
       category: 'shipping',
-      question: 'What are your delivery times?',
-      answer: 'Doorstep delivery typically takes 1-3 business days within Ghana. Orders placed before 2pm are dispatched the same day. Remote areas may take a little longer. Store pickup from our Accra location is usually ready within 24 hours.'
+      question: 'How long does delivery take?',
+      answer: 'Orders are delivered within 24–72 hours after payment, anywhere we deliver in Ghana.'
     },
     {
       category: 'shipping',
-      question: 'How much does shipping cost?',
-      answer: 'Doorstep delivery is charged based on your location — our team will contact you with the exact delivery fee after you place the order. Store pickup from our Accra store is completely FREE.'
+      question: 'How much does delivery cost?',
+      answer: 'Doorstep delivery is charged at cost: the fee depends on your location and the rider tells you the fee. It is not part of the online payment. Store pickup is free.'
     },
     {
       category: 'shipping',
-      question: 'Do you ship outside Ghana?',
-      answer: 'Currently, we only ship within Ghana. We\'re working on expanding to neighbouring West African countries. Sign up for our newsletter to be notified when international shipping becomes available.'
+      question: 'Do you deliver outside Ghana?',
+      answer: 'No. We deliver within Ghana only.'
     },
     {
       category: 'shipping',
-      question: 'What if nobody is home for delivery?',
-      answer: 'Our delivery partner will attempt delivery twice. If unsuccessful, the package will be held at the nearest collection point for 5 days. You\'ll receive SMS and email notifications with collection instructions.'
+      question: 'What if I am not available when the rider arrives?',
+      answer: 'The rider will call you on the phone number from your order. If you cannot be reached, call or WhatsApp us to arrange another time.'
     },
     {
       category: 'returns',
       question: 'What is your return policy?',
-      answer: 'We offer a 14-day return policy for unused items in original packaging. Simply initiate a return from your account, print the return label, and ship it back. Refunds are processed within 5-7 business days after we receive the item.'
+      answer: 'Start a return request within 14 days of receiving your order. Items should be unused and in their original packaging, unless they arrived damaged or wrong. We review every request and contact you within 2 working days to agree the next step.'
     },
     {
       category: 'returns',
-      question: 'Which items cannot be returned?',
-      answer: 'For hygiene reasons, we cannot accept returns on opened cosmetics, intimate apparel, earrings, or perishable goods. Custom or personalised items are also non-returnable unless defective.'
+      question: 'How do I start a return?',
+      answer: 'Go to the Returns page, enter your order number and the email or phone number used on the order, choose a reason and tell us what happened. You get a reference straight away.'
     },
     {
       category: 'returns',
-      question: 'Who pays for return shipping?',
-      answer: 'If you\'re returning due to a defect or our error, we cover return shipping. For change-of-mind returns, customers pay return shipping costs (GHS 15 standard rate). Free shipping on returns for defective items.'
-    },
-    {
-      category: 'returns',
-      question: 'Can I exchange an item instead of returning it?',
-      answer: 'Yes! If you need a different size or colour, select "Exchange" when initiating your return. We\'ll send the replacement as soon as we receive your original item. Exchange shipping is FREE.'
+      question: 'Can I exchange an item instead?',
+      answer: 'Say so in your return request (for example, the size you need). If the item is in stock, we will arrange it with you when we get in touch.'
     },
     {
       category: 'payment',
-      question: 'What payment methods do you accept?',
-      answer: 'We accept MTN Mobile Money, Vodafone Cash, AirtelTigo Money, and Visa/Mastercard credit and debit cards via our secure Moolre payment gateway. All transactions are encrypted and processed securely.'
+      question: 'How can I pay?',
+      answer: 'All orders are paid online through Hubtel, with mobile money (MTN, Telecel, AirtelTigo) or a Visa or Mastercard bank card. We do not offer cash on delivery or payment in instalments.'
     },
     {
       category: 'payment',
-      question: 'Is it safe to use my credit card on your site?',
-      answer: 'Absolutely. We use industry-standard SSL encryption and partner with Moolre for secure payment processing. We never store your full card details on our servers. All transactions are PCI-DSS compliant.'
+      question: 'Is paying online safe?',
+      answer: 'Payments are handled by Hubtel on their secure checkout. We never see or store your card details.'
     },
     {
       category: 'payment',
-      question: 'Can I pay in instalments?',
-      answer: 'Yes! We offer payment plans through our partners for purchases over GHS 500. Select "Pay in Instalments" at checkout to see available options. Approval is instant and no interest is charged.'
-    },
-    {
-      category: 'payment',
-      question: 'When will my payment be charged?',
-      answer: 'For card and mobile money payments, you\'re charged immediately. For Cash on Delivery, you pay when you receive your order. If an item is out of stock, we\'ll refund you within 24 hours.'
+      question: 'My payment failed. What now?',
+      answer: `Your order waits for payment and is not sent out until it is paid. Try again from the payment page or payment link. If money left your account but the order still shows unpaid, do not pay again: WhatsApp us on ${PUBLIC_CONTACT_PHONE_DISPLAY} with your order number.`
     },
     {
       category: 'payment',
       question: 'How do refunds work?',
-      answer: 'Refunds are processed to your original payment method within 5-7 business days after we receive and inspect your return. For mobile money refunds, ensure you provide correct details. You\'ll receive confirmation via email.'
+      answer: 'If a refund is agreed after reviewing your return, our team tells you the amount, how it will be paid and when to expect it.'
     },
     {
       category: 'account',
-      question: 'Do I need an account to place an order?',
-      answer: 'No, you can checkout as a guest. However, creating an account lets you track orders, save addresses, view purchase history, manage your wishlist, and receive exclusive offers. It only takes 30 seconds to sign up.'
+      question: 'Do I need an account to order?',
+      answer: 'No, you can check out as a guest. With an account you can see your orders, save delivery addresses and use support tickets.'
     },
     {
       category: 'account',
       question: 'How do I reset my password?',
-      answer: 'Click "Forgot Password" on the login page, enter your email address, and we\'ll send you a reset link. The link is valid for 1 hour. If you don\'t receive it, check your spam folder or contact support.'
+      answer: 'Choose "Forgot password?" on the sign-in page, enter your email and open the link we send. Check your spam folder if it does not arrive within a few minutes.'
     },
     {
       category: 'account',
-      question: 'Can I have multiple delivery addresses?',
-      answer: 'Yes! You can save multiple delivery addresses in your account. During checkout, simply select the address you want to use or add a new one. This is perfect for sending gifts or alternating between work and home.'
+      question: 'Can I save more than one delivery address?',
+      answer: 'Yes. Sign in and open My Account → Addresses to add, edit or delete addresses and choose a default.'
     },
     {
       category: 'account',
-      question: 'How do I update my account information?',
-      answer: 'Log in to your account and go to "Account Settings". You can update your name, email, phone number, password, and saved addresses. Changes are saved instantly and you\'ll receive a confirmation email.'
-    },
-    {
-      category: 'account',
-      question: 'What are loyalty points and how do they work?',
-      answer: 'Earn 1 point for every GHS 10 spent. 100 points = GHS 10 discount on your next purchase. Points are automatically added to your account after each order. Check your points balance in your account dashboard.'
+      question: 'How do I update my details?',
+      answer: 'Sign in and open My Account → Profile to change your name and phone number, or to change your password.'
     }
   ];
 
@@ -160,6 +145,7 @@ export default function FAQsPage() {
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Search for answers..."
+                aria-label="Search the FAQs"
                 className="w-full pl-12 pr-4 py-4 border border-gray-300 rounded-full focus:ring-2 focus:ring-emerald-500 focus:border-transparent text-sm shadow-lg"
               />
               <i className="ri-search-line absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 text-xl"></i>
@@ -173,6 +159,8 @@ export default function FAQsPage() {
           {categories.map((category) => (
             <button
               key={category.id}
+              type="button"
+              aria-pressed={activeCategory === category.id}
               onClick={() => setActiveCategory(category.id)}
               className={`flex items-center gap-2 px-6 py-3 rounded-full font-medium transition-all whitespace-nowrap ${
                 activeCategory === category.id
@@ -223,7 +211,7 @@ export default function FAQsPage() {
           </div>
           <h2 className="text-3xl font-bold text-white mb-4">Still Have Questions?</h2>
           <p className="text-xl text-emerald-100 mb-8 leading-relaxed">
-            Our customer service team is ready to help. Contact us and we'll respond within 24 hours.
+            Our team is ready to help. Send us a message and we usually reply within one working day.
           </p>
           <div className="flex flex-wrap gap-4 justify-center">
             <Link

@@ -13,7 +13,6 @@ interface Review {
   verified: boolean;
   title: string;
   content: string;
-  helpful: number;
   user_id: string;
 }
 
@@ -28,6 +27,7 @@ export default function ProductReviews({ productId }: ProductReviewsProps) {
   const [reviews, setReviews] = useState<Review[]>([]);
   const [loading, setLoading] = useState(true);
   const [user, setUser] = useState<any>(null);
+  const [submitted, setSubmitted] = useState(false);
 
   const [reviewForm, setReviewForm] = useState({
     rating: 5,
@@ -52,7 +52,7 @@ export default function ProductReviews({ productId }: ProductReviewsProps) {
         `reviews:${productId}`,
         (() => supabase
           .from('reviews')
-          .select('*')
+          .select('id, rating, title, content, verified_purchase, created_at, user_id')
           .eq('product_id', productId)
           .eq('status', 'approved')
           .order('created_at', { ascending: false })) as any,
@@ -68,13 +68,12 @@ export default function ProductReviews({ productId }: ProductReviewsProps) {
 
         const formattedReviews = data.map((r: any) => ({
           id: r.id,
-          author: 'Verified Customer', // or fetch from profiles if we had it joined
+          author: 'Customer', // names are not public
           rating: r.rating,
           date: r.created_at,
           verified: r.verified_purchase,
           title: r.title,
           content: r.content,
-          helpful: r.helpful_votes || 0,
           user_id: r.user_id
         }));
         setReviews(formattedReviews);
@@ -120,19 +119,19 @@ export default function ProductReviews({ productId }: ProductReviewsProps) {
     setIsSubmitting(true);
 
     try {
+      // The database sets the status (pending until approved) and works out
+      // "verified purchase" itself, so we only send what the shopper wrote.
       const { error } = await supabase.from('reviews').insert([{
         product_id: productId,
         user_id: user.id,
         rating: reviewForm.rating,
         title: reviewForm.title,
         content: reviewForm.content,
-        status: 'approved', // Auto-approve for demo
-        verified_purchase: false // We could check orders here but keeping it simple
       }]);
 
       if (error) throw error;
 
-      alert('Review submitted successfully!');
+      setSubmitted(true);
       setShowReviewForm(false);
       setReviewForm({ rating: 5, title: '', content: '' });
       invalidateCache(`reviews:${productId}`); // Clear cache so fresh data is fetched
@@ -152,11 +151,18 @@ export default function ProductReviews({ productId }: ProductReviewsProps) {
     <div className="bg-white rounded-xl shadow-sm p-8">
       <h2 className="text-2xl font-bold text-gray-900 mb-6">Customer Reviews</h2>
 
+      {submitted && (
+        <div className="mb-6 rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-800" role="status">
+          Thanks! Your review will appear once it has been approved.
+        </div>
+      )}
+
       {reviews.length === 0 && !showReviewForm ? (
         <div className="text-center py-8 mb-8 border-b border-gray-200">
           <p className="text-gray-500 mb-4">No reviews yet. Be the first to review!</p>
           <button
-            onClick={() => setShowReviewForm(true)}
+            type="button"
+            onClick={() => { setShowReviewForm(true); setSubmitted(false); }}
             className="bg-emerald-700 hover:bg-emerald-800 text-white px-6 py-2 rounded-lg font-semibold transition-colors"
           >
             Write a Review
@@ -167,7 +173,7 @@ export default function ProductReviews({ productId }: ProductReviewsProps) {
           <div className="grid md:grid-cols-3 gap-8 mb-8 pb-8 border-b border-gray-200">
             <div className="text-center">
               <div className="text-5xl font-bold text-gray-900 mb-2">{averageRating.toFixed(1)}</div>
-              <div className="flex items-center justify-center mb-2">
+              <div className="flex items-center justify-center mb-2" aria-hidden="true">
                 {[1, 2, 3, 4, 5].map((star) => (
                   <i
                     key={star}
@@ -176,7 +182,10 @@ export default function ProductReviews({ productId }: ProductReviewsProps) {
                   ></i>
                 ))}
               </div>
-              <p className="text-gray-600">Based on {reviews.length} reviews</p>
+              <p className="text-gray-600">
+                <span className="sr-only">{averageRating.toFixed(1)} out of 5 stars. </span>
+                Based on {reviews.length} {reviews.length === 1 ? 'review' : 'reviews'}
+              </p>
             </div>
 
             <div className="md:col-span-2">
@@ -184,13 +193,16 @@ export default function ProductReviews({ productId }: ProductReviewsProps) {
                 {ratingDistribution.map((dist) => (
                   <div key={dist.star} className="flex items-center space-x-3">
                     <button
+                      type="button"
                       onClick={() => setFilter(dist.star.toString())}
+                      aria-label={`Show ${dist.star}-star reviews (${dist.count})`}
+                      aria-pressed={filter === dist.star.toString()}
                       className="flex items-center space-x-1 hover:text-emerald-700 transition-colors"
                     >
                       <span className="text-sm font-medium w-6">{dist.star}</span>
-                      <i className="ri-star-fill text-yellow-400 text-sm"></i>
+                      <i className="ri-star-fill text-yellow-400 text-sm" aria-hidden="true"></i>
                     </button>
-                    <div className="flex-1 h-3 bg-gray-200 rounded-full overflow-hidden">
+                    <div className="flex-1 h-3 bg-gray-200 rounded-full overflow-hidden" aria-hidden="true">
                       <div
                         className="h-full bg-yellow-400 transition-all duration-300"
                         style={{ width: `${dist.percentage}%` }}
@@ -203,10 +215,12 @@ export default function ProductReviews({ productId }: ProductReviewsProps) {
             </div>
           </div>
 
-          <div className="flex items-center justify-between mb-6">
+          <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
             <div className="flex items-center space-x-2">
               <button
+                type="button"
                 onClick={() => setFilter('all')}
+                aria-pressed={filter === 'all'}
                 className={`px-4 py-2 rounded-lg font-medium transition-colors whitespace-nowrap ${filter === 'all'
                   ? 'bg-emerald-700 text-white'
                   : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
@@ -219,7 +233,8 @@ export default function ProductReviews({ productId }: ProductReviewsProps) {
 
             {!showReviewForm && (
               <button
-                onClick={() => setShowReviewForm(true)}
+                type="button"
+                onClick={() => { setShowReviewForm(true); setSubmitted(false); }}
                 className="bg-emerald-700 hover:bg-emerald-800 text-white px-6 py-2 rounded-lg font-semibold transition-colors whitespace-nowrap"
               >
                 Write a Review
@@ -233,34 +248,45 @@ export default function ProductReviews({ productId }: ProductReviewsProps) {
         <form onSubmit={handleSubmitReview} className="bg-gray-50 rounded-xl p-6 mb-8">
           <h3 className="text-lg font-bold text-gray-900 mb-4">Write Your Review</h3>
 
-          <div className="mb-4">
-            <label className="block text-sm font-semibold text-gray-900 mb-2">Your Rating *</label>
+          <fieldset className="mb-4">
+            <legend className="block text-sm font-semibold text-gray-900 mb-2">Your Rating *</legend>
             <div className="flex space-x-2">
               {[1, 2, 3, 4, 5].map((star) => (
                 <button
                   key={star}
                   type="button"
                   onClick={() => setReviewForm({ ...reviewForm, rating: star })}
+                  aria-label={`${star} star${star > 1 ? 's' : ''}`}
+                  aria-pressed={reviewForm.rating === star}
                   className="w-10 h-10 flex items-center justify-center"
                 >
                   <i
+                    aria-hidden="true"
                     className={`ri-star-${star <= reviewForm.rating ? 'fill' : 'line'} text-3xl ${star <= reviewForm.rating ? 'text-yellow-400' : 'text-gray-300'
                       }`}
                   ></i>
                 </button>
               ))}
             </div>
-          </div>
+          </fieldset>
 
           {!user && (
             <div className="mb-4 p-4 bg-amber-50 text-amber-800 rounded-lg">
-              You must be logged in to submit a review.
+              Please{' '}
+              <a
+                href="/auth/login"
+                className="font-semibold underline"
+              >
+                sign in
+              </a>{' '}
+              to write a review.
             </div>
           )}
 
           <div className="mb-4">
-            <label className="block text-sm font-semibold text-gray-900 mb-2">Review Title *</label>
+            <label htmlFor={`review-title-${productId}`} className="block text-sm font-semibold text-gray-900 mb-2">Review Title *</label>
             <input
+              id={`review-title-${productId}`}
               type="text"
               value={reviewForm.title}
               onChange={(e) => setReviewForm({ ...reviewForm, title: e.target.value })}
@@ -272,8 +298,9 @@ export default function ProductReviews({ productId }: ProductReviewsProps) {
           </div>
 
           <div className="mb-4">
-            <label className="block text-sm font-semibold text-gray-900 mb-2">Your Review *</label>
+            <label htmlFor={`review-content-${productId}`} className="block text-sm font-semibold text-gray-900 mb-2">Your Review *</label>
             <textarea
+              id={`review-content-${productId}`}
               value={reviewForm.content}
               onChange={(e) => setReviewForm({ ...reviewForm, content: e.target.value })}
               rows={4}
@@ -284,13 +311,15 @@ export default function ProductReviews({ productId }: ProductReviewsProps) {
             ></textarea>
           </div>
 
-          <div className="flex space-x-3">
+          <p className="mb-4 text-xs text-gray-500">Reviews are checked by our team before they appear.</p>
+
+          <div className="flex flex-wrap gap-3">
             <button
               type="submit"
               disabled={isSubmitting || !user}
               className="bg-emerald-700 hover:bg-emerald-800 text-white px-6 py-3 rounded-lg font-semibold transition-colors whitespace-nowrap disabled:opacity-50"
             >
-              {isSubmitting ? 'Submitting...' : 'Submit Review'}
+              {isSubmitting || verifying ? 'Submitting...' : 'Submit Review'}
             </button>
             <button
               type="button"
@@ -306,7 +335,7 @@ export default function ProductReviews({ productId }: ProductReviewsProps) {
       <div className="space-y-6">
         {filteredReviews.map((review) => (
           <div key={review.id} className="pb-6 border-b border-gray-200 last:border-0">
-            <div className="flex items-start justify-between mb-3">
+            <div className="flex flex-wrap items-start justify-between gap-3 mb-3">
               <div className="flex items-center space-x-3">
                 <div className="w-12 h-12 flex items-center justify-center bg-emerald-100 rounded-full text-emerald-700 font-bold text-lg">
                   {review.author.charAt(0)}
@@ -316,8 +345,8 @@ export default function ProductReviews({ productId }: ProductReviewsProps) {
                     <span className="font-semibold text-gray-900">{review.author}</span>
                     {review.verified && (
                       <span className="flex items-center text-xs text-emerald-700 bg-emerald-50 px-2 py-1 rounded">
-                        <i className="ri-checkbox-circle-fill mr-1"></i>
-                        Verified Must Have
+                        <i className="ri-checkbox-circle-fill mr-1" aria-hidden="true"></i>
+                        Verified purchase
                       </span>
                     )}
                   </div>
@@ -325,10 +354,11 @@ export default function ProductReviews({ productId }: ProductReviewsProps) {
                 </div>
               </div>
 
-              <div className="flex items-center space-x-1">
+              <div className="flex items-center space-x-1" role="img" aria-label={`${review.rating} out of 5 stars`}>
                 {[1, 2, 3, 4, 5].map((star) => (
                   <i
                     key={star}
+                    aria-hidden="true"
                     className={`ri-star-${star <= review.rating ? 'fill' : 'line'} text-lg ${star <= review.rating ? 'text-yellow-400' : 'text-gray-300'
                       }`}
                   ></i>
@@ -337,14 +367,7 @@ export default function ProductReviews({ productId }: ProductReviewsProps) {
             </div>
 
             <h4 className="font-semibold text-gray-900 mb-2">{review.title}</h4>
-            <p className="text-gray-700 mb-4">{review.content}</p>
-
-            <div className="flex items-center space-x-4 text-sm">
-              <button className="flex items-center space-x-1 text-gray-600 hover:text-emerald-700 transition-colors">
-                <i className="ri-thumb-up-line"></i>
-                <span>Helpful ({review.helpful})</span>
-              </button>
-            </div>
+            <p className="text-gray-700">{review.content}</p>
           </div>
         ))}
       </div>

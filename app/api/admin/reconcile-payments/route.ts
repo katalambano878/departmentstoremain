@@ -1,9 +1,14 @@
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase-admin';
 import { verifyAuth } from '@/lib/auth';
-import { sendOrderConfirmation, sendPosReceiptSmsByOrderRef, isPosSaleOrder } from '@/lib/notifications';
-import { checkHubtelStatus, isHubtelPaid } from '@/lib/hubtel';
-import { recordAffiliateCommission } from '@/lib/affiliate-server';
+import { checkHubtelStatus, isHubtelPaid, stripHubtelReferenceSuffix } from '@/lib/hubtel';
+import {
+    expectedChargeAmounts,
+    hubtelCustomerPaidAmount,
+    hubtelReferenceMatchesOrder,
+    paidCoversExpected,
+} from '@/app/api/payment/_lib/order-charge';
+import { runPaidSideEffects } from '@/app/api/payment/_lib/after-paid';
 
 type ReconcileRow = {
     id: string;
@@ -124,30 +129,31 @@ export async function POST(request: Request) {
     if (!clientReference) {
         return NextResponse.json({ error: 'No Hubtel reference on this order' }, { status: 400 });
     }
-
-    const expectedAmount = Number(order.total) || 0;
+    if (!hubtelReferenceMatchesOrder(clientReference, order.order_number, stripHubtelReferenceSuffix)) {
+        return NextResponse.json({ error: 'The Hubtel reference on this order belongs to a different order number.' }, { status: 400 });
+    }
 
     let verified = false;
-    let settlementAmount: number | null = null;
+    let paid: number | null = null;
+    let settlement: number | null = null;
     try {
         const status = await checkHubtelStatus(clientReference);
         verified = isHubtelPaid(String(status?.data?.status || ''), status?.responseCode);
-        const settlement = status?.data?.amountAfterCharges ?? status?.data?.amount;
-        if (settlement !== undefined && settlement !== null) {
-            const n = parseFloat(String(settlement));
-            if (Number.isFinite(n)) settlementAmount = n;
+        const returnedRef = status?.data?.clientReference;
+        if (verified && returnedRef && !hubtelReferenceMatchesOrder(String(returnedRef), order.order_number, stripHubtelReferenceSuffix)) {
+            return NextResponse.json({
+                success: false,
+                payment_status: order.payment_status,
+                message: `Hubtel returned a different reference (${returnedRef}). Not marking paid.`,
+            });
         }
+        // Compare what the CUSTOMER paid (TransactionAmount) with the order
+        // charge. AmountAfterFees is the merchant settlement, lower by the fee.
+        paid = hubtelCustomerPaidAmount(status);
+        settlement = status?.data?.amountAfterCharges ?? null;
     } catch (e: any) {
         console.error('[reconcile-payments] Hubtel status failed:', e?.message || e);
         return NextResponse.json({ error: 'Could not reach Hubtel' }, { status: 502 });
-    }
-
-    if (verified && settlementAmount !== null && Math.abs(settlementAmount - expectedAmount) > 0.01) {
-        return NextResponse.json({
-            success: false,
-            payment_status: order.payment_status,
-            message: `Hubtel reports Paid but amount mismatch (expected ${expectedAmount}, got ${settlementAmount}). Not marking paid.`,
-        });
     }
 
     if (!verified) {
@@ -155,6 +161,15 @@ export async function POST(request: Request) {
             success: false,
             payment_status: order.payment_status,
             message: 'Hubtel has not confirmed this payment as Paid yet.',
+        });
+    }
+
+    const expected = await expectedChargeAmounts(order);
+    if (!paidCoversExpected(paid, expected)) {
+        return NextResponse.json({
+            success: false,
+            payment_status: order.payment_status,
+            message: `Hubtel reports Paid but the amount doesn't match (customer paid ${paid ?? 'unknown'}${settlement != null ? `, settled ${settlement}` : ''}; expected ${expected.join(' or ') || 'unknown'}). Not marking paid.`,
         });
     }
 
@@ -168,36 +183,14 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: 'Failed to update order' }, { status: 500 });
     }
 
-    if (orderJson?.email) {
-        try {
-            await supabaseAdmin.rpc('update_customer_stats', {
-                p_customer_email: orderJson.email,
-                p_order_total: orderJson.total,
-            });
-        } catch (e: any) {
-            console.error('[reconcile-payments] Customer stats failed:', e?.message || e);
-        }
-    }
-
-    if (orderJson) {
-        try {
-            await sendOrderConfirmation(orderJson);
-            if (isPosSaleOrder(orderJson.metadata) && orderJson.order_number) {
-                await sendPosReceiptSmsByOrderRef(orderJson.order_number);
-            }
-        } catch (e: any) {
-            console.error('[reconcile-payments] Notification failed:', e?.message || e);
-        }
-    }
-
-    // Record affiliate commission (best-effort, idempotent).
-    if (order.order_number) {
-        await recordAffiliateCommission(order.order_number);
-    }
+    // Skipped when mark_order_paid reports already_paid.
+    await runPaidSideEffects(orderJson, 'reconcile-payments');
 
     return NextResponse.json({
         success: true,
         payment_status: 'paid',
-        message: 'Hubtel confirmed payment — order marked paid.',
+        message: orderJson?.already_paid
+            ? 'Order was already marked paid.'
+            : 'Hubtel confirmed payment — order marked paid.',
     });
 }

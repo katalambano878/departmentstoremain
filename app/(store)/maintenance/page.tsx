@@ -22,7 +22,7 @@ export const metadata: Metadata = {
 };
 
 const DEFAULT_MESSAGE =
-  "We're making a few updates to the website. They're almost done, and the store will open again when this countdown ends.";
+  "We're making a few updates to the website. The store will open again shortly.";
 
 export default async function MaintenancePage() {
   const message = process.env.MAINTENANCE_MESSAGE?.trim() || DEFAULT_MESSAGE;

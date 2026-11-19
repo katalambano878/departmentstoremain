@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 
 interface MobileFilterDrawerProps {
   isOpen: boolean;
@@ -74,10 +75,15 @@ export default function MobileFilterDrawer({ isOpen, onClose }: MobileFilterDraw
     return count;
   };
 
-  if (!isOpen) return null;
+  // Render into <body> so a transformed ancestor can never trap the fixed
+  // drawer off-screen.
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
 
-  return (
-    <div className="fixed inset-0 z-50 lg:hidden">
+  if (!isOpen || !mounted) return null;
+
+  return createPortal(
+    <div className="fixed inset-0 z-50 lg:hidden" role="dialog" aria-modal="true" aria-label="Filters">
       <div className="absolute inset-0 bg-black/50" onClick={onClose}></div>
       
       <div className="absolute bottom-0 left-0 right-0 bg-white rounded-t-2xl max-h-[90vh] flex flex-col">
@@ -85,7 +91,9 @@ export default function MobileFilterDrawer({ isOpen, onClose }: MobileFilterDraw
           <div className="flex items-center justify-between">
             <h2 className="text-lg font-semibold text-gray-900">Filters</h2>
             <button
+              type="button"
               onClick={onClose}
+              aria-label="Close filters"
               className="w-8 h-8 flex items-center justify-center text-gray-600 hover:bg-gray-100 rounded-full transition-colors"
             >
               <i className="ri-close-line text-xl"></i>
@@ -219,6 +227,7 @@ export default function MobileFilterDrawer({ isOpen, onClose }: MobileFilterDraw
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

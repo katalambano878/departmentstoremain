@@ -99,13 +99,15 @@ export default function PWAInstaller() {
           console.error('[PWA] Service Worker registration failed:', error);
         });
 
-      // Handle controller change (new SW activated)
+      // Reload only when an older worker was already in control (a real
+      // update). A first-time visitor gets a controller for the first time
+      // here, and reloading would throw away what they were doing.
+      const hadController = !!navigator.serviceWorker.controller;
       let refreshing = false;
       navigator.serviceWorker.addEventListener('controllerchange', () => {
-        if (!refreshing) {
-          refreshing = true;
-          window.location.reload();
-        }
+        if (!hadController || refreshing) return;
+        refreshing = true;
+        window.location.reload();
       });
     }
 

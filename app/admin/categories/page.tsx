@@ -61,15 +61,37 @@ export default function AdminCategoriesPage() {
   };
 
   const handleDelete = async (categoryId: string) => {
-    if (confirm('Are you sure you want to delete this category? This action cannot be undone.')) {
-      try {
-        const { error } = await supabase.from('categories').delete().eq('id', categoryId);
+    const category = categories.find(c => c.id === categoryId);
+    try {
+      const [{ count: productCount, error: pErr }, { count: childCount, error: cErr }] = await Promise.all([
+        supabase.from('products').select('id', { count: 'exact', head: true }).eq('category_id', categoryId),
+        supabase.from('categories').select('id', { count: 'exact', head: true }).eq('parent_id', categoryId),
+      ]);
+      if (pErr) throw pErr;
+      if (cErr) throw cErr;
+
+      const lines = [`Delete the category "${category?.name || ''}"? This cannot be undone.`];
+      if (productCount) lines.push(`${productCount} product${productCount !== 1 ? 's' : ''} in it will become uncategorised.`);
+      if (childCount) lines.push(`${childCount} subcategor${childCount !== 1 ? 'ies' : 'y'} will become top-level categories.`);
+      if (!productCount && !childCount) lines.push('No products or subcategories use it.');
+      if (!confirm(lines.join('\n\n'))) return;
+
+      // The foreign keys have no ON DELETE rule, so detach first or the delete fails.
+      if (productCount) {
+        const { error } = await supabase.from('products').update({ category_id: null }).eq('category_id', categoryId);
         if (error) throw error;
-        setCategories(categories.filter(c => c.id !== categoryId));
-        alert('Category deleted successfully');
-      } catch (err: any) {
-        alert('Error deleting: ' + err.message);
       }
+      if (childCount) {
+        const { error } = await supabase.from('categories').update({ parent_id: null }).eq('parent_id', categoryId);
+        if (error) throw error;
+      }
+      const { error } = await supabase.from('categories').delete().eq('id', categoryId);
+      if (error) throw error;
+      alert('Category deleted');
+      fetchCategories();
+    } catch (err: any) {
+      alert('Category not deleted: ' + (err?.message || 'unknown error'));
+      fetchCategories();
     }
   };
 
@@ -118,12 +140,19 @@ export default function AdminCategoriesPage() {
         image_url: formData.image_url,
         parent_id: formData.parent_id || null, // Handle empty string as null
         status: formData.status,
+        // Keep any other metadata keys (e.g. homepage settings) and only change `featured`.
         metadata: {
+          ...((showEditModal && editingCategory?.metadata) || {}),
           featured: formData.featured
         }
       };
 
       if (showEditModal && editingCategory) {
+        // Merge with the latest stored metadata, not the copy loaded with the list.
+        const { data: current, error: readErr } = await supabase
+          .from('categories').select('metadata').eq('id', editingCategory.id).single();
+        if (readErr) throw readErr;
+        payload.metadata = { ...(current?.metadata || {}), featured: formData.featured };
         const { error } = await supabase
           .from('categories')
           .update(payload)

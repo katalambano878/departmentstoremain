@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useCMS } from '@/context/CMSContext';
+import { useStaffRole } from '../_lib/useStaffRole';
 
 // Same default as lib/birthdays.ts (server); {name} becomes the customer's first name.
 const DEFAULT_BIRTHDAY_MESSAGE =
@@ -14,6 +15,10 @@ export default function SettingsPage() {
   const [saving, setSaving] = useState<string | null>(null);
   const [uploadingLogo, setUploadingLogo] = useState<'dark' | 'white' | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const { role, loading: roleLoading } = useStaffRole();
+  // site_settings writes are admin-only in the database.
+  const readOnly = roleLoading || role !== 'admin';
 
   // Local form state
   const [siteName, setSiteName] = useState(getSetting('site_name'));
@@ -48,6 +53,7 @@ export default function SettingsPage() {
 
   const handleSaveBirthday = async () => {
     setSaving('birthday');
+    setSaveError(null);
     try {
       const text = birthdayMessage.trim();
       await updateSetting('birthday_messages_enabled', birthdayEnabled ? 'true' : 'false');
@@ -55,7 +61,7 @@ export default function SettingsPage() {
       birthdayEdited.current = false;
       showSuccess('Birthday message settings saved');
     } catch (err: any) {
-      alert('Failed to save: ' + err.message);
+      setSaveError('Not saved: ' + (err?.message || 'unknown error'));
     } finally {
       setSaving(null);
     }
@@ -71,6 +77,7 @@ export default function SettingsPage() {
 
   const uploadLogo = async (file: File, type: 'dark' | 'white') => {
     setUploadingLogo(type);
+    setSaveError(null);
     try {
       const ext = file.name.split('.').pop();
       const fileName = `branding/logo-${type}-${Date.now()}.${ext}`;
@@ -91,7 +98,7 @@ export default function SettingsPage() {
 
       showSuccess(`${type === 'dark' ? 'Header' : 'Footer'} logo updated successfully`);
     } catch (err: any) {
-      alert('Upload failed: ' + err.message);
+      setSaveError('Logo not saved: ' + (err?.message || 'unknown error'));
     } finally {
       setUploadingLogo(null);
     }
@@ -99,6 +106,7 @@ export default function SettingsPage() {
 
   const handleSaveGeneral = async () => {
     setSaving('general');
+    setSaveError(null);
     try {
       await updateSetting('site_name', siteName);
       await updateSetting('site_tagline', siteTagline);
@@ -108,7 +116,7 @@ export default function SettingsPage() {
       await updateSetting('whatsapp_button_enabled', whatsappEnabled ? 'true' : 'false');
       showSuccess('Settings saved successfully');
     } catch (err: any) {
-      alert('Failed to save: ' + err.message);
+      setSaveError('Not saved: ' + (err?.message || 'unknown error'));
     } finally {
       setSaving(null);
     }
@@ -121,6 +129,23 @@ export default function SettingsPage() {
         <p className="text-gray-600 mt-1">Manage your store branding and general information</p>
       </div>
 
+      {!roleLoading && role !== 'admin' && (
+        <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 text-amber-900 px-4 py-3 rounded-lg">
+          <i className="ri-lock-line text-amber-600 mt-0.5"></i>
+          <span>Only an admin can change store settings. You can view them here.</span>
+        </div>
+      )}
+
+      {saveError && (
+        <div className="flex items-start gap-2 bg-red-50 border border-red-200 text-red-800 px-4 py-3 rounded-lg" role="alert">
+          <i className="ri-error-warning-line text-red-600 mt-0.5"></i>
+          <span className="flex-1">{saveError}</span>
+          <button onClick={() => setSaveError(null)} className="text-red-700 hover:text-red-900" aria-label="Dismiss">
+            <i className="ri-close-line"></i>
+          </button>
+        </div>
+      )}
+
       {success && (
         <div className="flex items-center gap-2 bg-green-50 border border-green-200 text-green-800 px-4 py-3 rounded-lg">
           <i className="ri-checkbox-circle-line text-green-600"></i>
@@ -128,6 +153,7 @@ export default function SettingsPage() {
         </div>
       )}
 
+      <fieldset disabled={readOnly} className="space-y-8 min-w-0">
       {/* Logo Section */}
       <div className="bg-white rounded-xl border border-gray-200 p-6">
         <h2 className="text-lg font-bold text-gray-900 mb-1">Logo</h2>
@@ -163,7 +189,7 @@ export default function SettingsPage() {
                 type="file"
                 accept="image/*"
                 className="hidden"
-                disabled={uploadingLogo !== null}
+                disabled={readOnly || uploadingLogo !== null}
                 onChange={(e) => e.target.files?.[0] && uploadLogo(e.target.files[0], 'dark')}
               />
             </label>
@@ -196,7 +222,7 @@ export default function SettingsPage() {
                 type="file"
                 accept="image/*"
                 className="hidden"
-                disabled={uploadingLogo !== null}
+                disabled={readOnly || uploadingLogo !== null}
                 onChange={(e) => e.target.files?.[0] && uploadLogo(e.target.files[0], 'white')}
               />
             </label>
@@ -288,7 +314,7 @@ export default function SettingsPage() {
 
         <button
           onClick={handleSaveGeneral}
-          disabled={saving === 'general'}
+          disabled={readOnly || saving === 'general'}
           className="mt-6 px-6 py-3 bg-blue-700 hover:bg-blue-800 text-white rounded-lg font-semibold transition-colors disabled:opacity-50 flex items-center gap-2"
         >
           {saving === 'general' ? (
@@ -338,7 +364,7 @@ export default function SettingsPage() {
 
         <button
           onClick={handleSaveBirthday}
-          disabled={saving === 'birthday'}
+          disabled={readOnly || saving === 'birthday'}
           className="mt-6 px-6 py-3 bg-blue-700 hover:bg-blue-800 text-white rounded-lg font-semibold transition-colors disabled:opacity-50 flex items-center gap-2"
         >
           {saving === 'birthday' ? (
@@ -348,6 +374,7 @@ export default function SettingsPage() {
           )}
         </button>
       </div>
+      </fieldset>
     </div>
   );
 }

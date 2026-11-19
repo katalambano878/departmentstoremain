@@ -4,7 +4,9 @@ import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 
 export default function AdminReviewsPage() {
-  const [statusFilter, setStatusFilter] = useState('all');
+  // New reviews arrive as pending, so open on the queue that needs action.
+  const [statusFilter, setStatusFilter] = useState('pending');
+  const [loadError, setLoadError] = useState('');
   const [selectedReviews, setSelectedReviews] = useState<string[]>([]);
   const [sortBy, setSortBy] = useState('date');
   const [reviews, setReviews] = useState<any[]>([]);
@@ -27,10 +29,9 @@ export default function AdminReviewsPage() {
         .order('created_at', { ascending: false });
 
       if (error) {
-        // Graceful fallback if table doesn't exist or permissions fail
-        console.warn('Error fetching reviews:', error);
-        // setReviews([]); // Keep empty
+        setLoadError(`Could not load reviews: ${error.message}`);
       } else if (data) {
+        setLoadError('');
         const formatted = data.map((r: any) => ({
           id: r.id,
           customer: {
@@ -40,15 +41,16 @@ export default function AdminReviewsPage() {
           },
           product: {
             name: r.products?.name || 'Unknown Product',
-            image: r.products?.product_images?.[0]?.url || 'https://via.placeholder.com/150'
+            image: r.products?.product_images?.[0]?.url || ''
           },
           rating: r.rating,
           title: r.title,
           comment: r.content,
           date: new Date(r.created_at).toLocaleDateString(),
+          createdAt: r.created_at,
           // Shown as Pending / Approved / Rejected; stored lowercase.
           status: r.status ? r.status.charAt(0).toUpperCase() + r.status.slice(1) : 'Pending',
-          helpful: r.helpful || 0
+          helpful: r.helpful_votes || 0
         }));
         setReviews(formatted);
       }
@@ -77,7 +79,7 @@ export default function AdminReviewsPage() {
       case 'rating': return (b.rating || 0) - (a.rating || 0);
       case 'helpful': return (b.helpful || 0) - (a.helpful || 0);
       case 'date':
-      default: return new Date(b.date || 0).getTime() - new Date(a.date || 0).getTime();
+      default: return new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime();
     }
   });
 
@@ -128,9 +130,9 @@ export default function AdminReviewsPage() {
         fetchReviews();
         setSelectedReviews([]);
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error('Error updating reviews', err);
-      alert('Failed to update reviews. Functionality might be limited.');
+      alert('Reviews not updated: ' + (err?.message || 'unknown error'));
     }
   };
 
@@ -152,13 +154,23 @@ export default function AdminReviewsPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold text-gray-900">Reviews</h1>
-          <p className="text-gray-600 mt-1">Moderate and manage customer reviews</p>
+          <p className="text-gray-600 mt-1">
+            New customer reviews stay hidden until approved.
+            {!loading && ` ${stats.pending} waiting for approval.`}
+          </p>
         </div>
       </div>
 
+      {loadError && (
+        <div className="flex items-start gap-2 bg-red-50 border border-red-200 text-red-800 px-4 py-3 rounded-lg" role="alert">
+          <i className="ri-error-warning-line text-red-600 mt-0.5"></i>
+          <span>{loadError}</span>
+        </div>
+      )}
+
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <button
-          onClick={() => setStatusFilter('all')}
+          onClick={() => { setStatusFilter('all'); setSelectedReviews([]); }}
           className={`p-4 rounded-xl border-2 transition-all text-left ${statusFilter === 'all' ? 'border-blue-700 bg-blue-50' : 'border-gray-200 bg-white'
             }`}
         >
@@ -166,15 +178,15 @@ export default function AdminReviewsPage() {
           <p className="text-sm text-gray-600 mt-1">Total Reviews</p>
         </button>
         <button
-          onClick={() => setStatusFilter('pending')}
+          onClick={() => { setStatusFilter('pending'); setSelectedReviews([]); }}
           className={`p-4 rounded-xl border-2 transition-all text-left ${statusFilter === 'pending' ? 'border-amber-700 bg-amber-50' : 'border-gray-200 bg-white'
             }`}
         >
           <p className="text-2xl font-bold text-amber-700">{stats.pending}</p>
-          <p className="text-sm text-gray-600 mt-1">Pending Review</p>
+          <p className="text-sm text-gray-600 mt-1">Waiting for approval</p>
         </button>
         <button
-          onClick={() => setStatusFilter('approved')}
+          onClick={() => { setStatusFilter('approved'); setSelectedReviews([]); }}
           className={`p-4 rounded-xl border-2 transition-all text-left ${statusFilter === 'approved' ? 'border-blue-700 bg-blue-50' : 'border-gray-200 bg-white'
             }`}
         >
@@ -182,7 +194,7 @@ export default function AdminReviewsPage() {
           <p className="text-sm text-gray-600 mt-1">Approved</p>
         </button>
         <button
-          onClick={() => setStatusFilter('rejected')}
+          onClick={() => { setStatusFilter('rejected'); setSelectedReviews([]); }}
           className={`p-4 rounded-xl border-2 transition-all text-left ${statusFilter === 'rejected' ? 'border-red-700 bg-red-50' : 'border-gray-200 bg-white'
             }`}
         >
@@ -270,11 +282,17 @@ export default function AdminReviewsPage() {
                     </td>
                     <td className="py-4 px-4">
                       <div className="flex items-center space-x-3">
-                        <img
-                          src={review.product.image}
-                          alt={review.product.name}
-                          className="w-12 h-12 rounded-lg object-cover border border-gray-100"
-                        />
+                        {review.product.image ? (
+                          <img
+                            src={review.product.image}
+                            alt={review.product.name}
+                            className="w-12 h-12 rounded-lg object-cover border border-gray-100"
+                          />
+                        ) : (
+                          <div className="w-12 h-12 rounded-lg bg-gray-100 border border-gray-100 flex items-center justify-center text-gray-400">
+                            <i className="ri-image-line"></i>
+                          </div>
+                        )}
                         <span className="text-sm font-medium text-gray-900 line-clamp-2">{review.product.name}</span>
                       </div>
                     </td>

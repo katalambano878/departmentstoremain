@@ -26,14 +26,14 @@ function getAccessToken(request: Request): string | null {
   return null;
 }
 
-async function requireAdmin(request: Request): Promise<NextResponse | null> {
+async function requireAdmin(request: Request, allowed: string[] = ['admin', 'staff']): Promise<NextResponse | null> {
   const token = getAccessToken(request);
   if (!token) return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
   const { data: { user }, error } = await supabaseAdmin.auth.getUser(token);
   if (error || !user) return NextResponse.json({ error: 'Invalid session' }, { status: 401 });
   const { data: profile } = await supabaseAdmin.from('profiles').select('role').eq('id', user.id).single();
   const role = profile?.role != null ? String(profile.role) : '';
-  if (role !== 'admin' && role !== 'staff') return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  if (!allowed.includes(role)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   return null;
 }
 
@@ -49,9 +49,10 @@ export async function GET(request: Request) {
   return NextResponse.json({ settings: await readSettings() });
 }
 
-// PUT — update affiliate program settings
+// PUT — update affiliate program settings (admin only: these set markup caps,
+// payout minimums and automatic disbursement).
 export async function PUT(request: Request) {
-  const err = await requireAdmin(request);
+  const err = await requireAdmin(request, ['admin']);
   if (err) return err;
 
   const body = await request.json().catch(() => ({}));
@@ -101,6 +102,9 @@ export async function PUT(request: Request) {
     .from('site_settings')
     .upsert({ key: 'affiliate', value: next, category: 'affiliate' }, { onConflict: 'key' });
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  if (error) {
+    console.error('[AffiliateSettings] save failed:', error.message);
+    return NextResponse.json({ error: 'Could not save settings.' }, { status: 500 });
+  }
   return NextResponse.json({ settings: next });
 }

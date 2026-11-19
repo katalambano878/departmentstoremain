@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { jwtVerify } from 'jose';
+import { authJwtSecret } from '@/lib/db/mode';
 
 // The middleware runs on the edge and cannot reach the database. It checks the
 // session signature itself, then asks the app (same container, over loopback)
@@ -24,8 +25,23 @@ function extractAuthToken(request: NextRequest): string | undefined {
     return request.cookies.get('sb-access-token')?.value || undefined;
 }
 
+/** The same signing secret lib/db/auth.ts uses (AUTH_JWT_SECRET, JWT_SECRET or SUPABASE_JWT_SECRET). */
+function jwtSecret(): string | null {
+    try {
+        return authJwtSecret();
+    } catch {
+        return null;
+    }
+}
+
+/** Dashboard paths a POS-only account (staff_pos) may open; everything else sends them to the till. */
+function posMayOpen(pathname: string): boolean {
+    const under = (base: string) => pathname === base || pathname.startsWith(`${base}/`);
+    return under('/admin/pos') || under('/admin/orders') || pathname === '/admin/login';
+}
+
 async function getRoleFromToken(token: string): Promise<{ userId: string; role: string } | null> {
-    const secret = process.env.AUTH_JWT_SECRET || process.env.JWT_SECRET;
+    const secret = jwtSecret();
     if (!secret) return null;
     try {
         const { payload } = await jwtVerify(token, new TextEncoder().encode(secret));
@@ -62,12 +78,6 @@ function maintenanceFromEnv(): { enabled: boolean; until: string; message: strin
         until: '',
         message: process.env.MAINTENANCE_MESSAGE?.trim() || '',
     };
-}
-
-function visitorWaitFinished(request: NextRequest): boolean {
-    const raw = request.cookies.get('ddz_wait_until')?.value;
-    const endsAt = Number(raw);
-    return Number.isFinite(endsAt) && endsAt > 0 && endsAt <= Date.now();
 }
 
 async function getMaintenanceSettings(): Promise<{ enabled: boolean; until: string; message: string }> {
@@ -128,7 +138,9 @@ export async function middleware(request: NextRequest) {
             const isAdminViewer =
                 auth?.role === 'admin' || auth?.role === 'staff' || auth?.role === 'staff_pos';
 
-            if (!isAdminViewer && !visitorWaitFinished(request)) {
+            // Only signed-in staff get past maintenance. (A visitor-set cookie
+            // such as ddz_wait_until no longer bypasses it.)
+            if (!isAdminViewer) {
                 const maintenanceUrl = new URL('/maintenance', request.url);
                 return NextResponse.redirect(maintenanceUrl);
             }
@@ -168,6 +180,11 @@ export async function middleware(request: NextRequest) {
             const loginUrl = new URL('/admin/login', request.url);
             loginUrl.searchParams.set('error', 'unauthorized');
             return NextResponse.redirect(loginUrl);
+        }
+
+        // POS-only staff work the till and its orders, nothing else.
+        if (auth.role === 'staff_pos' && !posMayOpen(pathname)) {
+            return NextResponse.redirect(new URL('/admin/pos', request.url));
         }
 
         // Auth passed — set user info in headers for downstream use

@@ -4,6 +4,16 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
 import { fetchAllPaged } from '@/lib/supabase-paginate';
+import { downloadCsv, csvMoney } from '@/lib/csv';
+
+const STAFF_ROLES = ['admin', 'staff', 'staff_pos'];
+
+/** Last 9 digits of a phone number, so 024…, +23324… and 23324… match. */
+const phoneKey = (phone?: string | null) => {
+  const digits = String(phone || '').replace(/\D/g, '');
+  return digits.length >= 9 ? digits.slice(-9) : '';
+};
+const emailKey = (email?: string | null) => String(email || '').trim().toLowerCase();
 
 // Helper for currency formatting
 const formatCurrency = (amount: number) => {
@@ -25,6 +35,7 @@ export default function CustomerInsightsPage() {
     returning: 0,
     new: 0,
     atRisk: 0,
+    noOrders: 0,
     avgCLV: 0
   });
 
@@ -36,78 +47,128 @@ export default function CustomerInsightsPage() {
     try {
       setLoading(true);
 
-      // 1. Fetch Profiles, paged so we don't truncate at 1000
-      const profiles = await fetchAllPaged<any>(() =>
-        supabase.from('profiles').select('*')
+      // 1. Every customer record: registered shoppers, guests and till customers.
+      const customerRows = await fetchAllPaged<any>(() =>
+        supabase
+          .from('customers')
+          .select('id, user_id, email, phone, secondary_email, secondary_phone, full_name, first_name, last_name, created_at')
+          .order('created_at', { ascending: false })
       );
 
-      // 2. Fetch Orders, paged for the same reason
+      // 2. Staff accounts are not customers.
+      const staffProfiles = await fetchAllPaged<any>(() =>
+        supabase.from('profiles').select('id, email, role').in('role', STAFF_ROLES)
+      );
+      const staffIds = new Set(staffProfiles.map((p: any) => p.id));
+      const staffEmails = new Set(staffProfiles.map((p: any) => emailKey(p.email)).filter(Boolean));
+
+      // 3. Real sales only: paid, not cancelled or refunded.
       const orders = await fetchAllPaged<any>(() =>
         supabase
           .from('orders')
-          .select('user_id, total, created_at, status')
+          .select('id, user_id, email, phone, total, created_at, status')
+          .eq('payment_status', 'paid')
+          .not('status', 'in', '(cancelled,refunded)')
+          .order('created_at', { ascending: false })
       );
 
-      // 3. Aggregate Data
-      const aggregated = profiles.map((profile: any) => {
-        const userOrders = orders?.filter(o => o.user_id === profile.id) || [];
-        const totalSpent = userOrders.reduce((sum, o) => sum + (o.total || 0), 0);
-        const orderCount = userOrders.length;
+      const byUser = new Map<string, any[]>();
+      const byEmail = new Map<string, any[]>();
+      const byPhone = new Map<string, any[]>();
+      const push = (map: Map<string, any[]>, key: string, o: any) => {
+        if (!key) return;
+        const list = map.get(key) || [];
+        list.push(o);
+        map.set(key, list);
+      };
+      for (const o of orders) {
+        if (o.user_id) push(byUser, o.user_id, o);
+        push(byEmail, emailKey(o.email), o);
+        push(byPhone, phoneKey(o.phone), o);
+      }
 
-        // Sort orders to find last order
-        const sortedOrders = [...userOrders].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
-        const lastOrderDate = sortedOrders[0]?.created_at || profile.created_at;
+      const now = Date.now();
+      const aggregated = customerRows
+        .filter((c: any) => !(c.user_id && staffIds.has(c.user_id)) && !staffEmails.has(emailKey(c.email)))
+        .map((c: any) => {
+          // Orders placed signed in, or as a guest / at the till with this email or phone.
+          const matched = new Map<string, any>();
+          const add = (list?: any[]) => list?.forEach((o) => matched.set(o.id, o));
+          if (c.user_id) add(byUser.get(c.user_id));
+          add(byEmail.get(emailKey(c.email)));
+          add(byEmail.get(emailKey(c.secondary_email)));
+          add(byPhone.get(phoneKey(c.phone)));
+          add(byPhone.get(phoneKey(c.secondary_phone)));
+          const userOrders = Array.from(matched.values());
 
-        // Calculate Segment
-        let segment = 'new';
-        const daysSinceJoin = (new Date().getTime() - new Date(profile.created_at).getTime()) / (1000 * 3600 * 24);
-        const daysSinceLastOrder = (new Date().getTime() - new Date(lastOrderDate).getTime()) / (1000 * 3600 * 24);
+          const totalSpent = userOrders.reduce((sum, o) => sum + Number(o.total || 0), 0);
+          const orderCount = userOrders.length;
+          const lastPaidAt = userOrders.reduce<string | null>(
+            (latest, o) => (!latest || o.created_at > latest ? o.created_at : latest),
+            null
+          );
+          const lastOrderDate = lastPaidAt;
 
-        if (totalSpent > 1000) segment = 'vip'; // VIP Threshold
-        else if (orderCount > 1) segment = 'returning';
-        else if (daysSinceLastOrder > 90 && orderCount > 0) segment = 'at-risk';
-        else if (daysSinceJoin < 30) segment = 'new';
-        else segment = 'returning'; // Default bucket
+          const joinDate = c.created_at;
+          const daysSinceJoin = (now - new Date(joinDate).getTime()) / (1000 * 3600 * 24);
+          const daysSinceLastOrder = lastOrderDate
+            ? (now - new Date(lastOrderDate).getTime()) / (1000 * 3600 * 24)
+            : Infinity;
 
-        // Risk Level
-        let riskLevel = 'low';
-        if (daysSinceLastOrder > 60) riskLevel = 'medium';
-        if (daysSinceLastOrder > 120) riskLevel = 'high';
+          let segment = 'new';
+          if (totalSpent > 1000) segment = 'vip';
+          else if (orderCount > 0 && daysSinceLastOrder > 90) segment = 'at-risk';
+          else if (orderCount > 1) segment = 'returning';
+          else if (orderCount === 1 || daysSinceJoin < 30) segment = 'new';
+          else segment = 'no-orders';
 
-        // Engagement Score (mock logic for now based on frequency)
-        let engagementScore = 50;
-        if (segment === 'vip') engagementScore += 40;
-        if (riskLevel === 'high') engagementScore -= 30;
-        if (daysSinceLastOrder < 30) engagementScore += 20;
+          let riskLevel = 'low';
+          if (daysSinceLastOrder > 60) riskLevel = 'medium';
+          if (daysSinceLastOrder > 120) riskLevel = 'high';
 
-        return {
-          id: profile.id,
-          name: profile.full_name || 'Unknown User',
-          email: profile.email,
-          phone: profile.phone || '-',
-          segment,
-          totalSpent,
-          orders: orderCount,
-          avgOrderValue: orderCount > 0 ? totalSpent / orderCount : 0,
-          lifetimeValue: totalSpent, // Simple CLV for now
-          joinDate: profile.created_at,
-          lastOrder: lastOrderDate,
-          riskLevel,
-          engagementScore: Math.min(100, Math.max(0, engagementScore)),
-          tags: [] // Could be populated from metadata
-        };
-      });
+          let engagementScore = 50;
+          if (segment === 'vip') engagementScore += 40;
+          if (riskLevel === 'high') engagementScore -= 30;
+          if (daysSinceLastOrder < 30) engagementScore += 20;
+
+          const name =
+            c.full_name ||
+            [c.first_name, c.last_name].filter(Boolean).join(' ') ||
+            (c.email ? String(c.email).split('@')[0] : '') ||
+            'Unknown';
+
+          return {
+            id: c.id,
+            name,
+            email: c.email || '',
+            phone: c.phone || '-',
+            isGuest: !c.user_id,
+            segment,
+            totalSpent,
+            orders: orderCount,
+            avgOrderValue: orderCount > 0 ? totalSpent / orderCount : 0,
+            lifetimeValue: totalSpent,
+            joinDate,
+            lastOrder: lastOrderDate,
+            riskLevel,
+            engagementScore: Math.min(100, Math.max(0, engagementScore)),
+            tags: []
+          };
+        });
 
       setCustomers(aggregated);
 
       // Calculate Stats
       const totalCLV = aggregated.reduce((sum, c) => sum + c.lifetimeValue, 0);
+      const buyers = aggregated.filter(c => c.orders > 0);
       setStats({
         vip: aggregated.filter(c => c.segment === 'vip').length,
         returning: aggregated.filter(c => c.segment === 'returning').length,
         new: aggregated.filter(c => c.segment === 'new').length,
         atRisk: aggregated.filter(c => c.segment === 'at-risk').length,
-        avgCLV: aggregated.length > 0 ? totalCLV / aggregated.length : 0
+        noOrders: aggregated.filter(c => c.segment === 'no-orders').length,
+        // Average over customers who have bought something.
+        avgCLV: buyers.length > 0 ? totalCLV / buyers.length : 0
       });
 
     } catch (err) {
@@ -119,18 +180,41 @@ export default function CustomerInsightsPage() {
 
 
   const filteredCustomers = customers.filter(customer => {
-    const matchesSearch = customer.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      customer.email.toLowerCase().includes(searchTerm.toLowerCase());
+    const q = searchTerm.toLowerCase();
+    const matchesSearch = customer.name.toLowerCase().includes(q) ||
+      customer.email.toLowerCase().includes(q) ||
+      String(customer.phone || '').toLowerCase().includes(q);
     const matchesSegment = selectedSegment === 'all' || customer.segment === selectedSegment;
     return matchesSearch && matchesSegment;
   });
+
+  const handleExport = () => {
+    downloadCsv(
+      `customer-insights-${selectedSegment}-${new Date().toISOString().slice(0, 10)}.csv`,
+      ['Name', 'Email', 'Phone', 'Type', 'Segment', 'Paid Orders', 'Total Spent (GHS)', 'Avg Order (GHS)', 'Risk', 'Joined', 'Last Paid Order'],
+      filteredCustomers.map(c => [
+        c.name,
+        c.email,
+        c.phone === '-' ? '' : c.phone,
+        c.isGuest ? 'Guest / till' : 'Registered',
+        getSegmentLabel(c.segment),
+        c.orders,
+        csvMoney(c.totalSpent),
+        csvMoney(c.avgOrderValue),
+        c.riskLevel,
+        c.joinDate ? new Date(c.joinDate).toLocaleDateString('en-GB') : '',
+        c.lastOrder ? new Date(c.lastOrder).toLocaleDateString('en-GB') : '',
+      ])
+    );
+  };
 
   const getSegmentBadge = (segment: string) => {
     const badges: any = {
       vip: 'bg-blue-100 text-blue-700',
       returning: 'bg-blue-100 text-blue-700',
       new: 'bg-amber-100 text-amber-700',
-      'at-risk': 'bg-red-100 text-red-700'
+      'at-risk': 'bg-red-100 text-red-700',
+      'no-orders': 'bg-gray-100 text-gray-700'
     };
     return badges[segment] || 'bg-gray-100 text-gray-700';
   };
@@ -140,7 +224,8 @@ export default function CustomerInsightsPage() {
       vip: 'VIP Customer',
       returning: 'Returning',
       new: 'New Customer',
-      'at-risk': 'At Risk'
+      'at-risk': 'At Risk',
+      'no-orders': 'No Paid Orders'
     };
     return labels[segment] || segment;
   };
@@ -165,9 +250,13 @@ export default function CustomerInsightsPage() {
             <p className="text-gray-600 mt-1 md:mt-2 text-sm md:text-base">Deep dive into customer behavior and lifetime value</p>
           </div>
           <div className="flex flex-col sm:flex-row gap-3">
-            <button className="border-2 border-gray-300 hover:border-gray-400 text-gray-700 px-6 py-3 rounded-lg font-semibold transition-colors whitespace-nowrap flex items-center justify-center">
+            <button
+              onClick={handleExport}
+              disabled={filteredCustomers.length === 0}
+              className="border-2 border-gray-300 hover:border-gray-400 text-gray-700 px-6 py-3 rounded-lg font-semibold transition-colors whitespace-nowrap flex items-center justify-center cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+            >
               <i className="ri-download-line mr-2"></i>
-              Export List
+              Export List ({filteredCustomers.length})
             </button>
             <Link
               href="/admin"
@@ -220,7 +309,7 @@ export default function CustomerInsightsPage() {
             </div>
             <p className="text-sm text-gray-600 mb-1">Avg. Lifetime Value</p>
             <p className="text-3xl font-bold text-gray-900">{formatCurrency(stats.avgCLV)}</p>
-            <p className="text-sm text-gray-500 mt-2">Per customer</p>
+            <p className="text-sm text-gray-500 mt-2">Per paying customer</p>
           </div>
         </div>
 
@@ -245,7 +334,8 @@ export default function CustomerInsightsPage() {
                 { value: 'vip', label: 'VIP', count: stats.vip },
                 { value: 'returning', label: 'Returning', count: stats.returning },
                 { value: 'new', label: 'New', count: stats.new },
-                { value: 'at-risk', label: 'At Risk', count: stats.atRisk }
+                { value: 'at-risk', label: 'At Risk', count: stats.atRisk },
+                { value: 'no-orders', label: 'No Orders', count: stats.noOrders }
               ].map((segment) => (
                 <button
                   key={segment.value}
@@ -344,7 +434,7 @@ export default function CustomerInsightsPage() {
                       <span className="font-medium">Joined:</span> {new Date(customer.joinDate).toLocaleDateString('en-GB')}
                     </span>
                     <span>
-                      <span className="font-medium">Last Order:</span> {new Date(customer.lastOrder).toLocaleDateString('en-GB')}
+                      <span className="font-medium">Last Paid Order:</span> {customer.lastOrder ? new Date(customer.lastOrder).toLocaleDateString('en-GB') : 'None'}
                     </span>
                   </div>
                 </div>

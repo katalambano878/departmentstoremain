@@ -45,8 +45,9 @@ export function getAccessToken(request: Request): string | null {
   return null;
 }
 
-/** Full staff (admin/staff) only — POS-only users cannot manage accounts. */
-export async function requireFullStaff(request: Request) {
+type StaffGateRole = 'admin' | 'staff' | 'staff_pos';
+
+async function gateByRole(request: Request, roles: StaffGateRole | StaffGateRole[], forbiddenMessage?: string) {
   const token = getAccessToken(request);
   if (!token) {
     return {
@@ -60,14 +61,16 @@ export async function requireFullStaff(request: Request) {
     new Request(request.url, {
       headers: { Authorization: `Bearer ${token}` },
     }),
-    { requireAdmin: true, requireFullStaff: true }
+    { requireRole: roles }
   );
 
   if (!auth.authenticated) {
+    // A role was read but is not allowed: signed in, just not permitted.
+    const forbidden = Boolean(auth.role) || String(auth.error || '').toLowerCase().includes('admin');
     return {
       error: NextResponse.json(
-        { error: auth.error || 'Forbidden' },
-        { status: auth.error?.toLowerCase().includes('admin') ? 403 : 401 }
+        { error: forbidden ? forbiddenMessage || auth.error || 'Forbidden' : auth.error || 'Not authenticated' },
+        { status: forbidden ? 403 : 401 }
       ),
       auth: null as null,
       token: null as null,
@@ -75,6 +78,11 @@ export async function requireFullStaff(request: Request) {
   }
 
   return { error: null, auth, token };
+}
+
+/** Full staff (admin/staff) only — POS-only users cannot see staff accounts. */
+export async function requireFullStaff(request: Request) {
+  return gateByRole(request, ['admin', 'staff']);
 }
 
 export async function findAuthUserIdByEmail(email: string): Promise<string | null> {
@@ -88,4 +96,45 @@ export async function findAuthUserIdByEmail(email: string): Promise<string | nul
     if (users.length < 200) break;
   }
   return null;
+}
+
+/** Admin only — every staff account write (create, edit, role, password, remove). */
+export async function requireAdminOnly(request: Request) {
+  return gateByRole(request, 'admin', 'Only an admin can change staff accounts.');
+}
+
+export type StaffLogAction =
+  | 'staff.create'
+  | 'staff.promote'
+  | 'staff.update'
+  | 'staff.role_change'
+  | 'staff.password_reset'
+  | 'staff.remove'
+  | 'staff.restore_access';
+
+/**
+ * Server-side twin of `logActivity` (lib/activity-log.ts, browser only): writes the
+ * same kind of row to audit_logs, attributed to the signed-in admin. Never put a
+ * password in `details`. Runs on the current transaction when inside withAuditActor.
+ */
+export async function logStaffActivity(
+  actor: { id: string; email?: string | null; role?: string | null },
+  action: StaffLogAction,
+  summary: string,
+  target: { id: string; email?: string | null },
+  details?: Record<string, unknown>
+) {
+  const { error } = await supabaseAdmin.from('audit_logs').insert({
+    user_id: actor.id,
+    actor_email: actor.email ?? null,
+    actor_role: actor.role ?? null,
+    action,
+    entity_type: 'staff',
+    entity_id: target.id,
+    table_name: 'profiles',
+    record_id: target.id,
+    summary: summary.slice(0, 300),
+    changes: { target_email: target.email ?? null, ...(details ?? {}) },
+  });
+  if (error) throw new Error(`Could not record the activity log: ${error.message}`);
 }

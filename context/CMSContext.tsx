@@ -150,8 +150,13 @@ export function CMSProvider({ children }: { children: ReactNode }) {
 
     const updateSetting = async (key: string, value: string) => {
         const jsonValue = JSON.stringify(value);
-        await supabase.from('site_settings')
+        const { error } = await supabase.from('site_settings')
             .upsert({ key, value: jsonValue }, { onConflict: 'key' });
+        if (error) {
+            // Only admins can write site_settings; surface the real reason instead of
+            // letting the caller report a save that never happened.
+            throw new Error(error.message || 'Could not save the setting');
+        }
         setSettings(prev => ({ ...prev, [key]: value }));
     };
 

@@ -25,8 +25,12 @@ function OrderTrackingContent() {
     const emailVal = email.trim();
     const phoneVal = phone.trim();
 
-    if (!orderNum && !emailVal && !phoneVal) {
-      setError('Enter your email, order number, or phone number.');
+    if (!orderNum) {
+      setError('Enter your order number or the tracking number from your SMS.');
+      return;
+    }
+    if (!emailVal && !phoneVal) {
+      setError('Also enter the email or phone number you used at checkout.');
       return;
     }
 
@@ -52,7 +56,7 @@ function OrderTrackingContent() {
       }
 
       if (res.status === 404) {
-        setError('No order found. Check your email, order number, or phone and try again.');
+        setError('No order found. Check the order or tracking number and the email or phone, then try again.');
         setIsTracking(false);
         return;
       }
@@ -72,7 +76,7 @@ function OrderTrackingContent() {
           : [];
 
       if (orders.length === 0) {
-        setError('No order found. Check your email, order number, or phone and try again.');
+        setError('No order found. Check the order or tracking number and the email or phone, then try again.');
         setIsTracking(false);
         return;
       }
@@ -114,7 +118,7 @@ function OrderTrackingContent() {
       {
         key: 'placed',
         title: 'Order Placed',
-        description: 'Your order has been confirmed',
+        description: 'We received your order',
         date: new Date(order.created_at).toLocaleString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }),
         icon: 'ri-checkbox-circle-line',
         status: 'completed' as const
@@ -191,52 +195,70 @@ function OrderTrackingContent() {
         <div className="max-w-2xl mx-auto">
           <div className="text-center mb-8">
             <h1 className="text-4xl font-bold text-gray-900 mb-2">Track Your Order</h1>
-            <p className="text-gray-600">Use your email, order number, or phone number — any one is enough</p>
+            <p className="text-gray-600">Enter your order or tracking number, plus the email or phone you used at checkout</p>
           </div>
 
           <div className="bg-white rounded-xl shadow-sm p-8">
-            <form onSubmit={handleTrack} className="space-y-6">
+            <form onSubmit={handleTrack} className="space-y-6" noValidate>
               <div>
-                <label className="block text-sm font-semibold text-gray-900 mb-2">
-                  Email
+                <label htmlFor="track-order-number" className="block text-sm font-semibold text-gray-900 mb-2">
+                  Order or tracking number *
                 </label>
                 <input
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
-                  placeholder="you@example.com"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-semibold text-gray-900 mb-2">
-                  Order Number
-                </label>
-                <input
+                  id="track-order-number"
                   type="text"
                   value={orderNumber}
                   onChange={(e) => setOrderNumber(e.target.value)}
+                  aria-describedby="track-order-number-help"
+                  autoComplete="off"
+                  required
                   className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
-                  placeholder="e.g. ORD-1770328211911-915"
+                  placeholder="e.g. ORD-1770328211911-915 or SLI-AB12CD"
                 />
+                <p id="track-order-number-help" className="mt-1 text-xs text-gray-500">
+                  Use the order number or the tracking number from your SMS.
+                </p>
               </div>
 
-              <div>
-                <label className="block text-sm font-semibold text-gray-900 mb-2">
-                  Phone Number
-                </label>
-                <input
-                  type="tel"
-                  value={phone}
-                  onChange={(e) => setPhone(e.target.value)}
-                  className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
-                  placeholder="e.g. 0248615775"
-                />
-              </div>
+              <fieldset>
+                <legend className="block text-sm font-semibold text-gray-900 mb-1">
+                  Email or phone number *
+                </legend>
+                <p className="mb-3 text-xs text-gray-500">Fill in at least one, the same as you used at checkout.</p>
+                <div className="space-y-4">
+                  <div>
+                    <label htmlFor="track-email" className="block text-sm font-medium text-gray-700 mb-2">
+                      Email
+                    </label>
+                    <input
+                      id="track-email"
+                      type="email"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      autoComplete="email"
+                      className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                      placeholder="you@example.com"
+                    />
+                  </div>
+                  <div>
+                    <label htmlFor="track-phone" className="block text-sm font-medium text-gray-700 mb-2">
+                      Phone number
+                    </label>
+                    <input
+                      id="track-phone"
+                      type="tel"
+                      value={phone}
+                      onChange={(e) => setPhone(e.target.value)}
+                      autoComplete="tel"
+                      className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                      placeholder="e.g. 0248615775"
+                    />
+                  </div>
+                </div>
+              </fieldset>
 
               {error && (
-                <div className="p-4 bg-red-50 border border-red-200 rounded-lg">
+                <div className="p-4 bg-red-50 border border-red-200 rounded-lg" role="alert">
                   <p className="text-sm text-red-700">{error}</p>
                 </div>
               )}
@@ -261,7 +283,7 @@ function OrderTrackingContent() {
                 <div>
                   <p className="text-sm font-semibold text-emerald-900">Need Help?</p>
                   <p className="text-sm text-emerald-700 mt-1">
-                    Fill in any one field — the email, order number, or phone you used at checkout. You can find these in the SMS or email we sent after your order was confirmed.
+                    Your order number and tracking number are in the SMS or email we sent after you placed your order. If you can't find them, contact our support team.
                   </p>
                 </div>
               </div>
@@ -358,8 +380,17 @@ function OrderTrackingContent() {
   // Order tracking results
   const trackingSteps = getTrackingSteps();
   const statusBadge = getStatusBadge();
-  const trackingNumber = order.metadata?.tracking_number || '';
-  const shippingAddress = order.shipping_address || {};
+  const trackingNumber = order.tracking_number || order.metadata?.tracking_number || '';
+  // The server returns a trimmed address (first name, city, region) and
+  // masked contact details — never the full address.
+  const shippingAddress = order.shipping_address || order.address || {};
+  const recipientFirstName = shippingAddress.firstName || shippingAddress.first_name || '';
+  const shippingPlace = [shippingAddress.city, shippingAddress.region].filter(Boolean).join(', ');
+  const maskedEmail = order.email_masked || order.masked_email || order.email || '';
+  const maskedPhone = order.phone_masked || order.masked_phone || order.phone || '';
+  const orderTotal = Number(order.total ?? 0);
+  const orderSubtotal = order.subtotal != null ? Number(order.subtotal) : null;
+  const orderDiscount = Number(order.discount_total ?? 0);
   const createdAt = new Date(order.created_at);
   const addDays = (n: number) => {
     const d = new Date(createdAt.getTime());
@@ -373,7 +404,8 @@ function OrderTrackingContent() {
     <main className="min-h-screen bg-gray-50 py-12 px-4">
       <div className="max-w-4xl mx-auto">
         <div className="mb-8">
-          <button 
+          <button
+            type="button"
             onClick={() => {
               if (matches.length > 1) {
                 setOrder(null);
@@ -414,7 +446,7 @@ function OrderTrackingContent() {
                 <div>
                   <p className="text-sm text-gray-600">Shipping To</p>
                   <p className="font-semibold text-gray-900">
-                    {shippingAddress.city || shippingAddress.region || 'Ghana'}
+                    {recipientFirstName ? `${recipientFirstName}, ` : ''}{shippingPlace || 'Ghana'}
                   </p>
                 </div>
               </div>
@@ -427,7 +459,7 @@ function OrderTrackingContent() {
                 </div>
                 <div>
                   <p className="text-sm text-gray-600">Total</p>
-                  <p className="font-semibold text-gray-900">GH₵ {Number(order.total).toFixed(2)}</p>
+                  <p className="font-semibold text-gray-900">GH₵ {orderTotal.toFixed(2)}</p>
                 </div>
               </div>
             </div>
@@ -522,6 +554,29 @@ function OrderTrackingContent() {
               );
             })}
           </div>
+          <div className="mt-6 border-t border-gray-200 pt-4 space-y-2 text-sm">
+            {orderSubtotal != null && (
+              <div className="flex justify-between text-gray-600">
+                <span>Subtotal</span>
+                <span>GH₵ {orderSubtotal.toFixed(2)}</span>
+              </div>
+            )}
+            {orderDiscount > 0 && (
+              <div className="flex justify-between text-emerald-700">
+                <span>Discount</span>
+                <span>− GH₵ {orderDiscount.toFixed(2)}</span>
+              </div>
+            )}
+            <div className="flex justify-between font-bold text-gray-900 text-base">
+              <span>Total</span>
+              <span>GH₵ {orderTotal.toFixed(2)}</span>
+            </div>
+          </div>
+          {(maskedEmail || maskedPhone) && (
+            <p className="mt-4 text-xs text-gray-500">
+              Updates go to {[maskedEmail, maskedPhone].filter(Boolean).join(' and ')}.
+            </p>
+          )}
         </div>
 
         <div className="mt-8 text-center">

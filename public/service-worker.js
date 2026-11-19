@@ -1,7 +1,9 @@
-// Discount Discovery Zone - Service Worker v7.0
+// Discount Discovery Zone - Service Worker v8.0
 //   v6: wipe every cache left from the Vercel host, and never store HTML.
 //   v7: the data API (/rest, /auth/v1, /storage) is served from this origin.
-const CACHE_VERSION = 'ddz-v7.0-plain-postgres';
+//   v8: keep the current caches on activate (offline page works again), delete
+//       only stale ones, and never cache /api, /rest, /auth, /storage or admin.
+const CACHE_VERSION = 'ddz-v8.0';
 const STATIC_CACHE = `static-${CACHE_VERSION}`;
 const DYNAMIC_CACHE = `dynamic-${CACHE_VERSION}`;
 const IMAGE_CACHE = `images-${CACHE_VERSION}`;
@@ -30,7 +32,7 @@ async function trimCache(cacheName, maxItems) {
 
 // Install: pre-cache static assets
 self.addEventListener('install', (event) => {
-  console.log('[SW] Installing v2.0...');
+  console.log('[SW] Installing v8.0...');
   event.waitUntil(
     caches.open(STATIC_CACHE)
       .then((cache) => {
@@ -45,29 +47,37 @@ self.addEventListener('install', (event) => {
   );
 });
 
-// Activate: hard-wipe ALL caches (one-time favicon/branding reset)
-// We deliberately delete every cache the SW knows about — not just the
-// non-current ones — to guarantee that any previously cached multimey
-// favicon/PWA icon is purged from every device on the next visit.
+// Activate: delete caches from older versions only, keep this version's
+// pre-cached offline page.
+const CURRENT_CACHES = [STATIC_CACHE, DYNAMIC_CACHE, IMAGE_CACHE, API_CACHE];
 self.addEventListener('activate', (event) => {
-  console.log('[SW] Activating v7.0 (hard cache wipe)...');
   event.waitUntil(
     (async () => {
       const keys = await caches.keys();
-      await Promise.all(keys.map((key) => {
-        console.log('[SW] Deleting cache:', key);
-        return caches.delete(key);
-      }));
-      // Notify every controlled tab so it can drop in-memory image refs
-      // and reload to pick up the fresh icons.
-      const clientsList = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
-      clientsList.forEach((client) => {
-        client.postMessage({ type: 'DDZ_CACHE_RESET', reason: 'vercel-cutover' });
-      });
+      await Promise.all(
+        keys
+          .filter((key) => !CURRENT_CACHES.includes(key))
+          .map((key) => caches.delete(key))
+      );
       await self.clients.claim();
     })()
   );
 });
+
+/** Paths whose responses must never be stored by the service worker. */
+function isNeverCached(url) {
+  if (url.origin !== self.location.origin) return false;
+  const p = url.pathname;
+  return (
+    p.startsWith('/api/') ||
+    p.startsWith('/rest/') ||
+    p.startsWith('/auth/') ||
+    p.startsWith('/storage/') ||
+    p === '/admin' ||
+    p.startsWith('/admin/') ||
+    p === '/service-worker.js'
+  );
+}
 
 // Allow the page to ask us to wipe caches at any time.
 self.addEventListener('message', (event) => {
@@ -89,18 +99,14 @@ self.addEventListener('fetch', (event) => {
   // Skip chrome-extension, ws, and other non-http
   if (!url.protocol.startsWith('http')) return;
 
-  // Skip API routes that modify data
-  if (url.pathname.startsWith('/api/payment')) return;
-  if (url.pathname.startsWith('/api/notifications')) return;
-
-  // Skip admin routes
-  if (url.pathname.startsWith('/admin')) return;
+  // Data API, auth, uploaded files and admin pages: straight to the network.
+  // Prices, stock, orders and sessions change constantly.
+  if (isNeverCached(url)) return;
 
   // Strategy: Images - Cache First (long-lived)
   if (
     request.destination === 'image' ||
-    url.pathname.match(/\.(png|jpg|jpeg|gif|webp|svg|ico)$/) ||
-    url.pathname.startsWith('/storage/v1/object/public/')
+    url.pathname.match(/\.(png|jpg|jpeg|gif|webp|svg|ico)$/)
   ) {
     event.respondWith(
       caches.open(IMAGE_CACHE).then((cache) => {
@@ -123,18 +129,6 @@ self.addEventListener('fetch', (event) => {
       })
     );
     return;
-  }
-
-  // Strategy: API routes - network-only.  Prices, stock, orders, and
-  // auth tokens change constantly; stale responses here cause real bugs
-  // (customers seeing an old cart, out-of-stock items, other people's
-  // order tracking results, etc.).
-  if (
-    url.pathname.startsWith('/api/') ||
-    url.pathname.startsWith('/rest/') ||
-    url.pathname.startsWith('/auth/v1/')
-  ) {
-    return; // let the browser handle it directly, no SW caching
   }
 
   // Strategy: Static assets (JS, CSS, fonts) - Cache First

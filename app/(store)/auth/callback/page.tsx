@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
+import { safeInternalPath } from '../safe-next';
 
 /**
  * Completes Supabase email confirmation / OAuth redirect (PKCE).
@@ -20,7 +21,7 @@ export default function AuthCallbackPage() {
       try {
         const url = new URL(window.location.href);
         const code = url.searchParams.get('code');
-        const next = url.searchParams.get('next') || '/account';
+        const next = safeInternalPath(url.searchParams.get('next'), '/account');
 
         // supabase-js already exchanges ?code= while it initializes
         // (detectSessionInUrl); exchanging it again would fail, so only do it
@@ -53,7 +54,7 @@ export default function AuthCallbackPage() {
         } = await supabase.auth.getSession();
         if (cancelled) return;
         if (sessionError) {
-          setMessage(`Could not complete sign-in: ${sessionError.message}`);
+          setMessage('Could not complete sign-in. Please try signing in again.');
           return;
         }
         if (session) {
@@ -65,7 +66,7 @@ export default function AuthCallbackPage() {
         setMessage('No active session. Try signing in again, or use the link from your latest email.');
       } catch (e: unknown) {
         if (!cancelled) {
-          setMessage(e instanceof Error ? e.message : 'Something went wrong.');
+          setMessage('Something went wrong. Please try signing in again.');
         }
       }
     };

@@ -150,8 +150,11 @@ export default function CustomerDetailsPage() {
     if (!customer) return <div className="p-8 text-center text-red-500">Customer not found</div>;
 
     // Spend and order count cover paid orders only; unpaid checkouts still show in the history.
-    const paidOrders = orders.filter((order) => order.payment_status === 'paid' && order.status !== 'cancelled');
-    const totalSpent = paidOrders.reduce((sum, order) => sum + (order.total || 0), 0);
+    // Real sales only: paid and not cancelled or refunded.
+    const paidOrders = orders.filter(
+        (order) => order.payment_status === 'paid' && order.status !== 'cancelled' && order.status !== 'refunded'
+    );
+    const totalSpent = paidOrders.reduce((sum, order) => sum + Number(order.total || 0), 0);
     const getOrderStatusLabel = (status: string) => {
         if (status === 'shipped') return 'Packaged';
         if (status === 'picked_up') return 'Picked Up by Rider';

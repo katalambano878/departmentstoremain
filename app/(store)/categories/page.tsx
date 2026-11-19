@@ -6,7 +6,7 @@ import PageHero from '@/components/PageHero';
 export const revalidate = 0; // Ensure fresh data on every visit
 
 export default async function CategoriesPage() {
-  const { data: categoriesData } = await supabase
+  const { data: categoriesData, error: categoriesError } = await supabase
     .from('categories')
     .select(`
       id,
@@ -33,7 +33,7 @@ export default async function CategoriesPage() {
     const style = palette[i % palette.length];
     return {
       ...c,
-      image: c.image_url || 'https://via.placeholder.com/600x400?text=Category',
+      image: c.image_url || '',
       color: style.color,
       icon: style.icon,
       // Optional: Fetch product count if needed, currently skipping for performance/simplicity
@@ -49,7 +49,20 @@ export default async function CategoriesPage() {
       />
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
-        {categories.length > 0 ? (
+        {categoriesError ? (
+          <div className="text-center py-20 bg-gray-50 rounded-xl" role="alert">
+            <i className="ri-wifi-off-line text-5xl text-gray-300 mb-4 block" aria-hidden="true"></i>
+            <p className="text-xl text-gray-700 font-semibold mb-2">Couldn&apos;t load categories</p>
+            <p className="text-gray-500 mb-6">Something went wrong on our side. Please try again.</p>
+            {/* A full page load re-runs the server query (revalidate = 0). */}
+            <a
+              href="/categories"
+              className="inline-flex items-center rounded-full bg-emerald-700 px-6 py-3 font-medium text-white transition-colors hover:bg-emerald-800"
+            >
+              Try again
+            </a>
+          </div>
+        ) : categories.length > 0 ? (
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
             {categories.map((category) => (
               <Link
@@ -58,12 +71,18 @@ export default async function CategoriesPage() {
                 className="group bg-white border border-gray-200 rounded-2xl overflow-hidden hover:shadow-2xl transition-all cursor-pointer"
               >
                 <div className="relative h-48 overflow-hidden">
-                  <img
-                    src={getOptimizedImageUrl(category.image, { width: 640 })}
-                    alt={category.name}
-                    className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
-                    loading="lazy"
-                  />
+                  {category.image ? (
+                    <img
+                      src={getOptimizedImageUrl(category.image, { width: 640 })}
+                      alt={category.name}
+                      className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
+                      loading="lazy"
+                    />
+                  ) : (
+                    <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-emerald-50 to-emerald-100" aria-hidden="true">
+                      <i className="ri-image-line text-4xl text-emerald-300"></i>
+                    </div>
+                  )}
                   <div className={`absolute inset-0 bg-gradient-to-t ${category.color} opacity-0 group-hover:opacity-20 transition-opacity`}></div>
                 </div>
                 <div className="p-6">

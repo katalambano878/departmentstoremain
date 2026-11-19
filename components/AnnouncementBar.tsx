@@ -77,7 +77,7 @@ export default function AnnouncementBar() {
             <div className="relative z-[60] shrink-0 border-b border-[#d1fae5]/60 bg-[#ecfdf5]">
                 <div className="relative flex items-center justify-center px-10 py-2.5">
                     <p className="max-w-[min(100%,52rem)] text-center text-xs font-light tracking-wide text-slate-700 sm:text-sm">
-                        Free delivery on qualifying orders · Authentic products · Delivered across Ghana
+                        Doorstep delivery across Ghana · Free pickup at our Accra store · Pay with mobile money or card
                     </p>
                 </div>
             </div>

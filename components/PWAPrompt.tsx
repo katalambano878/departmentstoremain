@@ -65,22 +65,16 @@ export default function PWAPrompt() {
               </div>
               <div className="flex-1 min-w-0">
                 <h3 className="font-bold text-gray-900 text-lg truncate">Discount Discovery Zone</h3>
-                <p className="text-sm text-gray-500">discount-discovery-zone.vercel.app</p>
-                <div className="flex items-center gap-1 mt-1">
-                  {[1, 2, 3, 4, 5].map((star) => (
-                    <i key={star} className="ri-star-fill text-amber-400 text-xs" />
-                  ))}
-                  <span className="text-xs text-gray-400 ml-1">Shopping</span>
-                </div>
+                <p className="text-sm text-gray-500">www.discountdiscoveryzone.com</p>
               </div>
             </div>
 
             {/* Features */}
             <div className="grid grid-cols-3 gap-3 mb-6">
               {[
-                { icon: 'ri-flashlight-line', label: 'Lightning Fast' },
-                { icon: 'ri-wifi-off-line', label: 'Works Offline' },
-                { icon: 'ri-notification-3-line', label: 'Get Notified' },
+                { icon: 'ri-home-line', label: 'On your home screen' },
+                { icon: 'ri-fullscreen-line', label: 'Opens full screen' },
+                { icon: 'ri-flashlight-line', label: 'Quick to open' },
               ].map((feature) => (
                 <div
                   key={feature.label}

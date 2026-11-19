@@ -26,9 +26,26 @@ export async function cachedQuery<T>(
     return cached.data;
   }
   
+  // If queryFn throws, nothing is cached and the error reaches the caller.
   const data = await queryFn();
-  cache.set(key, { data, timestamp: Date.now() });
+  // Never cache failures: Supabase-style results report errors as
+  // `{ data, error }` instead of throwing, so a network blip would otherwise
+  // stick for the whole TTL.
+  if (!isFailedResult(data)) {
+    cache.set(key, { data, timestamp: Date.now() });
+  } else {
+    cache.delete(key);
+  }
   return data;
+}
+
+function isFailedResult(value: unknown): boolean {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    'error' in value &&
+    (value as { error?: unknown }).error != null
+  );
 }
 
 /**

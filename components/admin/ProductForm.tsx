@@ -6,7 +6,7 @@ import { supabase } from '@/lib/supabase';
 import { useRouter } from 'next/navigation';
 import { generateNextPosCode, getPosCodeFromMetadata } from '@/lib/posCode';
 import {
-    normalizeProductVisibility,
+    getProductVisibility,
     type ProductVisibility,
 } from '@/lib/product-visibility';
 import { slugify } from '@/lib/slug';
@@ -58,15 +58,17 @@ export default function ProductForm({ initialData, isEditMode = false }: Product
         const hasVariantRows = (initialData?.product_variants || []).length > 0;
         const rawPrice = initialData?.price ?? '';
         const rawCompare = initialData?.compare_at_price ?? '';
-        if (!hasVariantRows) {
-            if (md.paused_sale_price != null) {
-                // Campaign paused: price already holds the regular price.
-                return { price: rawPrice, compare: rawCompare, sale: String(md.paused_sale_price) };
-            }
-            if (initialData?.on_sale && Number(rawCompare) > Number(rawPrice)) {
-                // Active sale: unswap so "Price" shows the regular price.
-                return { price: rawCompare, compare: '', sale: String(rawPrice) };
-            }
+        // Variant products use the same swap at product level (price = cheapest
+        // charged price, compare_at = regular), so unswap them too or a re-save
+        // would store the sale price as the regular price. Their sale prices
+        // live on the variant rows, so the product-level sale field stays empty.
+        if (md.paused_sale_price != null) {
+            // Campaign paused: price already holds the regular price.
+            return { price: rawPrice, compare: rawCompare, sale: hasVariantRows ? '' : String(md.paused_sale_price) };
+        }
+        if (initialData?.on_sale && Number(rawCompare) > Number(rawPrice)) {
+            // Active sale: unswap so "Price" shows the regular price.
+            return { price: rawCompare, compare: '', sale: hasVariantRows ? '' : String(rawPrice) };
         }
         return { price: rawPrice, compare: rawCompare, sale: '' };
     })();
@@ -88,6 +90,17 @@ export default function ProductForm({ initialData, isEditMode = false }: Product
     const [barcode, setBarcode] = useState(initialData?.barcode || '');
     const [posCode, setPosCode] = useState(getPosCodeFromMetadata(initialData?.metadata));
     const [stock, setStock] = useState(initialData?.quantity || '');
+    // Stock as it was when the form opened. A save only writes quantity when the
+    // admin changed it here, so a till sale made meanwhile is not undone.
+    const [initialStockValue] = useState(String(initialData?.quantity || ''));
+    const [initialVariantStock] = useState<Record<string, string>>(() =>
+        Object.fromEntries(
+            (initialData?.product_variants || [])
+                .filter((v: any) => v?.id)
+                .map((v: any) => [v.id, (v.stock ?? v.quantity ?? 0).toString()])
+        )
+    );
+    const [formErrors, setFormErrors] = useState<{ name?: string; price?: string; variants?: string }>({});
     const [moq, setMoq] = useState(initialData?.moq || '1');
     const [lowStockThreshold, setLowStockThreshold] = useState(initialData?.metadata?.low_stock_threshold || '5');
     const [description, setDescription] = useState(initialData?.description || '');
@@ -95,7 +108,9 @@ export default function ProductForm({ initialData, isEditMode = false }: Product
         normalizeProductStatus(initialData?.status)
     );
     const [visibility, setVisibility] = useState<ProductVisibility>(
-        normalizeProductVisibility(initialData?.visibility ?? initialData?.metadata?.visibility)
+        // metadata.visibility is what row-level security and the shop read; the
+        // column is NOT NULL default 'global' and never written, so it must not win.
+        getProductVisibility(initialData || {})
     );
     const [featured, setFeatured] = useState(initialData?.featured || false);
     const [preorderShipping, setPreorderShipping] = useState(initialData?.metadata?.preorder_shipping || '');
@@ -228,6 +243,7 @@ export default function ProductForm({ initialData, isEditMode = false }: Product
         field: keyof VariantSizeRow,
         value: string
     ) => {
+        if (field === 'price') setFormErrors(prev => (prev.variants ? { ...prev, variants: undefined } : prev));
         setVariantGroups(prev => prev.map(g => {
             if (g.tempId !== groupId) return g;
             return {
@@ -370,9 +386,67 @@ export default function ProductForm({ initialData, isEditMode = false }: Product
         setImages(images.filter((_, idx) => idx !== indexToRemove));
     };
 
+    /** Required fields. Returns false (and shows inline messages) when the form can't be saved. */
+    const validateForm = (): boolean => {
+        const errors: { name?: string; price?: string; variants?: string } = {};
+        if (!productName.trim()) errors.name = 'Enter a product name.';
+        const base = parseFloat(price);
+        const basePriced = Number.isFinite(base) && base > 0;
+        if (variantGroups.length > 0) {
+            const unpriced = variantGroups.flatMap(g => g.sizes.map(s => ({ g, s }))).filter(({ s }) => {
+                const own = parseFloat(s.price);
+                return !(Number.isFinite(own) && own > 0) && !basePriced;
+            });
+            if (unpriced.length > 0) {
+                const first = unpriced[0];
+                errors.variants = `${unpriced.length} variant${unpriced.length === 1 ? ' has' : 's have'} no price (e.g. "${first.g.name || first.g.colorName || 'Default'} / ${first.s.size || 'Default'}"). Give every variant a price above 0, or set the product price.`;
+            }
+        } else if (!basePriced) {
+            errors.price = 'Enter a price above GH₵0.';
+        }
+        setFormErrors(errors);
+        if (errors.name) setActiveTab('general');
+        else if (errors.price) setActiveTab('pricing');
+        else if (errors.variants) setActiveTab('variants');
+        return !errors.name && !errors.price && !errors.variants;
+    };
+
     const handleSubmit = async () => {
+        if (loading) return;
+        if (!validateForm()) return;
         try {
             setLoading(true);
+
+            // Re-read the saved sale state and metadata right before saving: the
+            // Sales page (or the till) may have changed them since the form opened.
+            let currentMetadata: Record<string, any> = initialData?.metadata || {};
+            let saleOnNow = saleOn;
+            if (isEditMode && initialData?.id) {
+                const { data: fresh, error: freshError } = await supabase
+                    .from('products')
+                    .select('on_sale, price, compare_at_price, metadata')
+                    .eq('id', initialData.id)
+                    .maybeSingle();
+                if (freshError) throw freshError;
+                if (!fresh) throw new Error('This product no longer exists or you cannot edit it.');
+                currentMetadata = fresh.metadata || {};
+                const currentSaleState: 'on' | 'off' | null = fresh.on_sale
+                    ? currentMetadata.paused_sale_price != null ? 'off' : 'on'
+                    : null;
+                saleOnNow = currentSaleState ? currentSaleState === 'on' : salesActive;
+                if (currentSaleState !== savedSaleState) {
+                    const describe = (st: 'on' | 'off' | null) => st === 'on' ? 'running' : st === 'off' ? 'paused' : 'not on sale';
+                    const ok = window.confirm(
+                        `This product's sale was changed elsewhere while this form was open (it was ${describe(savedSaleState)}, it is now ${describe(currentSaleState)}).\n\n` +
+                        `Saving will keep the sale ${currentSaleState === 'on' ? 'running' : currentSaleState === 'off' ? 'paused' : 'state set by the prices in this form'} and write the prices shown in this form. Continue?`
+                    );
+                    if (!ok) {
+                        setLoading(false);
+                        return;
+                    }
+                }
+            }
+
             const ensuredPosCode = (posCode || '').trim() || await generatePosCode();
 
             const hasVariants = variantGroups.length > 0;
@@ -436,7 +510,7 @@ export default function ProductForm({ initialData, isEditMode = false }: Product
                 : null;
 
             const metadata: Record<string, any> = {
-                ...(initialData?.metadata || {}),
+                ...currentMetadata,
                 pos_code: ensuredPosCode || null,
                 low_stock_threshold: parseInt(lowStockThreshold) || 5,
                 preorder_shipping: preorderShipping.trim() || null,
@@ -444,7 +518,7 @@ export default function ProductForm({ initialData, isEditMode = false }: Product
             };
 
             let pricingFields: Record<string, any>;
-            if (hasVariants && anyVariantSale && saleOn) {
+            if (hasVariants && anyVariantSale && saleOnNow) {
                 delete metadata.paused_sale_price;
                 pricingFields = { price: minCharged, compare_at_price: regularP, on_sale: true };
             } else if (hasVariants && anyVariantSale) {
@@ -461,7 +535,7 @@ export default function ProductForm({ initialData, isEditMode = false }: Product
                     compare_at_price: comparePrice ? parseFloat(comparePrice) : null,
                     on_sale: false,
                 };
-            } else if (hasSale && saleOn) {
+            } else if (hasSale && saleOnNow) {
                 delete metadata.paused_sale_price;
                 pricingFields = { price: saleP, compare_at_price: regularP, on_sale: true };
             } else if (hasSale) {
@@ -481,14 +555,20 @@ export default function ProductForm({ initialData, isEditMode = false }: Product
             }
 
             const productData = {
-                name: productName,
+                name: productName.trim(),
                 slug: slugify(urlSlug) || slugify(productName) || `product-${Date.now()}`,
                 description,
                 category_id: categoryId || null,
                 ...pricingFields,
                 sku: sku || generateSku(),
                 barcode: barcode || generateBarcode(),
-                quantity: hasVariants ? variantStockTotal : (parseInt(stock) || 0),
+                // Edit mode: write stock only when changed in this form. Variant
+                // products get their total re-summed from the variants after sync.
+                ...(!isEditMode
+                    ? { quantity: hasVariants ? variantStockTotal : (parseInt(stock) || 0) }
+                    : !hasVariants && String(stock) !== initialStockValue
+                        ? { quantity: parseInt(stock) || 0 }
+                        : {}),
                 moq: parseInt(moq) || 1,
                 status,
                 featured,
@@ -579,7 +659,7 @@ export default function ProductForm({ initialData, isEditMode = false }: Product
                                     ? { color_hex: group.colorHex }
                                     : {})
                             };
-                            if (hasRowSale && !saleOn) {
+                            if (hasRowSale && !saleOnNow) {
                                 variantMetadata.paused_sale_price = rowSale;
                             } else {
                                 delete variantMetadata.paused_sale_price;
@@ -594,9 +674,12 @@ export default function ProductForm({ initialData, isEditMode = false }: Product
                                     product_id: productId,
                                     name: sizeLabel,
                                     sku: sizeRow.sku || null,
-                                    price: hasRowSale && saleOn ? rowSale : rowRegular,
-                                    compare_at_price: hasRowSale && saleOn ? rowRegular : null,
-                                    quantity: parseInt(sizeRow.stock) || 0,
+                                    price: hasRowSale && saleOnNow ? rowSale : rowRegular,
+                                    compare_at_price: hasRowSale && saleOnNow ? rowRegular : null,
+                                    // Only write stock the admin changed here (new rows always).
+                                    ...(!existingId || sizeRow.stock !== initialVariantStock[existingId]
+                                        ? { quantity: parseInt(sizeRow.stock) || 0 }
+                                        : {}),
                                     option1: sizeLabel,
                                     option2: option2Value,
                                     image_url: group.imageUrl || null,
@@ -649,11 +732,15 @@ export default function ProductForm({ initialData, isEditMode = false }: Product
                     const updateRows = desiredRows.filter(r => !!r.existingId);
                     const insertRows = desiredRows.filter(r => !r.existingId);
 
-                    if (updateRows.length > 0) {
-                        const { error: upsertVariantsError } = await supabase
+                    // Update existing variants one by one: rows may carry different
+                    // columns (quantity only when changed), which a bulk upsert would null out.
+                    for (const r of updateRows) {
+                        const { id: _id, ...fields } = r.payload as Record<string, any>;
+                        const { error: updateVariantError } = await supabase
                             .from('product_variants')
-                            .upsert(updateRows.map(r => r.payload), { onConflict: 'id' });
-                        if (upsertVariantsError) throw upsertVariantsError;
+                            .update(fields)
+                            .eq('id', r.existingId as string);
+                        if (updateVariantError) throw updateVariantError;
                     }
 
                     let insertedIds: string[] = [];
@@ -706,6 +793,22 @@ export default function ProductForm({ initialData, isEditMode = false }: Product
                         .delete()
                         .eq('product_id', productId);
                     if (deleteAllVariantsError) throw deleteAllVariantsError;
+                }
+
+                // Product stock for a variant product = sum of its variants as they
+                // are now in the database (includes till sales made meanwhile).
+                if (hasVariants && isEditMode) {
+                    const { data: liveVariants, error: liveVariantsError } = await supabase
+                        .from('product_variants')
+                        .select('quantity')
+                        .eq('product_id', productId);
+                    if (liveVariantsError) throw liveVariantsError;
+                    const total = (liveVariants || []).reduce((sum: number, v: any) => sum + (Number(v.quantity) || 0), 0);
+                    const { error: totalError } = await supabase
+                        .from('products')
+                        .update({ quantity: total })
+                        .eq('id', productId);
+                    if (totalError) throw totalError;
                 }
 
                 // 2. Product-level images
@@ -811,6 +914,11 @@ export default function ProductForm({ initialData, isEditMode = false }: Product
                 </div>
 
                 <div className="flex items-center space-x-3">
+                    {(formErrors.name || formErrors.price || formErrors.variants) && (
+                        <p className="text-sm text-red-600 font-medium" role="alert">
+                            Fix the highlighted fields to save.
+                        </p>
+                    )}
                     {isEditMode && (
                         <Link
                             href={`/product/${initialData?.id}`}
@@ -863,10 +971,17 @@ export default function ProductForm({ initialData, isEditMode = false }: Product
                                 <input
                                     type="text"
                                     value={productName}
-                                    onChange={(e) => setProductName(e.target.value)}
-                                    className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                    onChange={(e) => {
+                                        setProductName(e.target.value);
+                                        if (formErrors.name) setFormErrors(prev => ({ ...prev, name: undefined }));
+                                    }}
+                                    aria-invalid={!!formErrors.name}
+                                    className={`w-full px-4 py-3 border-2 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${formErrors.name ? 'border-red-500' : 'border-gray-300'}`}
                                     placeholder="Enter product name"
                                 />
+                                {formErrors.name && (
+                                    <p className="text-sm text-red-600 mt-1" role="alert">{formErrors.name}</p>
+                                )}
                             </div>
 
                             <div>
@@ -982,11 +1097,18 @@ export default function ProductForm({ initialData, isEditMode = false }: Product
                                         <input
                                             type="number"
                                             value={price}
-                                            onChange={(e) => setPrice(e.target.value)}
-                                            className="w-full pl-16 pr-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                                            step="0.01" placeholder="0.00"
+                                            onChange={(e) => {
+                                                setPrice(e.target.value);
+                                                if (formErrors.price || formErrors.variants) setFormErrors(prev => ({ ...prev, price: undefined, variants: undefined }));
+                                            }}
+                                            aria-invalid={!!formErrors.price}
+                                            className={`w-full pl-16 pr-4 py-3 border-2 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${formErrors.price ? 'border-red-500' : 'border-gray-300'}`}
+                                            step="0.01" min="0" placeholder="0.00"
                                         />
                                     </div>
+                                    {formErrors.price && (
+                                        <p className="text-sm text-red-600 mt-1" role="alert">{formErrors.price}</p>
+                                    )}
                                 </div>
                                 <div>
                                     <label className="block text-sm font-semibold text-gray-900 mb-2">Compare at Price (GH₵)</label>
@@ -1212,6 +1334,9 @@ export default function ProductForm({ initialData, isEditMode = false }: Product
                                 <div>
                                     <h3 className="text-lg font-bold text-gray-900">Product Variants</h3>
                                     <p className="text-gray-600 mt-1 text-sm">Create a variant (color/style), then add sizes with different stock and price.</p>
+                                    {formErrors.variants && (
+                                        <p className="text-sm text-red-600 mt-2" role="alert">{formErrors.variants}</p>
+                                    )}
                                 </div>
                                 <button
                                     onClick={addVariantGroup}

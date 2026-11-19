@@ -27,6 +27,14 @@ function getAccessToken(request: Request): string | null {
   return null;
 }
 
+// Columns an affiliate may see about themselves (never the admin `notes`).
+const AFFILIATE_SELF_COLUMNS =
+  'id, user_id, code, status, commission_pct, pending_commission_pct, commission_requested_at, full_name, email, phone, payout_method, payout_number, payout_provider, payout_name, total_earned, total_paid, balance_pending, balance_available, approved_at, created_at, updated_at';
+const COMMISSION_SELF_COLUMNS =
+  'id, affiliate_id, order_id, order_number, base_amount, commission_pct, commission_amount, status, matures_at, payout_id, matured_at, paid_at, created_at, updated_at';
+const PAYOUT_SELF_COLUMNS =
+  'id, affiliate_id, amount, method, destination, provider, status, moolre_ref, failure_reason, created_at, processed_at';
+
 // GET — affiliate's own dashboard: record, commissions, payouts.
 export async function GET(request: Request) {
   const token = getAccessToken(request);
@@ -35,16 +43,16 @@ export async function GET(request: Request) {
   if (error || !user) return NextResponse.json({ error: 'Invalid session' }, { status: 401 });
 
   const { data: affiliate } = await supabaseAdmin
-    .from('affiliates').select('*').eq('user_id', user.id).maybeSingle();
+    .from('affiliates').select('id').eq('user_id', user.id).maybeSingle();
   if (!affiliate) return NextResponse.json({ affiliate: null, commissions: [], payouts: [] });
 
   // Mature any commissions whose hold window has elapsed, then re-read balances.
   await matureDueCommissions(affiliate.id);
 
   const [{ data: fresh }, { data: commissions }, { data: payouts }] = await Promise.all([
-    supabaseAdmin.from('affiliates').select('*').eq('id', affiliate.id).single(),
-    supabaseAdmin.from('affiliate_commissions').select('*').eq('affiliate_id', affiliate.id).order('created_at', { ascending: false }).limit(100),
-    supabaseAdmin.from('affiliate_payouts').select('*').eq('affiliate_id', affiliate.id).order('created_at', { ascending: false }).limit(50),
+    supabaseAdmin.from('affiliates').select(AFFILIATE_SELF_COLUMNS).eq('id', affiliate.id).single(),
+    supabaseAdmin.from('affiliate_commissions').select(COMMISSION_SELF_COLUMNS).eq('affiliate_id', affiliate.id).order('created_at', { ascending: false }).limit(100),
+    supabaseAdmin.from('affiliate_payouts').select(PAYOUT_SELF_COLUMNS).eq('affiliate_id', affiliate.id).order('created_at', { ascending: false }).limit(50),
   ]);
 
   return NextResponse.json({ affiliate: fresh, commissions: commissions || [], payouts: payouts || [] });
@@ -91,7 +99,10 @@ export async function PATCH(request: Request) {
   }
 
   const { data, error: updErr } = await supabaseAdmin
-    .from('affiliates').update(updates).eq('user_id', user.id).select().single();
-  if (updErr) return NextResponse.json({ error: updErr.message }, { status: 500 });
+    .from('affiliates').update(updates).eq('user_id', user.id).select(AFFILIATE_SELF_COLUMNS).single();
+  if (updErr) {
+    console.error('[AffiliateDashboard] update failed:', updErr.message);
+    return NextResponse.json({ error: 'Could not save your details.' }, { status: 500 });
+  }
   return NextResponse.json({ affiliate: data });
 }

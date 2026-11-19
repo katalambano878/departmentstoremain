@@ -1,66 +1,96 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+import { supabase } from '@/lib/supabase';
 
 export default function PrivacySettingsPage() {
+  const router = useRouter();
+  const [user, setUser] = useState<any>(null);
   const [exporting, setExporting] = useState(false);
+  const [exportMessage, setExportMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [deleteMessage, setDeleteMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleteConfirmText, setDeleteConfirmText] = useState('');
 
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (!session) {
+        router.replace('/auth/login?redirect=/account/privacy');
+        return;
+      }
+      setUser(session.user);
+    });
+  }, [router]);
+
   const handleExportData = async () => {
+    if (!user) return;
     setExporting(true);
-    
-    setTimeout(() => {
+    setExportMessage(null);
+    try {
+      const [profileRes, addressesRes, ordersRes] = await Promise.all([
+        supabase.from('profiles').select('email, full_name, phone, date_of_birth, gender, created_at').eq('id', user.id).maybeSingle(),
+        supabase.from('addresses').select('label, full_name, phone, address_line1, address_line2, city, state, postal_code, country, is_default, created_at').eq('user_id', user.id),
+        supabase
+          .from('orders')
+          .select('order_number, created_at, status, payment_status, subtotal, shipping_total, discount_total, total, shipping_method, shipping_address, order_items(product_name, variant_name, quantity, unit_price, total_price)')
+          .eq('user_id', user.id)
+          .order('created_at', { ascending: false }),
+      ]);
+      const failed = [profileRes, addressesRes, ordersRes].find((r) => r.error);
+      if (failed) throw failed.error;
+
       const userData = {
-        personalInfo: {
-          name: 'John Doe',
-          email: 'john@example.com',
-          phone: '+1234567890',
-          createdAt: '2024-01-15'
-        },
-        orders: [
-          { id: 'ORD-2024-001', date: '2024-03-15', total: 129.99 },
-          { id: 'ORD-2024-002', date: '2024-03-20', total: 89.99 }
-        ],
-        addresses: [
-          { type: 'Home', street: '123 Main St', city: 'New York', zip: '10001' }
-        ],
-        preferences: {
-          newsletter: true,
-          smsNotifications: false,
-          marketing: true
-        }
+        exportedAt: new Date().toISOString(),
+        account: { email: user.email, createdAt: user.created_at },
+        profile: profileRes.data || null,
+        addresses: addressesRes.data || [],
+        orders: ordersRes.data || [],
       };
 
-      const dataStr = JSON.stringify(userData, null, 2);
-      const dataBlob = new Blob([dataStr], { type: 'application/json' });
+      const dataBlob = new Blob([JSON.stringify(userData, null, 2)], { type: 'application/json' });
       const url = URL.createObjectURL(dataBlob);
       const link = document.createElement('a');
       link.href = url;
-      link.download = `my-data-export-${Date.now()}.json`;
+      link.download = `ddz-my-data-${new Date().toISOString().slice(0, 10)}.json`;
+      document.body.appendChild(link);
       link.click();
-      
+      link.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+      setExportMessage({ type: 'success', text: 'Your data file has been downloaded.' });
+    } catch (err) {
+      console.error('Data export failed:', err);
+      setExportMessage({ type: 'error', text: 'We could not prepare your data. Please try again.' });
+    } finally {
       setExporting(false);
-      alert('Your data has been downloaded successfully!');
-    }, 2000);
+    }
   };
 
   const handleDeleteAccount = async () => {
-    if (deleteConfirmText !== 'DELETE') {
-      alert('Please type DELETE to confirm');
+    if (!user || deleteConfirmText !== 'DELETE') return;
+    setDeleting(true);
+    setDeleteMessage(null);
+    const { error } = await supabase.from('support_tickets').insert({
+      user_id: user.id,
+      email: user.email,
+      subject: 'Account deletion request',
+      description: 'I would like my Discount Discovery Zone account and personal data to be deleted.',
+      category: 'account',
+    });
+    setDeleting(false);
+    if (error) {
+      console.error('Deletion request failed:', error);
+      setDeleteMessage({ type: 'error', text: 'Your request could not be sent. Please try again, or email info@discountdiscoveryzone.com.' });
       return;
     }
-
-    setDeleting(true);
-    
-    setTimeout(() => {
-      alert('Account deletion request submitted. You will receive a confirmation email within 24 hours.');
-      setShowDeleteConfirm(false);
-      setDeleteConfirmText('');
-      setDeleting(false);
-    }, 2000);
+    setShowDeleteConfirm(false);
+    setDeleteConfirmText('');
+    setDeleteMessage({
+      type: 'success',
+      text: 'Your deletion request has been sent to our team as a support ticket. Your account is not deleted yet: we will contact you to confirm before we delete it. You can follow the request under My support tickets.',
+    });
   };
 
   return (
@@ -68,7 +98,7 @@ export default function PrivacySettingsPage() {
       <div className="bg-white border-b sticky top-0 z-10">
         <div className="max-w-4xl mx-auto px-4 py-4">
           <div className="flex items-center gap-3">
-            <Link href="/account" className="w-9 h-9 flex items-center justify-center hover:bg-gray-100 rounded-lg transition-colors">
+            <Link href="/account?tab=security" aria-label="Back to my account" className="w-9 h-9 flex items-center justify-center hover:bg-gray-100 rounded-lg transition-colors">
               <i className="ri-arrow-left-line text-xl"></i>
             </Link>
             <div>
@@ -86,7 +116,7 @@ export default function PrivacySettingsPage() {
             <div>
               <h3 className="font-semibold text-emerald-900 mb-1">Your Privacy Matters</h3>
               <p className="text-sm text-emerald-800">
-                We are committed to protecting your personal information in compliance with GDPR, CCPA, and other privacy regulations.
+                You can download a copy of the personal data we hold for your account, or ask us to delete your account.
               </p>
             </div>
           </div>
@@ -101,17 +131,18 @@ export default function PrivacySettingsPage() {
                 Download Your Data
               </h3>
               <p className="text-sm text-gray-600 mb-4">
-                Get a complete copy of all your personal information, orders, and preferences in JSON format.
+                Download your profile, saved addresses and orders as a JSON file.
               </p>
               <button
+                type="button"
                 onClick={handleExportData}
-                disabled={exporting}
+                disabled={exporting || !user}
                 className="px-4 py-2 bg-black text-white rounded-lg hover:bg-gray-800 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed font-medium whitespace-nowrap"
               >
                 {exporting ? (
                   <>
                     <i className="ri-loader-4-line animate-spin mr-2"></i>
-                    Preparing Export...
+                    Preparing file…
                   </>
                 ) : (
                   <>
@@ -122,31 +153,11 @@ export default function PrivacySettingsPage() {
               </button>
             </div>
 
-            <div className="bg-gray-50 rounded-lg p-4">
-              <h3 className="font-semibold mb-2">What's Included?</h3>
-              <ul className="space-y-2 text-sm text-gray-600">
-                <li className="flex items-start gap-2">
-                  <i className="ri-check-line text-green-600 mt-0.5 flex-shrink-0"></i>
-                  <span>Personal information (name, email, phone)</span>
-                </li>
-                <li className="flex items-start gap-2">
-                  <i className="ri-check-line text-green-600 mt-0.5 flex-shrink-0"></i>
-                  <span>Order history and transaction details</span>
-                </li>
-                <li className="flex items-start gap-2">
-                  <i className="ri-check-line text-green-600 mt-0.5 flex-shrink-0"></i>
-                  <span>Saved addresses and payment methods</span>
-                </li>
-                <li className="flex items-start gap-2">
-                  <i className="ri-check-line text-green-600 mt-0.5 flex-shrink-0"></i>
-                  <span>Marketing preferences and subscriptions</span>
-                </li>
-                <li className="flex items-start gap-2">
-                  <i className="ri-check-line text-green-600 mt-0.5 flex-shrink-0"></i>
-                  <span>Wishlist and browsing history</span>
-                </li>
-              </ul>
-            </div>
+            {exportMessage && (
+              <p role={exportMessage.type === 'error' ? 'alert' : 'status'} className={`text-sm p-3 rounded-lg ${exportMessage.type === 'success' ? 'bg-emerald-50 text-emerald-800' : 'bg-red-50 text-red-700'}`}>
+                {exportMessage.text}
+              </p>
+            )}
           </div>
 
           <div className="border-t pt-6">
@@ -157,12 +168,13 @@ export default function PrivacySettingsPage() {
                 Delete Account
               </h3>
               <p className="text-sm text-red-800 mb-4">
-                Permanently delete your account and all associated data. This action cannot be undone.
+                Send us a request to delete your account. Our team handles it by hand and contacts you to confirm first. Records we must keep by law, such as paid orders, are kept.
               </p>
               
               {!showDeleteConfirm ? (
                 <button
-                  onClick={() => setShowDeleteConfirm(true)}
+                  type="button"
+                  onClick={() => { setShowDeleteConfirm(true); setDeleteMessage(null); }}
                   className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors font-medium whitespace-nowrap"
                 >
                   Request Account Deletion
@@ -170,32 +182,26 @@ export default function PrivacySettingsPage() {
               ) : (
                 <div className="space-y-4">
                   <div className="bg-white rounded-lg p-4 border border-red-300">
-                    <h4 className="font-semibold text-red-900 mb-2">⚠️ Before You Continue:</h4>
+                    <h4 className="font-semibold text-red-900 mb-2">Before you continue</h4>
                     <ul className="space-y-2 text-sm text-gray-700 mb-4">
                       <li className="flex items-start gap-2">
-                        <i className="ri-alert-line text-red-600 mt-0.5 flex-shrink-0"></i>
-                        <span>All your orders and purchase history will be deleted</span>
+                        <i className="ri-alert-line text-red-600 mt-0.5 flex-shrink-0" aria-hidden="true"></i>
+                        <span>Once deleted, you can no longer sign in or see your order history here.</span>
                       </li>
                       <li className="flex items-start gap-2">
-                        <i className="ri-alert-line text-red-600 mt-0.5 flex-shrink-0"></i>
-                        <span>Your loyalty points and rewards will be forfeited</span>
-                      </li>
-                      <li className="flex items-start gap-2">
-                        <i className="ri-alert-line text-red-600 mt-0.5 flex-shrink-0"></i>
-                        <span>Active subscriptions will be cancelled</span>
-                      </li>
-                      <li className="flex items-start gap-2">
-                        <i className="ri-alert-line text-red-600 mt-0.5 flex-shrink-0"></i>
-                        <span>This action cannot be reversed</span>
+                        <i className="ri-alert-line text-red-600 mt-0.5 flex-shrink-0" aria-hidden="true"></i>
+                        <span>Download your data first if you want to keep a copy.</span>
                       </li>
                     </ul>
 
                     <div className="mb-4">
-                      <label className="block text-sm font-medium mb-2 text-gray-900">
+                      <label htmlFor="delete-confirm" className="block text-sm font-medium mb-2 text-gray-900">
                         Type <span className="font-bold">DELETE</span> to confirm:
                       </label>
                       <input
+                        id="delete-confirm"
                         type="text"
+                        autoComplete="off"
                         value={deleteConfirmText}
                         onChange={(e) => setDeleteConfirmText(e.target.value)}
                         placeholder="DELETE"
@@ -205,6 +211,7 @@ export default function PrivacySettingsPage() {
 
                     <div className="flex gap-3">
                       <button
+                        type="button"
                         onClick={() => {
                           setShowDeleteConfirm(false);
                           setDeleteConfirmText('');
@@ -214,6 +221,7 @@ export default function PrivacySettingsPage() {
                         Cancel
                       </button>
                       <button
+                        type="button"
                         onClick={handleDeleteAccount}
                         disabled={deleteConfirmText !== 'DELETE' || deleting}
                         className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed font-medium whitespace-nowrap"
@@ -221,15 +229,21 @@ export default function PrivacySettingsPage() {
                         {deleting ? (
                           <>
                             <i className="ri-loader-4-line animate-spin mr-2"></i>
-                            Processing...
+                            Sending…
                           </>
                         ) : (
-                          'Delete My Account'
+                          'Send deletion request'
                         )}
                       </button>
                     </div>
                   </div>
                 </div>
+              )}
+              {deleteMessage && (
+                <p role={deleteMessage.type === 'error' ? 'alert' : 'status'} className={`mt-4 text-sm p-3 rounded-lg ${deleteMessage.type === 'success' ? 'bg-white text-emerald-800 border border-emerald-200' : 'bg-white text-red-700 border border-red-200'}`}>
+                  {deleteMessage.text}{' '}
+                  {deleteMessage.type === 'success' && <Link href="/support/tickets" className="font-semibold underline">My support tickets</Link>}
+                </p>
               )}
             </div>
           </div>
@@ -242,7 +256,7 @@ export default function PrivacySettingsPage() {
               <i className="ri-eye-line text-lg text-gray-400 flex-shrink-0"></i>
               <div>
                 <h3 className="font-semibold mb-1">Right to Access</h3>
-                <p className="text-gray-600">You can request and download all your personal data at any time.</p>
+                <p className="text-gray-600">You can download your profile, addresses and orders at any time.</p>
               </div>
             </div>
             <div className="flex gap-3">
@@ -256,7 +270,7 @@ export default function PrivacySettingsPage() {
               <i className="ri-delete-bin-line text-lg text-gray-400 flex-shrink-0"></i>
               <div>
                 <h3 className="font-semibold mb-1">Right to Erasure</h3>
-                <p className="text-gray-600">You can request complete deletion of your account and all data.</p>
+                <p className="text-gray-600">You can ask us to delete your account. We keep only what the law requires.</p>
               </div>
             </div>
             <div className="flex gap-3">

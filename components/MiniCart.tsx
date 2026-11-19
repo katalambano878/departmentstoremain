@@ -6,6 +6,7 @@ import { createPortal } from 'react-dom';
 import { useCart } from '@/context/CartContext';
 import { useAffiliate } from '@/context/AffiliateContext';
 import { getOptimizedImageUrl } from '@/lib/imageOptimization';
+import { round2 } from '@/lib/affiliate';
 
 interface MiniCartProps {
   isOpen: boolean;
@@ -20,7 +21,9 @@ export default function MiniCart({ isOpen, onClose }: MiniCartProps) {
   useEffect(() => setMounted(true), []);
 
   // Cart stores base prices; affiliate markup is applied for display only.
-  const subtotal = cart.reduce((sum, item) => sum + mk(item.price, item.id) * item.quantity, 0);
+  // Same rounding as checkout: round each marked-up unit price, then the sum.
+  const unitPrice = (item: { price: number; id: string }) => round2(mk(item.price, item.id));
+  const subtotal = round2(cart.reduce((sum, item) => sum + unitPrice(item) * item.quantity, 0));
   const itemCount = cart.reduce((sum, i) => sum + i.quantity, 0);
 
   // Lock body scroll when cart is open
@@ -151,7 +154,7 @@ export default function MiniCart({ isOpen, onClose }: MiniCartProps) {
                           </button>
                         </div>
                         <p className="text-sm font-semibold text-[#0B1B3A]">
-                          GH₵{(mk(item.price, item.id) * item.quantity).toFixed(2)}
+                          GH₵{round2(unitPrice(item) * item.quantity).toFixed(2)}
                         </p>
                       </div>
                       {item.quantity >= item.maxStock && (

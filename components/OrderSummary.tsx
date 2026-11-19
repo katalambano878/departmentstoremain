@@ -15,10 +15,13 @@ interface OrderSummaryProps {
   shipping: number;
   tax: number;
   total: number;
+  /** Coupon discount already taken off `total`. */
+  discount?: number;
+  couponCode?: string;
   deliveryMethod?: string;
 }
 
-export default function OrderSummary({ items, subtotal, total, deliveryMethod }: OrderSummaryProps) {
+export default function OrderSummary({ items, subtotal, total, discount = 0, couponCode, deliveryMethod }: OrderSummaryProps) {
   return (
     <div className="sticky top-24 overflow-hidden rounded-2xl border border-[#d1fae5] bg-[#ecfdf5] shadow-[0_14px_34px_-24px_rgba(11,27,58,0.5)]">
       <div className="space-y-5 p-6">
@@ -34,7 +37,7 @@ export default function OrderSummary({ items, subtotal, total, deliveryMethod }:
                   className="size-full object-cover"
                   loading="lazy"
                 />
-                <span className="absolute -right-1.5 -top-1.5 flex size-5 items-center justify-center rounded-full bg-emerald-600 text-[10px] font-bold text-white">
+                <span aria-hidden="true" className="absolute -right-1.5 -top-1.5 flex size-5 items-center justify-center rounded-full bg-emerald-600 text-[10px] font-bold text-white">
                   {item.quantity}
                 </span>
               </div>
@@ -42,7 +45,9 @@ export default function OrderSummary({ items, subtotal, total, deliveryMethod }:
                 <h3 className="line-clamp-1 text-sm font-medium text-[#0B1B3A]">{item.name}</h3>
                 {item.variant && <p className="text-[11px] text-gray-500">{item.variant}</p>}
               </div>
-              <span className="shrink-0 text-sm font-semibold text-[#0B1B3A]">GH₵{item.price.toFixed(2)}</span>
+              <span className="shrink-0 text-sm font-semibold text-[#0B1B3A]">
+                <span className="sr-only">{item.quantity} × </span>GH₵{item.price.toFixed(2)}
+              </span>
             </div>
           ))}
         </div>
@@ -54,6 +59,14 @@ export default function OrderSummary({ items, subtotal, total, deliveryMethod }:
             <span className="text-gray-500">Subtotal</span>
             <span className="font-semibold text-[#0B1B3A]">GH₵{subtotal.toFixed(2)}</span>
           </div>
+          {discount > 0 && (
+            <div className="flex justify-between text-sm">
+              <span className="text-gray-500">
+                Discount{couponCode ? <span className="ml-1 font-mono text-xs">({couponCode})</span> : null}
+              </span>
+              <span className="font-semibold text-emerald-700">− GH₵{discount.toFixed(2)}</span>
+            </div>
+          )}
           {deliveryMethod === 'pickup' ? (
             <div className="flex justify-between text-sm">
               <span className="text-gray-500">Store Pickup</span>
@@ -78,7 +91,7 @@ export default function OrderSummary({ items, subtotal, total, deliveryMethod }:
         </div>
 
         <div className="flex items-center justify-center gap-2 pt-1 text-sm font-medium text-[#0B1B3A]/80">
-          <i className="ri-shield-check-line text-emerald-700"></i>
+          <i className="ri-shield-check-line text-emerald-700" aria-hidden="true"></i>
           <span>Secure Checkout</span>
         </div>
       </div>

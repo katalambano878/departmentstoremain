@@ -7,6 +7,7 @@ import PasswordStrengthMeter from '@/components/PasswordStrengthMeter';
 import { supabase } from '@/lib/supabase';
 import { getPublicSiteUrl } from '@/lib/site-url';
 import { useRecaptcha } from '@/hooks/useRecaptcha';
+import { safeInternalPath } from '../safe-next';
 
 function getFriendlyError(message: string): string {
   const lower = message.toLowerCase();
@@ -50,6 +51,13 @@ export default function SignupPage() {
   const { getToken, verifying } = useRecaptcha();
 
   // Auto-scroll to error when it appears
+  const [redirectTo, setRedirectTo] = useState('/account');
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    setRedirectTo(safeInternalPath(params.get('redirect') || params.get('next'), '/account'));
+  }, []);
+  const loginHref = redirectTo !== '/account' ? `/auth/login?redirect=${encodeURIComponent(redirectTo)}` : '/auth/login';
+
   useEffect(() => {
     if (authError && errorRef.current) {
       errorRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -104,7 +112,7 @@ export default function SignupPage() {
         email: formData.email,
         password: formData.password,
         options: {
-          emailRedirectTo: `${getPublicSiteUrl()}/auth/callback`,
+          emailRedirectTo: `${getPublicSiteUrl()}/auth/callback${redirectTo !== '/account' ? `?next=${encodeURIComponent(redirectTo)}` : ''}`,
           data: {
             first_name: formData.firstName,
             last_name: formData.lastName,
@@ -135,7 +143,7 @@ export default function SignupPage() {
           setSuccess(true);
         } else {
           // Auto-login success (if email confirming is off)
-          router.push('/account');
+          router.push(redirectTo);
           router.refresh();
         }
       }
@@ -159,7 +167,7 @@ export default function SignupPage() {
             We've sent a confirmation link to <strong>{formData.email}</strong>.<br />
             Please check your inbox to activate your account.
           </p>
-          <Link href="/auth/login" className="inline-block bg-emerald-700 text-white px-8 py-3 rounded-lg font-semibold hover:bg-emerald-800 transition-colors">
+          <Link href={loginHref} className="inline-block bg-emerald-700 text-white px-8 py-3 rounded-lg font-semibold hover:bg-emerald-800 transition-colors">
             Back to Login
           </Link>
         </div>
@@ -373,7 +381,7 @@ export default function SignupPage() {
 
           <p className="mt-8 text-center text-gray-600">
             Already have an account?{' '}
-            <Link href="/auth/login" className="text-emerald-700 hover:text-emerald-900 font-semibold whitespace-nowrap">
+            <Link href={loginHref} className="text-emerald-700 hover:text-emerald-900 font-semibold whitespace-nowrap">
               Sign in
             </Link>
           </p>

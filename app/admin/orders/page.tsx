@@ -6,8 +6,31 @@ import { supabase } from '@/lib/supabase';
 import { fetchAllPaged } from '@/lib/supabase-paginate';
 import ProductSalesStats from './ProductSalesStats';
 import { appendOrderStatusChange, fetchCurrentStaffActor } from '@/lib/orderStatusHistory';
+import { downloadCsv, csvMoney } from '@/lib/csv';
 
 const ADMIN_ORDERS_LIST_SCROLL_KEY = 'ddz_admin_orders_list_scroll_y';
+
+/** Payment states that mean money was taken (now or before a refund). */
+const SETTLED_PAYMENT = ['paid', 'refunded', 'partially_refunded'];
+const CLOSED_STATUSES = ['cancelled', 'refunded'];
+
+/** Confirmed tab: paid (or since refunded), plus anything cancelled/refunded. */
+function isConfirmedOrder(o: { payment_status: string; status: string }) {
+  return SETTLED_PAYMENT.includes(o.payment_status) || CLOSED_STATUSES.includes(o.status);
+}
+
+/** Abandoned cart: never paid and still open. */
+function isAbandonedOrder(o: { payment_status: string; status: string }) {
+  return !isConfirmedOrder(o);
+}
+
+/** Local calendar day (YYYY-MM-DD) of a timestamp, for the date-range filter. */
+function localDay(iso: string) {
+  const d = new Date(iso);
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${d.getFullYear()}-${m}-${day}`;
+}
 
 function saveAdminOrdersListScroll() {
   try {
@@ -64,13 +87,25 @@ export default function AdminOrdersPage() {
     { label: 'Picked Up by Rider', count: 0, status: 'picked_up' },
     { label: 'Completed', count: 0, status: 'completed' },
     { label: 'Delivered', count: 0, status: 'delivered' },
-    { label: 'Cancelled', count: 0, status: 'cancelled' }
+    { label: 'Cancelled', count: 0, status: 'cancelled' },
+    { label: 'Refunded', count: 0, status: 'refunded' }
   ]);
   const [abandonedCount, setAbandonedCount] = useState(0);
   const [confirmedCount, setConfirmedCount] = useState(0);
   const [showProductStats, setShowProductStats] = useState(false);
   const [productFilter, setProductFilter] = useState('all');
   const [availableProducts, setAvailableProducts] = useState<string[]>([]);
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
+  const [paymentMethodFilter, setPaymentMethodFilter] = useState('all');
+  const [paymentStatusFilter, setPaymentStatusFilter] = useState('all');
+  const [shippingMethodFilter, setShippingMethodFilter] = useState('all');
+  const [bulkBusy, setBulkBusy] = useState(false);
+
+  // Hidden rows must never stay selected: any tab or filter change clears the selection.
+  useEffect(() => {
+    setSelectedOrders([]);
+  }, [orderViewTab, statusFilter, searchQuery, productFilter, dateFrom, dateTo, paymentMethodFilter, paymentStatusFilter, shippingMethodFilter]);
 
   useEffect(() => {
     fetchOrders();
@@ -141,9 +176,9 @@ export default function AdminOrdersPage() {
       });
       setAvailableProducts(Array.from(productNames).sort());
 
-      // Separate confirmed (paid) from abandoned (pending payment)
-      const confirmedOrders = ordersData?.filter(o => o.payment_status === 'paid') || [];
-      const abandonedOrders = ordersData?.filter(o => o.payment_status !== 'paid') || [];
+      // Confirmed = paid (or refunded / cancelled); abandoned = unpaid and still open.
+      const confirmedOrders = ordersData?.filter(isConfirmedOrder) || [];
+      const abandonedOrders = ordersData?.filter(isAbandonedOrder) || [];
       
       setConfirmedCount(confirmedOrders.length);
       setAbandonedCount(abandonedOrders.length);
@@ -157,7 +192,8 @@ export default function AdminOrdersPage() {
         { label: 'Picked Up by Rider', count: confirmedOrders.filter(o => o.status === 'picked_up').length, status: 'picked_up' },
         { label: 'Completed', count: confirmedOrders.filter(o => o.status === 'completed').length, status: 'completed' },
         { label: 'Delivered', count: confirmedOrders.filter(o => o.status === 'delivered').length, status: 'delivered' },
-        { label: 'Cancelled', count: confirmedOrders.filter(o => o.status === 'cancelled').length, status: 'cancelled' }
+        { label: 'Cancelled', count: confirmedOrders.filter(o => o.status === 'cancelled').length, status: 'cancelled' },
+        { label: 'Refunded', count: confirmedOrders.filter(o => o.status === 'refunded').length, status: 'refunded' }
       ];
       setOrderStats(stats);
 
@@ -176,6 +212,7 @@ export default function AdminOrdersPage() {
     'completed': 'bg-emerald-100 text-emerald-700 border-emerald-200',
     'delivered': 'bg-blue-100 text-blue-700 border-blue-200',
     'cancelled': 'bg-red-100 text-red-700 border-red-200',
+    'refunded': 'bg-purple-100 text-purple-700 border-purple-200',
     'awaiting_payment': 'bg-gray-100 text-gray-700 border-gray-200'
   };
 
@@ -254,14 +291,47 @@ export default function AdminOrdersPage() {
     }
   };
 
+  const ORDER_CSV_HEADERS = ['Order ID', 'Customer', 'Email', 'Phone', 'Date', 'Items', 'Total (GHS)', 'Status', 'Payment Status', 'Payment Method', 'Shipping Method'];
+  const orderCsvRow = (o: Order) => [
+    o.order_number || o.id,
+    getCustomerName(o),
+    getCustomerEmail(o),
+    o.phone || o.shipping_address?.phone || '',
+    formatDate(o.created_at),
+    getItemCount(o),
+    csvMoney(o.total),
+    o.status,
+    o.payment_status,
+    o.payment_method || '',
+    o.shipping_method || '',
+  ];
+
+  /** Selected orders that are still visible under the current tab and filters. */
+  const visibleSelected = () => {
+    const visible = new Set(filteredOrders.map((o) => o.id));
+    return orders.filter((o) => selectedOrders.includes(o.id) && visible.has(o.id));
+  };
+
+  const getAuthToken = async () => {
+    const { data: { session } } = await supabase.auth.getSession();
+    return session?.access_token;
+  };
+
   const handleBulkAction = async (action: string, newStatus?: string) => {
     if (newStatus) {
+      const targets = visibleSelected();
+      if (targets.length === 0) return;
+      setBulkBusy(true);
+      const updated: Order[] = [];
+      const skipped: string[] = [];
+      const failed: string[] = [];
       try {
         const actor = await fetchCurrentStaffActor(supabase);
-        const toUpdate = orders.filter((o) => selectedOrders.includes(o.id));
 
-        for (const o of toUpdate) {
-          if (o.status === newStatus) continue;
+        for (const o of targets) {
+          if (o.status === newStatus) { skipped.push(o.order_number); continue; }
+          // A cancelled or refunded order is not reopened by a bulk status change.
+          if (CLOSED_STATUSES.includes(o.status)) { skipped.push(o.order_number); continue; }
           const baseMeta =
             o.metadata && typeof o.metadata === 'object' && !Array.isArray(o.metadata)
               ? { ...(o.metadata as Record<string, unknown>) }
@@ -277,65 +347,116 @@ export default function AdminOrdersPage() {
             .from('orders')
             .update({ status: newStatus, metadata: nextMetadata })
             .eq('id', o.id);
-          if (upErr) throw upErr;
+          if (upErr) { failed.push(o.order_number); continue; }
+          updated.push(o);
         }
 
-        // Send Notifications with auth token
-        const { data: { session } } = await supabase.auth.getSession();
-        const authToken = session?.access_token;
-        
-        const updatedOrders = orders.filter(o => selectedOrders.includes(o.id));
-        updatedOrders.forEach(order => {
+        // Notify only the orders whose status actually changed.
+        const authToken = await getAuthToken();
+        updated.forEach(order => {
           fetch('/api/notifications', {
             method: 'POST',
-            headers: { 
+            headers: {
               'Content-Type': 'application/json',
               ...(authToken && { 'Authorization': `Bearer ${authToken}` })
             },
             body: JSON.stringify({
               type: 'order_updated',
-              payload: { order, status: newStatus }
+              payload: { order: { ...order, status: newStatus }, status: newStatus }
             })
           }).catch(err => console.error('Notification error', err));
         });
 
         await fetchOrders();
         setSelectedOrders([]);
-        alert(`${selectedOrders.length} orders updated to ${newStatus}`);
+        alert(
+          `${updated.length} order${updated.length === 1 ? '' : 's'} updated to ${formatStatus(newStatus)}.` +
+            (skipped.length ? `\n${skipped.length} skipped (already in that status, or cancelled/refunded).` : '') +
+            (failed.length ? `\n${failed.length} failed: ${failed.join(', ')}` : '')
+        );
       } catch (error) {
         console.error('Error updating orders:', error);
         alert('Failed to update orders');
+      } finally {
+        setBulkBusy(false);
       }
     } else if (action === 'Export') {
-      const ordersToExport = orders.filter(o => selectedOrders.includes(o.id));
-      const csvContent = `Order ID,Customer,Email,Date,Items,Total,Status,Payment\n${ordersToExport.map(o =>
-        `${o.order_number || o.id},${getCustomerName(o)},${getCustomerEmail(o)},${formatDate(o.created_at)},${getItemCount(o)},${o.total},${o.status},${o.payment_method || 'N/A'}`
-      ).join('\n')}`;
-      const blob = new Blob([csvContent], { type: 'text/csv' });
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = 'selected-orders.csv';
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      window.URL.revokeObjectURL(url);
+      const ordersToExport = visibleSelected();
+      downloadCsv('selected-orders.csv', ORDER_CSV_HEADERS, ordersToExport.map(orderCsvRow));
+    }
+  };
+
+  /** Bulk cancel / refund through the server route (payment status + stock in one transaction). */
+  const handleBulkCancelRefund = async (action: 'cancel' | 'refund') => {
+    const targetStatus = action === 'refund' ? 'refunded' : 'cancelled';
+    const targets = visibleSelected().filter((o) => o.status !== targetStatus && !(action === 'cancel' && o.status === 'refunded'));
+    if (targets.length === 0) {
+      alert(`None of the selected orders can be ${targetStatus}.`);
+      return;
+    }
+    const paidCount = targets.filter((o) => o.payment_status === 'paid' || o.payment_status === 'partially_refunded').length;
+    const msg = [
+      `${action === 'refund' ? 'Refund' : 'Cancel'} ${targets.length} order${targets.length === 1 ? '' : 's'}?`,
+      '',
+      action === 'refund'
+        ? `• ${paidCount} paid order${paidCount === 1 ? '' : 's'} will have payment status set to "refunded". No money is sent back automatically: refund each customer through your payment provider or in cash.`
+        : paidCount > 0
+          ? `• ${paidCount} of these are PAID. Cancelling does not mark the payment refunded; use Refund if you are returning the money.`
+          : '• None of these orders are paid.',
+      '• Items taken from stock for these orders will be put back.',
+      '• Each customer will be notified.',
+    ].join('\n');
+    if (!confirm(msg)) return;
+
+    setBulkBusy(true);
+    const done: Order[] = [];
+    const failed: string[] = [];
+    let restocked = 0;
+    try {
+      const authToken = await getAuthToken();
+      for (const o of targets) {
+        try {
+          const res = await fetch('/api/admin/orders/refund', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              ...(authToken && { Authorization: `Bearer ${authToken}` }),
+            },
+            body: JSON.stringify({ orderId: o.id, action }),
+          });
+          const body = await res.json().catch(() => ({}));
+          if (!res.ok) { failed.push(`${o.order_number} (${body?.error || res.status})`); continue; }
+          if (body?.stockRestored) restocked++;
+          if (!body?.alreadyDone) done.push(o);
+        } catch {
+          failed.push(o.order_number);
+        }
+      }
+      done.forEach((order) => {
+        fetch('/api/notifications', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(authToken && { Authorization: `Bearer ${authToken}` }),
+          },
+          body: JSON.stringify({ type: 'order_updated', payload: { order: { ...order, status: targetStatus }, status: targetStatus } }),
+        }).catch((err) => console.error('Notification error', err));
+      });
+      await fetchOrders();
+      setSelectedOrders([]);
+      alert(
+        `${done.length} order${done.length === 1 ? '' : 's'} ${targetStatus}.` +
+          (restocked ? ` Stock returned for ${restocked}.` : '') +
+          (failed.length ? `\nFailed: ${failed.join(', ')}` : '')
+      );
+    } finally {
+      setBulkBusy(false);
     }
   };
 
   const handleExportAll = () => {
-    const csvContent = `Order ID,Customer,Email,Date,Items,Total,Status,Payment\n${orders.map(o =>
-      `${o.order_number || o.id},${getCustomerName(o)},${getCustomerEmail(o)},${formatDate(o.created_at)},${getItemCount(o)},${o.total},${o.status},${o.payment_method || 'N/A'}`
-    ).join('\n')}`;
-    const blob = new Blob([csvContent], { type: 'text/csv' });
-    const url = window.URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'all-orders.csv';
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    window.URL.revokeObjectURL(url);
+    const tabName = orderViewTab === 'abandoned' ? 'abandoned-carts' : 'orders';
+    downloadCsv(`${tabName}-${new Date().toISOString().slice(0, 10)}.csv`, ORDER_CSV_HEADERS, filteredOrders.map(orderCsvRow));
   };
 
   const handlePrintInvoice = (orderId: string) => {
@@ -376,8 +497,7 @@ export default function AdminOrdersPage() {
     const orderId = (order.order_number || order.id).toLowerCase();
 
     // First filter by view tab (confirmed vs abandoned)
-    const isConfirmed = order.payment_status === 'paid';
-    const matchesViewTab = orderViewTab === 'confirmed' ? isConfirmed : !isConfirmed;
+    const matchesViewTab = orderViewTab === 'confirmed' ? isConfirmedOrder(order) : isAbandonedOrder(order);
 
     const matchesSearch = orderId.includes(searchQuery.toLowerCase()) ||
       customerName.includes(searchQuery.toLowerCase()) ||
@@ -385,7 +505,13 @@ export default function AdminOrdersPage() {
     const matchesStatus = statusFilter === 'all' || order.status === statusFilter;
     const matchesProduct = productFilter === 'all' || 
       order.order_items?.some((item: any) => item.product_name === productFilter);
-    return matchesViewTab && matchesSearch && matchesStatus && matchesProduct;
+    const day = order.created_at ? localDay(order.created_at) : '';
+    const matchesDate = (!dateFrom || day >= dateFrom) && (!dateTo || day <= dateTo);
+    const matchesPaymentMethod = paymentMethodFilter === 'all' || (order.payment_method || '') === paymentMethodFilter;
+    const matchesPaymentStatus = paymentStatusFilter === 'all' || order.payment_status === paymentStatusFilter;
+    const matchesShipping = shippingMethodFilter === 'all' || (order.shipping_method || '') === shippingMethodFilter;
+    return matchesViewTab && matchesSearch && matchesStatus && matchesProduct &&
+      matchesDate && matchesPaymentMethod && matchesPaymentStatus && matchesShipping;
   }).sort((a, b) => {
     switch (sortBy) {
       case 'total':
@@ -399,6 +525,24 @@ export default function AdminOrdersPage() {
         return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
     }
   });
+
+  const distinct = (values: (string | undefined | null)[]) =>
+    Array.from(new Set(values.filter((v): v is string => !!v))).sort();
+  const paymentMethods = distinct(orders.map((o) => o.payment_method));
+  const paymentStatuses = distinct(orders.map((o) => o.payment_status));
+  const shippingMethods = distinct(orders.map((o) => o.shipping_method));
+  const activeFilterCount =
+    (dateFrom ? 1 : 0) + (dateTo ? 1 : 0) +
+    (paymentMethodFilter !== 'all' ? 1 : 0) +
+    (paymentStatusFilter !== 'all' ? 1 : 0) +
+    (shippingMethodFilter !== 'all' ? 1 : 0);
+  const clearFilters = () => {
+    setDateFrom('');
+    setDateTo('');
+    setPaymentMethodFilter('all');
+    setPaymentStatusFilter('all');
+    setShippingMethodFilter('all');
+  };
 
   return (
     <div className="space-y-6">
@@ -420,7 +564,7 @@ export default function AdminOrdersPage() {
             className="flex-1 md:flex-none bg-blue-700 hover:bg-blue-800 text-white px-6 py-3 rounded-lg font-semibold transition-colors whitespace-nowrap cursor-pointer shadow-sm flex items-center justify-center"
           >
             <i className="ri-download-line mr-2"></i>
-            Export
+            Export ({filteredOrders.length})
           </button>
         </div>
       </div>
@@ -506,7 +650,7 @@ export default function AdminOrdersPage() {
                 className="px-4 py-3 border-2 border-gray-300 text-gray-700 rounded-lg hover:border-gray-400 transition-colors font-medium whitespace-nowrap cursor-pointer"
               >
                 <i className="ri-filter-line mr-2"></i>
-                Filters
+                Filters{activeFilterCount > 0 ? ` (${activeFilterCount})` : ''}
               </button>
               <select
                 value={productFilter}
@@ -532,57 +676,123 @@ export default function AdminOrdersPage() {
           </div>
 
           {showFilters && (
-            <div className="mt-4 p-4 bg-gray-50 rounded-lg grid md:grid-cols-3 gap-4">
+            <div className="mt-4 p-4 bg-gray-50 rounded-lg grid sm:grid-cols-2 lg:grid-cols-5 gap-4">
               <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">Date Range</label>
-                <input type="date" className="w-full px-3 py-2 border-2 border-gray-300 rounded-lg text-sm" />
+                <label className="block text-sm font-semibold text-gray-700 mb-2">From</label>
+                <input
+                  type="date"
+                  value={dateFrom}
+                  max={dateTo || undefined}
+                  onChange={(e) => setDateFrom(e.target.value)}
+                  className="w-full px-3 py-2 border-2 border-gray-300 rounded-lg text-sm"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">To</label>
+                <input
+                  type="date"
+                  value={dateTo}
+                  min={dateFrom || undefined}
+                  onChange={(e) => setDateTo(e.target.value)}
+                  className="w-full px-3 py-2 border-2 border-gray-300 rounded-lg text-sm"
+                />
               </div>
               <div>
                 <label className="block text-sm font-semibold text-gray-700 mb-2">Payment Method</label>
-                <select className="w-full px-3 py-2 pr-8 border-2 border-gray-300 rounded-lg text-sm cursor-pointer">
-                  <option>All Methods</option>
-                  <option>Moolre</option>
-                  <option>Mobile Money</option>
-                  <option>Card</option>
+                <select
+                  value={paymentMethodFilter}
+                  onChange={(e) => setPaymentMethodFilter(e.target.value)}
+                  className="w-full px-3 py-2 pr-8 border-2 border-gray-300 rounded-lg text-sm cursor-pointer"
+                >
+                  <option value="all">All Methods</option>
+                  {paymentMethods.map((m) => (
+                    <option key={m} value={m}>{m}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">Payment Status</label>
+                <select
+                  value={paymentStatusFilter}
+                  onChange={(e) => setPaymentStatusFilter(e.target.value)}
+                  className="w-full px-3 py-2 pr-8 border-2 border-gray-300 rounded-lg text-sm cursor-pointer"
+                >
+                  <option value="all">All</option>
+                  {paymentStatuses.map((m) => (
+                    <option key={m} value={m}>{m.replace(/_/g, ' ')}</option>
+                  ))}
                 </select>
               </div>
               <div>
                 <label className="block text-sm font-semibold text-gray-700 mb-2">Shipping Method</label>
-                <select className="w-full px-3 py-2 pr-8 border-2 border-gray-300 rounded-lg text-sm cursor-pointer">
-                  <option>All Methods</option>
-                  <option>Standard</option>
-                  <option>Express</option>
-                  <option>Store Pickup</option>
+                <select
+                  value={shippingMethodFilter}
+                  onChange={(e) => setShippingMethodFilter(e.target.value)}
+                  className="w-full px-3 py-2 pr-8 border-2 border-gray-300 rounded-lg text-sm cursor-pointer"
+                >
+                  <option value="all">All Methods</option>
+                  {shippingMethods.map((m) => (
+                    <option key={m} value={m}>{m}</option>
+                  ))}
                 </select>
               </div>
+              {activeFilterCount > 0 && (
+                <div className="sm:col-span-2 lg:col-span-5">
+                  <button
+                    onClick={clearFilters}
+                    className="text-sm font-medium text-blue-700 hover:text-blue-800 cursor-pointer"
+                  >
+                    Clear filters
+                  </button>
+                </div>
+              )}
             </div>
           )}
         </div>
 
         {selectedOrders.length > 0 && (
-          <div className="p-4 bg-blue-50 border-b border-blue-200 flex items-center justify-between">
+          <div className="p-4 bg-blue-50 border-b border-blue-200 flex flex-wrap gap-3 items-center justify-between">
             <p className="text-blue-800 font-semibold">
               {selectedOrders.length} order{selectedOrders.length > 1 ? 's' : ''} selected
             </p>
-            <div className="flex items-center space-x-2">
+            <div className="flex flex-wrap items-center gap-2">
               <button
+                disabled={bulkBusy}
                 onClick={() => handleBulkAction('Mark as Processing', 'processing')}
-                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors whitespace-nowrap cursor-pointer"
+                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors whitespace-nowrap cursor-pointer disabled:opacity-50"
               >
                 Mark Processing
               </button>
               <button
+                disabled={bulkBusy}
                 onClick={() => handleBulkAction('Mark as Packaged', 'shipped')}
-                className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-sm font-medium transition-colors whitespace-nowrap cursor-pointer"
+                className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-sm font-medium transition-colors whitespace-nowrap cursor-pointer disabled:opacity-50"
               >
                 Mark Packaged
               </button>
               <button
+                disabled={bulkBusy}
                 onClick={() => handleBulkAction('Mark as Picked Up by Rider', 'picked_up')}
-                className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-medium transition-colors whitespace-nowrap cursor-pointer"
+                className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-medium transition-colors whitespace-nowrap cursor-pointer disabled:opacity-50"
               >
                 Mark Picked Up
               </button>
+              <button
+                disabled={bulkBusy}
+                onClick={() => handleBulkCancelRefund('cancel')}
+                className="px-4 py-2 border-2 border-red-300 text-red-700 hover:bg-red-50 rounded-lg text-sm font-medium transition-colors whitespace-nowrap cursor-pointer disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              {orderViewTab === 'confirmed' && (
+                <button
+                  disabled={bulkBusy}
+                  onClick={() => handleBulkCancelRefund('refund')}
+                  className="px-4 py-2 border-2 border-purple-300 text-purple-700 hover:bg-purple-50 rounded-lg text-sm font-medium transition-colors whitespace-nowrap cursor-pointer disabled:opacity-50"
+                >
+                  Refund
+                </button>
+              )}
               <button
                 onClick={() => handleBulkAction('Export')}
                 className="px-4 py-2 bg-gray-700 hover:bg-gray-800 text-white rounded-lg text-sm font-medium transition-colors whitespace-nowrap cursor-pointer"
@@ -669,9 +879,9 @@ export default function AdminOrdersPage() {
                     <td className="py-4 px-4 text-sm whitespace-nowrap">
                       <div className="flex flex-col">
                         <span className="text-gray-700">{order.payment_method || 'N/A'}</span>
-                        {orderViewTab === 'abandoned' && (
-                          <span className={`text-xs mt-1 ${order.payment_status === 'failed' ? 'text-red-600' : 'text-amber-600'}`}>
-                            {order.payment_status === 'failed' ? 'Failed' : 'Pending'}
+                        {(orderViewTab === 'abandoned' || order.payment_status !== 'paid') && (
+                          <span className={`text-xs mt-1 capitalize ${order.payment_status === 'failed' ? 'text-red-600' : order.payment_status === 'refunded' || order.payment_status === 'partially_refunded' ? 'text-purple-600' : 'text-amber-600'}`}>
+                            {(order.payment_status || 'pending').replace(/_/g, ' ')}
                           </span>
                         )}
                       </div>

@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
 import { fetchAllPaged } from '@/lib/supabase-paginate';
 import { PieChart, Pie, AreaChart, Area, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+import { downloadCsv, csvMoney } from '@/lib/csv';
 
 type TimeRange = 'day' | 'week' | 'month';
 type SalesChannel = 'all' | 'website' | 'pos';
@@ -197,8 +198,9 @@ export default function AnalyticsPage() {
           .select('id, created_at, total, payment_status, metadata')
           .gte('created_at', isoStart)
           .lte('created_at', isoEnd)
+          // Real revenue: paid, and not cancelled or refunded.
           .eq('payment_status', 'paid')
-          .neq('status', 'cancelled')
+          .not('status', 'in', '(cancelled,refunded)')
           .order('created_at')
       );
 
@@ -213,24 +215,32 @@ export default function AnalyticsPage() {
       if (orders.length > 0) {
         const orderIds = orders.map(o => o.id);
         try {
-          validItems = await fetchAllPaged<any>(() =>
-            supabase
-              .from('order_items')
-              .select(`
-                quantity,
-                unit_price,
-                total_price,
-                product_id,
-                products!inner(name, category_id, categories(name))
-              `)
-              .in('order_id', orderIds)
-          );
+          // Fetch items in chunks of 150 order ids so the request URL stays short on busy periods.
+          const CHUNK = 150;
+          for (let i = 0; i < orderIds.length; i += CHUNK) {
+            const chunk = orderIds.slice(i, i + CHUNK);
+            const rows = await fetchAllPaged<any>(() =>
+              supabase
+                .from('order_items')
+                .select(`
+                  quantity,
+                  unit_price,
+                  total_price,
+                  product_id,
+                  product_name,
+                  products(name, category_id, categories(name))
+                `)
+                .in('order_id', chunk)
+                .order('id')
+            );
+            validItems.push(...rows);
+          }
         } catch (itemFetchError) {
           console.error('Error fetching order items:', itemFetchError);
         }
       }
 
-      const totalRevenue = orders.reduce((sum, o) => sum + (o.total || 0), 0);
+      const totalRevenue = orders.reduce((sum, o) => sum + Number(o.total || 0), 0);
       const totalOrders = orders.length;
       const aov = totalOrders > 0 ? totalRevenue / totalOrders : 0;
 
@@ -264,7 +274,7 @@ export default function AnalyticsPage() {
         const parts = getStoreParts(new Date(o.created_at));
         const key = ymd(Number(parts.year), Number(parts.month), Number(parts.day));
         if (salesMap[key]) {
-          salesMap[key].sales += o.total || 0;
+          salesMap[key].sales += Number(o.total || 0);
           salesMap[key].orders += 1;
         }
       });
@@ -275,18 +285,18 @@ export default function AnalyticsPage() {
       validItems.forEach(item => {
         const catName = item.products?.categories?.name || 'Uncategorized';
         if (!catMap[catName]) catMap[catName] = { name: catName, value: 0 };
-        const itemRevenue = item.total_price || (item.unit_price * item.quantity) || 0;
+        const itemRevenue = Number(item.total_price) || (Number(item.unit_price) * Number(item.quantity)) || 0;
         catMap[catName].value += itemRevenue;
       });
       setCategoryRevenue(Object.values(catMap).map((c: any) => ({ name: c.name, value: c.value })));
 
       const prodMap: Record<string, any> = {};
       validItems.forEach(item => {
-        const pName = item.products?.name || 'Unknown';
+        const pName = item.products?.name || item.product_name || 'Unknown';
         if (!prodMap[pName]) prodMap[pName] = { name: pName, revenue: 0, units: 0 };
-        const itemRevenue = item.total_price || (item.unit_price * item.quantity) || 0;
+        const itemRevenue = Number(item.total_price) || (Number(item.unit_price) * Number(item.quantity)) || 0;
         prodMap[pName].revenue += itemRevenue;
-        prodMap[pName].units += item.quantity;
+        prodMap[pName].units += Number(item.quantity) || 0;
       });
       setTopProducts(
         Object.values(prodMap)
@@ -309,16 +319,11 @@ export default function AnalyticsPage() {
   ];
 
   const exportCsv = () => {
-    const csvContent = `Date,Revenue,Orders\n${salesData.map(d => `${d.date},${d.sales},${d.orders}`).join('\n')}`;
-    const blob = new Blob([csvContent], { type: 'text/csv' });
-    const url = window.URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `analytics-${timeRange}-${channel}-${period.startYmd}.csv`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    window.URL.revokeObjectURL(url);
+    downloadCsv(
+      `analytics-${timeRange}-${channel}-${period.startYmd}.csv`,
+      ['Date', 'Revenue (GHS)', 'Orders'],
+      salesData.map(d => [d.date, csvMoney(d.sales), d.orders])
+    );
   };
 
   return (

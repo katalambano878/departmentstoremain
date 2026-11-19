@@ -5,6 +5,7 @@ import { WishlistProvider } from "@/context/WishlistContext";
 import { CMSProvider } from "@/context/CMSContext";
 import "./globals.css";
 import { PUBLIC_CONTACT_EMAIL, PUBLIC_CONTACT_PHONE } from "@/lib/brand-contact";
+import { ConsentedAnalytics } from "@/components/CookieConsent";
 
 export const viewport: Viewport = {
   width: 'device-width',
@@ -183,26 +184,6 @@ export default function RootLayout({
         />
       </head>
 
-      {/* Google Analytics */}
-      {GA_MEASUREMENT_ID && (
-        <>
-          <Script
-            src={`https://www.googletagmanager.com/gtag/js?id=${GA_MEASUREMENT_ID}`}
-            strategy="afterInteractive"
-          />
-          <Script id="google-analytics" strategy="afterInteractive">
-            {`
-              window.dataLayer = window.dataLayer || [];
-              function gtag(){dataLayer.push(arguments);}
-              gtag('js', new Date());
-              gtag('config', '${GA_MEASUREMENT_ID}', {
-                page_path: window.location.pathname,
-              });
-            `}
-          </Script>
-        </>
-      )}
-
       {/* Google reCAPTCHA v3 */}
       {RECAPTCHA_SITE_KEY && (
         <Script
@@ -224,6 +205,8 @@ export default function RootLayout({
               <div id="main-content">
                 {children}
               </div>
+              {/* Google Analytics: loaded only after the visitor accepts analytics cookies */}
+              {GA_MEASUREMENT_ID && <ConsentedAnalytics measurementId={GA_MEASUREMENT_ID} />}
             </WishlistProvider>
           </CartProvider>
         </CMSProvider>

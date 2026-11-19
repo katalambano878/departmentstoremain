@@ -13,6 +13,8 @@ export type WishlistItem = {
     badge?: string;
     inStock: boolean;
     slug: string;
+    /** True when the product has options to choose (size, colour, ...). */
+    hasVariants?: boolean;
 };
 
 type WishlistContextType = {
@@ -47,6 +49,9 @@ export function WishlistProvider({ children }: { children: ReactNode }) {
     useEffect(() => {
         if (isInitialized) {
             localStorage.setItem('wishlist', JSON.stringify(wishlist));
+            // Tell listeners (the header badge reads localStorage) only after
+            // the new list is saved, so the count is never one behind.
+            window.dispatchEvent(new Event('wishlistUpdated'));
         }
     }, [wishlist, isInitialized]);
 

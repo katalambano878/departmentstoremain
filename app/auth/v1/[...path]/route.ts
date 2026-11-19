@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import {
+  canChangePasswordWith,
   consumeEmailToken,
   createConfirmationToken,
   createRecoveryToken,
@@ -9,9 +10,11 @@ import {
   refreshSession,
   saveFlowState,
   signInWithPassword,
+  signOutEverywhere,
   signUpWithPassword,
   updateUserMetadata,
   updateUserPassword,
+  verifyAccessToken,
   type AuthFailure,
   type EmailLinkType,
   type SessionTokens,
@@ -19,7 +22,14 @@ import {
 import { isPlainPostgres } from "@/lib/db/mode";
 import { query } from "@/lib/db/pool";
 import { sendPasswordResetEmail, sendSignupConfirmationEmail } from "@/lib/auth-emails";
-import { checkRateLimit, getClientIdentifier, RATE_LIMITS } from "@/lib/rate-limit";
+import {
+  checkRateLimit,
+  clearLoginFailures,
+  getClientIdentifier,
+  loginLockRemaining,
+  RATE_LIMITS,
+  recordLoginFailure,
+} from "@/lib/rate-limit";
 import { getPublicSiteUrl } from "@/lib/site-url";
 
 // GoTrue replacement for the browser's supabase-js auth client. Covers what
@@ -201,7 +211,19 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ path: stri
       const email = String(body.email || "").trim().toLowerCase();
       const limited = rateLimited(`auth-login:${ip}`) || rateLimited(`auth-login:${email}`);
       if (limited) return limited;
+      // 10 wrong passwords for one address lock it for 15 minutes. Only
+      // failures count, and a correct password clears the count.
+      const lockedFor = loginLockRemaining(email);
+      if (lockedFor > 0) {
+        return gotrueError(
+          `Too many failed sign-in attempts. Try again in ${Math.ceil(lockedFor / 60)} minutes, or reset your password.`,
+          429,
+          "over_request_rate_limit"
+        );
+      }
       const { session, error, userId } = await signInWithPassword(email, String(body.password || ""));
+      if (error?.code === "invalid_credentials") recordLoginFailure(email);
+      else if (!error || error.code === "email_not_confirmed") clearLoginFailures(email);
       if (error?.code === "email_not_confirmed" && userId) {
         await resendConfirmation(req, userId, email, safeRedirect(req, null, "/auth/callback")).catch((e) =>
           console.error("[auth] confirmation resend failed:", e.message)
@@ -227,6 +249,8 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ path: stri
       if (limited) return limited;
       const { session, error } = await exchangeAuthCode(String(body.auth_code || ""), String(body.code_verifier || ""));
       if (error || !session) return failure(error!);
+      // Proving inbox access (reset or confirmation link) lifts a sign-in lock.
+      if (session.user.email) clearLoginFailures(session.user.email);
       return sessionResponse(session);
     }
 
@@ -236,16 +260,20 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ path: stri
   if (slug === "signup") {
     const limited = rateLimited(`auth-signup:${ip}`);
     if (limited) return limited;
-    const { user, confirmationToken, error } = await signUpWithPassword({
+    const { user, confirmationToken, flowUserId, error } = await signUpWithPassword({
       email: String(body.email || ""),
       password: String(body.password || ""),
       data: body.data || body.user_metadata || {},
     });
     if (error || !user) return failure(error!);
+    // The browser just replaced its PKCE verifier, so remember the new
+    // challenge even when no new email goes out (an email sent under a minute
+    // ago then finishes in this browser). Never for an already-confirmed
+    // address: that reply is a decoy and nothing is sent.
+    if (flowUserId && body.code_challenge) {
+      await saveFlowState(flowUserId, "signup", String(body.code_challenge), String(body.code_challenge_method || "s256"));
+    }
     if (confirmationToken) {
-      if (body.code_challenge) {
-        await saveFlowState(user.id, "signup", String(body.code_challenge), String(body.code_challenge_method || "s256"));
-      }
       const redirectTo = safeRedirect(req, sp.get("redirect_to"), "/auth/callback");
       await sendSignupConfirmationEmail(user.email, verifyLink(req, "signup", confirmationToken, redirectTo)).catch(
         (e) => console.error("[auth] confirmation email failed:", e.message)
@@ -264,10 +292,13 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ path: stri
       if (body.code_challenge) {
         await saveFlowState(recovery.userId, "recovery", String(body.code_challenge), String(body.code_challenge_method || "s256"));
       }
-      const redirectTo = safeRedirect(req, sp.get("redirect_to"), "/auth/update-password");
-      await sendPasswordResetEmail(recovery.email, verifyLink(req, "recovery", recovery.token, redirectTo)).catch((e) =>
-        console.error("[auth] reset email failed:", e.message)
-      );
+      // No token: a reset email went to this address under a minute ago.
+      if (recovery.token) {
+        const redirectTo = safeRedirect(req, sp.get("redirect_to"), "/auth/update-password");
+        await sendPasswordResetEmail(recovery.email, verifyLink(req, "recovery", recovery.token, redirectTo)).catch((e) =>
+          console.error("[auth] reset email failed:", e.message)
+        );
+      }
     }
     // Same answer whether or not the account exists.
     return NextResponse.json({}, { headers: cors() });
@@ -290,8 +321,15 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ path: stri
   }
 
   if (slug === "logout") {
-    // Sessions are stateless JWTs; the client drops its tokens. GoTrue answers
-    // 204 with no body, and supabase-js keeps the session if this errors.
+    // supabase-js signOut() defaults to scope=global: end every session of
+    // the account (all devices) by bumping its session version. "local" and
+    // "others" only drop this browser's tokens. GoTrue answers 204 with no
+    // body, and supabase-js keeps the session if this errors, so never fail.
+    const scope = sp.get("scope") || "global";
+    const token = bearer(req);
+    if (scope === "global" && token) {
+      await signOutEverywhere(token).catch((e) => console.error("[auth] global sign-out failed:", e.message));
+    }
     return new NextResponse(null, { status: 204, headers: cors() });
   }
 
@@ -312,6 +350,17 @@ export async function PUT(req: NextRequest, ctx: { params: Promise<{ path: strin
   let user = current;
 
   if (body.password !== undefined) {
+    // supabase-js sends only the new password. Require a fresh sign-in (last
+    // 15 minutes) or a session opened from a password-reset email, so a
+    // borrowed or stolen session cannot take over the account.
+    const verified = await verifyAccessToken(token);
+    if (!verified || !canChangePasswordWith(verified.payload)) {
+      return gotrueError(
+        "For your security, please sign in again before changing your password.",
+        401,
+        "reauthentication_needed"
+      );
+    }
     const res = await updateUserPassword(current.id, String(body.password));
     if (res.error || !res.user) return failure(res.error!);
     user = res.user;

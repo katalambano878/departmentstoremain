@@ -15,6 +15,7 @@ function AdminLoginForm() {
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
+  const [notice, setNotice] = useState('');
   const { getToken, verifying } = useRecaptcha();
   const { getSetting } = useCMS();
   const siteName = getSetting('site_name') || 'Discount Discovery Zone';
@@ -26,12 +27,31 @@ function AdminLoginForm() {
       setError(
         'Your account does not have admin access. Sign in with an admin, staff, or POS staff account.'
       );
+    } else if (q === 'session_expired') {
+      setNotice('Your session expired, please sign in again.');
     }
   }, [searchParams]);
+
+  // Only follow a redirect back into the dashboard: a same-site path under /admin,
+  // never a protocol-relative (//host) or absolute URL.
+  const safeRedirect = (): string => {
+    const raw = searchParams.get('redirect') || '';
+    if (!raw.startsWith('/admin') || raw.startsWith('//') || raw.includes('\\')) return '/admin';
+    if (raw.startsWith('/admin/login')) return '/admin';
+    try {
+      const url = new URL(raw, window.location.origin);
+      const inAdmin = url.pathname === '/admin' || url.pathname.startsWith('/admin/');
+      if (url.origin !== window.location.origin || !inAdmin) return '/admin';
+      return url.pathname + url.search + url.hash;
+    } catch {
+      return '/admin';
+    }
+  };
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+    setNotice('');
     setIsLoading(true);
 
     const isHuman = await getToken('admin_login');
@@ -53,7 +73,7 @@ function AdminLoginForm() {
         document.cookie = `sb-access-token=${data.session.access_token}; path=/; max-age=${60 * 60 * 24 * 7}; SameSite=Lax; Secure`;
         document.cookie = `sb-refresh-token=${data.session.refresh_token}; path=/; max-age=${60 * 60 * 24 * 30}; SameSite=Lax; Secure`;
 
-        router.push('/admin');
+        router.push(safeRedirect());
         router.refresh();
       }
     } catch (err: unknown) {
@@ -90,6 +110,13 @@ function AdminLoginForm() {
         </div>
 
         <div className="bg-white rounded-xl sm:rounded-2xl shadow-xl p-5 sm:p-8 border border-gray-100 w-full">
+          {notice && !error && (
+            <div className="mb-5 sm:mb-6 p-3 sm:p-4 bg-amber-50 border border-amber-200 rounded-lg flex items-start gap-3" role="status">
+              <i className="ri-time-line text-amber-600 text-xl mt-0.5 shrink-0" aria-hidden />
+              <p className="text-amber-800 text-sm sm:text-base min-w-0 text-left">{notice}</p>
+            </div>
+          )}
+
           {error && (
             <div className="mb-5 sm:mb-6 p-3 sm:p-4 bg-red-50 border border-red-200 rounded-lg flex items-start gap-3">
               <i className="ri-error-warning-line text-red-600 text-xl mt-0.5 shrink-0" aria-hidden />

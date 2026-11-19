@@ -46,8 +46,17 @@ export default function AffiliatePage() {
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
-    setSubmitting(true);
     setError('');
+    const momo = form.payout_number.replace(/\D/g, '');
+    if (form.payout_number.trim() && !/^0[25]\d{8}$/.test(momo) && !/^233[25]\d{8}$/.test(momo)) {
+      setError('Enter a valid mobile money number, for example 024 123 4567.');
+      return;
+    }
+    if (form.payout_number.trim() && !form.payout_provider) {
+      setError('Choose the network for your mobile money number.');
+      return;
+    }
+    setSubmitting(true);
     try {
       const res = await fetch('/api/affiliate/register', {
         method: 'POST',
@@ -130,7 +139,7 @@ export default function AffiliatePage() {
         <div className="bg-amber-50 border border-amber-200 rounded-2xl p-8 text-center">
           <i className="ri-time-line text-3xl text-amber-500 mb-3 block" />
           <h2 className="text-lg font-semibold text-gray-900">Application under review</h2>
-          <p className="text-gray-600 mt-1">We&apos;ve received your application. You&apos;ll be notified once it&apos;s approved.</p>
+          <p className="text-gray-600 mt-1">We&apos;ve received your application. Once it is approved, your link and earnings appear here and under My Account → Affiliate.</p>
         </div>
       )}
 
@@ -170,11 +179,11 @@ export default function AffiliatePage() {
             </label>
             <label className="block">
               <span className="text-sm font-medium text-gray-700">MoMo number</span>
-              <input value={form.payout_number} onChange={(e) => setForm({ ...form, payout_number: e.target.value })}
+              <input type="tel" inputMode="tel" value={form.payout_number} onChange={(e) => setForm({ ...form, payout_number: e.target.value })}
                 className="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2" placeholder="0XXXXXXXXX" />
             </label>
           </div>
-          <p className="text-xs text-gray-400">MoMo details are where we&apos;ll send your commission payouts. You can update these later.</p>
+          <p className="text-xs text-gray-400">MoMo details are where we&apos;ll send your commission payouts. You can change them later under My Account → Affiliate.</p>
           <button type="submit" disabled={submitting}
             className="w-full px-5 py-3 rounded-lg bg-gray-900 text-white font-medium hover:bg-gray-800 disabled:opacity-50">
             {submitting ? 'Submitting…' : 'Submit application'}

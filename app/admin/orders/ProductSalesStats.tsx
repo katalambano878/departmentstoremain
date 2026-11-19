@@ -67,8 +67,8 @@ export default function ProductSalesStats({ isOpen, onClose }: { isOpen: boolean
           )
         `);
 
-            // Only include paid orders (confirmed) and exclude cancelled
-            query = query.eq('orders.payment_status', 'paid').neq('orders.status', 'cancelled');
+            // Real sales only: paid, and not cancelled or refunded
+            query = query.eq('orders.payment_status', 'paid').not('orders.status', 'in', '(cancelled,refunded)');
 
             if (startDate) {
                 query = query.gte('orders.created_at', startDate);
@@ -98,13 +98,13 @@ export default function ProductSalesStats({ isOpen, onClose }: { isOpen: boolean
 
                     const entry = map.get(pid)!;
                     entry.itemsSold += (item.quantity || 0);
-                    entry.totalRevenue += (item.total_price || 0);
+                    entry.totalRevenue += Number(item.total_price || 0);
 
                     // Track variants
                     const variantName = item.variant_name || 'Default';
                     const existing = entry.variants.get(variantName) || { quantity: 0, revenue: 0 };
                     existing.quantity += (item.quantity || 0);
-                    existing.revenue += (item.total_price || 0);
+                    existing.revenue += Number(item.total_price || 0);
                     entry.variants.set(variantName, existing);
 
                     const orderId = item.orders?.id;

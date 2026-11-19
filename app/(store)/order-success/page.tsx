@@ -5,13 +5,15 @@ import { useSearchParams } from 'next/navigation';
 import { Suspense, useState, useEffect } from 'react';
 import { getOptimizedImageUrl } from '@/lib/imageOptimization';
 
+const PLACEHOLDER_IMAGE =
+  "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 150 150'><rect width='150' height='150' fill='%23f3f4f6'/><path d='M50 95l18-22 14 16 10-12 18 18z' fill='%23d1d5db'/><circle cx='60' cy='58' r='8' fill='%23d1d5db'/></svg>";
+
 function OrderSuccessContent() {
   const searchParams = useSearchParams();
   const orderNumber = searchParams.get('order');
   const paymentSuccess = searchParams.get('payment_success');
   const [order, setOrder] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-  const [showConfetti, setShowConfetti] = useState(true);
   const [verifying, setVerifying] = useState(false);
 
   useEffect(() => {
@@ -32,7 +34,9 @@ function OrderSuccessContent() {
         const { order: orderData } = await res.json();
         setOrder(orderData);
 
-        if (paymentSuccess === 'true' && orderData && orderData.payment_status !== 'paid') {
+        // Never trust the redirect alone: if the order is not marked paid yet,
+        // poll and ask the gateway before showing a confirmation.
+        if (orderData && orderData.payment_status !== 'paid' && paymentSuccess === 'true') {
           verifyPayment(orderNumber, orderData.email);
         }
       } catch (err) {
@@ -94,12 +98,17 @@ function OrderSuccessContent() {
     }
   };
 
-  if (loading) {
+  if (loading || verifying) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+      <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4" role="status" aria-live="polite">
         <div className="text-center">
-          <i className="ri-loader-4-line text-4xl text-emerald-700 animate-spin mb-4 block"></i>
-          <p className="text-gray-500">Loading order details...</p>
+          <i className="ri-loader-4-line text-4xl text-emerald-700 animate-spin mb-4 block" aria-hidden="true"></i>
+          <p className="text-gray-700 font-semibold">
+            {verifying ? 'Checking your payment…' : 'Loading order details…'}
+          </p>
+          {verifying && (
+            <p className="mt-2 text-sm text-gray-500">This can take a few seconds. Please don&apos;t close this page.</p>
+          )}
         </div>
       </div>
     );
@@ -134,40 +143,51 @@ function OrderSuccessContent() {
   const formatDeliveryDate = (d: Date) =>
     d.toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
   const estimatedDeliveryRange = `${formatDeliveryDate(deliveryEarliest)} – ${formatDeliveryDate(deliveryLatest)}`;
-  const pointsEarned = Math.floor(order.total / 10); // Example logic: 1 point per 10 currency units
+  const isPaid = order.payment_status === 'paid';
+  // Cash-style orders are confirmed without an online payment.
+  const isOfflinePayment = order.payment_method && order.payment_method !== 'hubtel' && order.payment_method !== 'moolre';
+  const isConfirmed = isPaid || (isOfflinePayment && order.payment_status !== 'failed');
+  const payLink = `/pay/${encodeURIComponent(order.order_number || order.id)}`;
 
   return (
     <main className="min-h-screen bg-gradient-to-br from-emerald-50 via-white to-emerald-50">
-      {showConfetti && (
-        <div className="fixed inset-0 pointer-events-none z-50 overflow-hidden">
-          {[...Array(50)].map((_, i) => (
-            <div
-              key={i}
-              className="absolute animate-fall"
-              style={{
-                left: `${Math.random() * 100}%`,
-                top: `-${Math.random() * 20}%`,
-                animationDelay: `${Math.random() * 3}s`,
-                animationDuration: `${3 + Math.random() * 2}s`
-              }}
-            >
-              <i className={`ri-${['heart', 'star', 'gift'][Math.floor(Math.random() * 3)]}-fill text-${['blue', 'amber', 'blue'][Math.floor(Math.random() * 3)]}-500 text-xl opacity-70`}></i>
-            </div>
-          ))}
-        </div>
-      )}
-
       <section className="py-16">
         <div className="max-w-4xl mx-auto px-4 sm:px-6">
-          <div className="bg-white rounded-2xl shadow-xl p-8 md:p-12 text-center mb-8">
-            <div className="w-24 h-24 flex items-center justify-center mx-auto mb-6 bg-emerald-100 rounded-full">
-              <i className="ri-checkbox-circle-fill text-6xl text-emerald-600"></i>
-            </div>
+          <div className="bg-white rounded-2xl shadow-xl p-6 sm:p-8 md:p-12 text-center mb-8">
+            {isConfirmed ? (
+              <>
+                <div className="w-24 h-24 flex items-center justify-center mx-auto mb-6 bg-emerald-100 rounded-full">
+                  <i className="ri-checkbox-circle-fill text-6xl text-emerald-600" aria-hidden="true"></i>
+                </div>
 
-            <h1 className="text-4xl font-bold text-gray-900 mb-4">Order Confirmed!</h1>
-            <p className="text-xl text-gray-600 mb-8">
-              Thank you for your purchase. We're processing your order now.
-            </p>
+                <h1 className="text-3xl sm:text-4xl font-bold text-gray-900 mb-4">Order Confirmed</h1>
+                <p className="text-lg sm:text-xl text-gray-600 mb-8">
+                  {isPaid
+                    ? 'Thank you. Your payment went through and we are preparing your order.'
+                    : 'Thank you. We have your order and will be in touch about payment.'}
+                </p>
+              </>
+            ) : (
+              <>
+                <div className="w-24 h-24 flex items-center justify-center mx-auto mb-6 bg-amber-100 rounded-full">
+                  <i className="ri-error-warning-fill text-6xl text-amber-600" aria-hidden="true"></i>
+                </div>
+
+                <h1 className="text-3xl sm:text-4xl font-bold text-gray-900 mb-4">Payment not completed</h1>
+                <p className="text-lg sm:text-xl text-gray-600 mb-6">
+                  {order.payment_status === 'failed'
+                    ? 'Your payment did not go through, so we have not started on this order yet.'
+                    : 'We have not received payment for this order yet. If you just paid, it can take a minute to show here.'}
+                </p>
+                <Link
+                  href={payLink}
+                  className="mb-8 inline-flex items-center justify-center rounded-lg bg-emerald-700 px-8 py-4 font-semibold text-white transition-colors hover:bg-emerald-800"
+                >
+                  <i className="ri-secure-payment-line mr-2" aria-hidden="true"></i>
+                  Complete payment
+                </Link>
+              </>
+            )}
 
             <div className="bg-emerald-50 rounded-xl p-6 mb-8">
               <div className="grid md:grid-cols-3 gap-6 text-center">
@@ -205,25 +225,13 @@ function OrderSuccessContent() {
               </Link>
             </div>
 
-            <div className="bg-gradient-to-r from-amber-50 to-orange-50 rounded-xl p-6 border-2 border-amber-200">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-4">
-                  <div className="w-12 h-12 flex items-center justify-center bg-amber-500 rounded-full">
-                    <i className="ri-star-fill text-white text-2xl"></i>
-                  </div>
-                  <div className="text-left">
-                    <p className="font-bold text-gray-900 text-lg">You Earned {pointsEarned} Points!</p>
-                    <p className="text-sm text-gray-600">Join our loyalty program to redeem.</p>
-                  </div>
-                </div>
-                <Link
-                  href="/register"
-                  className="bg-amber-500 hover:bg-amber-600 text-white px-6 py-3 rounded-lg font-semibold transition-colors whitespace-nowrap"
-                >
-                  Join Now
-                </Link>
-              </div>
-            </div>
+            <p className="text-sm text-gray-500">
+              Want to see your orders in one place?{' '}
+              <Link href="/auth/signup" className="font-semibold text-emerald-700 hover:underline">
+                Create an account
+              </Link>{' '}
+              with the same email.
+            </p>
           </div>
 
           <div className="grid md:grid-cols-2 gap-8 mb-8">
@@ -235,7 +243,7 @@ function OrderSuccessContent() {
                     <div className="w-20 h-20 bg-gray-100 rounded-lg overflow-hidden flex-shrink-0 border border-gray-200">
                       <img
                         src={getOptimizedImageUrl(
-                          item.metadata?.image || 'https://via.placeholder.com/150',
+                          item.metadata?.image || PLACEHOLDER_IMAGE,
                           { width: 160 }
                         )}
                         alt={item.product_name}
@@ -254,15 +262,21 @@ function OrderSuccessContent() {
                         </p>
                       )}
                     </div>
-                    <p className="font-bold text-gray-900">GH₵{item.unit_price.toFixed(2)}</p>
+                    <p className="font-bold text-gray-900">GH₵{Number(item.unit_price).toFixed(2)}</p>
                   </div>
                 ))}
               </div>
               <div className="border-t border-gray-200 mt-4 pt-4">
                 <div className="flex justify-between text-sm text-gray-600 mb-2">
                   <span>Subtotal</span>
-                  <span>GH₵{order.subtotal.toFixed(2)}</span>
+                  <span>GH₵{Number(order.subtotal).toFixed(2)}</span>
                 </div>
+                {Number(order.discount_total) > 0 && (
+                  <div className="flex justify-between text-sm text-emerald-700 mb-2">
+                    <span>Discount</span>
+                    <span>− GH₵{Number(order.discount_total).toFixed(2)}</span>
+                  </div>
+                )}
                 {order.shipping_method === 'pickup' ? (
                   <div className="flex justify-between text-sm text-gray-600 mb-2">
                     <span>Store Pickup</span>
@@ -281,8 +295,8 @@ function OrderSuccessContent() {
                 )}
 
                 <div className="flex justify-between text-xl font-bold text-gray-900 border-t border-gray-200 pt-2">
-                  <span>Total Paid</span>
-                  <span>GH₵{order.total.toFixed(2)}</span>
+                  <span>{isPaid ? 'Total Paid' : 'Total to Pay'}</span>
+                  <span>GH₵{Number(order.total).toFixed(2)}</span>
                 </div>
               </div>
             </div>
@@ -302,7 +316,9 @@ function OrderSuccessContent() {
                       <p className="text-sm text-gray-600 mb-1">Address</p>
                       <p className="text-gray-900">{order.shipping_address.address}</p>
                       <p className="text-gray-900">{order.shipping_address.city}, {order.shipping_address.region}</p>
-                      <p className="text-gray-900">{order.shipping_address.postalCode}</p>
+                      {order.shipping_address.postalCode && (
+                        <p className="text-gray-900">{order.shipping_address.postalCode}</p>
+                      )}
                     </div>
                     <div>
                       <p className="text-sm text-gray-600 mb-1">Phone</p>
@@ -323,14 +339,18 @@ function OrderSuccessContent() {
                     <i className="ri-mail-line text-emerald-700 mt-1"></i>
                     <div>
                       <p className="text-sm font-semibold text-gray-900">Email Confirmation</p>
-                      <p className="text-sm text-gray-600">Sent to {order.email}</p>
+                      <p className="text-sm text-gray-600">
+                        {isPaid ? `Sent to ${order.email}` : `Sent to ${order.email} once payment is received`}
+                      </p>
                     </div>
                   </div>
                   <div className="flex items-start space-x-3">
                     <i className="ri-box-3-line text-emerald-700 mt-1"></i>
                     <div>
                       <p className="text-sm font-semibold text-gray-900">Processing</p>
-                      <p className="text-sm text-gray-600">We'll pack your order today</p>
+                      <p className="text-sm text-gray-600">
+                        {isPaid ? 'We start packing once your payment is confirmed' : 'We start packing after payment'}
+                      </p>
                     </div>
                   </div>
                   <div className="flex items-start space-x-3">
@@ -352,7 +372,7 @@ function OrderSuccessContent() {
                 <i className="ri-customer-service-line mr-1"></i>
                 Contact Support
               </Link>
-              <Link href="/account/orders" className="text-emerald-700 hover:text-emerald-900 font-semibold whitespace-nowrap">
+              <Link href="/account?tab=orders" className="text-emerald-700 hover:text-emerald-900 font-semibold whitespace-nowrap">
                 <i className="ri-question-line mr-1"></i>
                 Order Help
               </Link>
@@ -364,18 +384,6 @@ function OrderSuccessContent() {
           </div>
         </div>
       </section>
-
-      <style jsx>{`
-        @keyframes fall {
-          to {
-            transform: translateY(100vh) rotate(360deg);
-            opacity: 0;
-          }
-        }
-        .animate-fall {
-          animation: fall linear forwards;
-        }
-      `}</style>
     </main>
   );
 }

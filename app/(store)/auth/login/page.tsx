@@ -5,14 +5,16 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import { useRecaptcha } from '@/hooks/useRecaptcha';
+import { safeInternalPath } from '../safe-next';
 
 export default function LoginPage() {
   const router = useRouter();
   const [formData, setFormData] = useState({
     email: '',
     password: '',
-    rememberMe: false
   });
+  const [redirectTo, setRedirectTo] = useState('/account');
+  const [passwordChanged, setPasswordChanged] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [errors, setErrors] = useState<any>({});
   const [isLoading, setIsLoading] = useState(false);
@@ -30,6 +32,10 @@ export default function LoginPage() {
     if (params.get('confirmed') === '1') {
       setEmailConfirmed(true);
     }
+    if (params.get('changed') === '1') {
+      setPasswordChanged(true);
+    }
+    setRedirectTo(safeInternalPath(params.get('redirect') || params.get('next'), '/account'));
   }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -74,12 +80,13 @@ export default function LoginPage() {
       }
 
       if (data.session) {
-        router.push('/account');
+        router.push(redirectTo);
         router.refresh(); // Refresh to update auth state in other components
       }
     } catch (error: any) {
       console.error('Login error:', error);
-      setAuthError(error.message || 'Failed to sign in. Please check your credentials.');
+      // Show the server's message (wrong password, too many attempts, …).
+      setAuthError(error?.message || 'The request could not be completed.');
     } finally {
       setIsLoading(false);
     }
@@ -99,24 +106,31 @@ export default function LoginPage() {
               Your password was updated. Sign in with your new password.
             </div>
           )}
+          {passwordChanged && (
+            <div role="status" className="mb-4 p-4 bg-green-50 border border-green-200 text-green-800 rounded-lg text-sm">
+              Password changed. Please sign in with your new password.
+            </div>
+          )}
           {emailConfirmed && (
             <div className="mb-4 p-4 bg-green-50 border border-green-200 text-green-800 rounded-lg text-sm">
               Your email is confirmed. Sign in to continue.
             </div>
           )}
           {authError && (
-            <div className="mb-4 p-4 bg-red-50 border border-red-200 text-red-700 rounded-lg text-sm">
+            <div role="alert" className="mb-4 p-4 bg-red-50 border border-red-200 text-red-700 rounded-lg text-sm">
               {authError}
             </div>
           )}
 
           <form onSubmit={handleSubmit} className="space-y-6">
             <div>
-              <label className="block text-sm font-semibold text-gray-900 mb-2">
+              <label htmlFor="login-email" className="block text-sm font-semibold text-gray-900 mb-2">
                 Email Address
               </label>
               <input
+                id="login-email"
                 type="email"
+                autoComplete="email"
                 value={formData.email}
                 onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                 className={`w-full px-4 py-3 border-2 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 ${errors.email ? 'border-red-500' : 'border-gray-300'
@@ -129,11 +143,13 @@ export default function LoginPage() {
             </div>
 
             <div>
-              <label className="block text-sm font-semibold text-gray-900 mb-2">
+              <label htmlFor="login-password" className="block text-sm font-semibold text-gray-900 mb-2">
                 Password
               </label>
               <div className="relative">
                 <input
+                  id="login-password"
+                  autoComplete="current-password"
                   type={showPassword ? 'text' : 'password'}
                   value={formData.password}
                   onChange={(e) => setFormData({ ...formData, password: e.target.value })}
@@ -144,6 +160,7 @@ export default function LoginPage() {
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
+                  aria-label={showPassword ? 'Hide password' : 'Show password'}
                   className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
                 >
                   <i className={`${showPassword ? 'ri-eye-off-line' : 'ri-eye-line'} text-xl`}></i>
@@ -154,16 +171,7 @@ export default function LoginPage() {
               )}
             </div>
 
-            <div className="flex items-center justify-between">
-              <label className="flex items-center space-x-2 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={formData.rememberMe}
-                  onChange={(e) => setFormData({ ...formData, rememberMe: e.target.checked })}
-                  className="w-4 h-4 text-emerald-600 rounded focus:ring-emerald-500"
-                />
-                <span className="text-sm text-gray-700">Remember me</span>
-              </label>
+            <div className="flex items-center justify-end">
               <Link href="/auth/forgot-password" className="text-sm text-emerald-700 hover:text-emerald-900 font-medium whitespace-nowrap">
                 Forgot password?
               </Link>
@@ -182,37 +190,9 @@ export default function LoginPage() {
             </button>
           </form>
 
-          <div className="mt-6">
-            <div className="relative">
-              <div className="absolute inset-0 flex items-center">
-                <div className="w-full border-t border-gray-300"></div>
-              </div>
-              <div className="relative flex justify-center text-sm">
-                <span className="px-4 bg-white text-gray-500">Or continue with</span>
-              </div>
-            </div>
-
-            <div className="mt-6 grid grid-cols-2 gap-4">
-              <button
-                disabled
-                className="flex items-center justify-center space-x-2 border-2 border-gray-200 bg-gray-50 py-3 rounded-lg cursor-not-allowed opacity-60"
-              >
-                <i className="ri-google-fill text-xl text-red-600 grayscale opacity-50"></i>
-                <span className="font-medium text-gray-400">Google</span>
-              </button>
-              <button
-                disabled
-                className="flex items-center justify-center space-x-2 border-2 border-gray-200 bg-gray-50 py-3 rounded-lg cursor-not-allowed opacity-60"
-              >
-                <i className="ri-facebook-fill text-xl text-emerald-600 grayscale opacity-50"></i>
-                <span className="font-medium text-gray-400">Facebook</span>
-              </button>
-            </div>
-          </div>
-
           <p className="mt-8 text-center text-gray-600">
             Don't have an account?{' '}
-            <Link href="/auth/signup" className="text-emerald-700 hover:text-emerald-900 font-semibold whitespace-nowrap">
+            <Link href={redirectTo !== '/account' ? `/auth/signup?redirect=${encodeURIComponent(redirectTo)}` : '/auth/signup'} className="text-emerald-700 hover:text-emerald-900 font-semibold whitespace-nowrap">
               Create one now
             </Link>
           </p>

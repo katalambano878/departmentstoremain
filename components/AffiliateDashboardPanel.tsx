@@ -34,6 +34,10 @@ export default function AffiliateDashboardPanel() {
   const [payouts, setPayouts] = useState<AffiliatePayout[]>([]);
   const [origin, setOrigin] = useState('');
   const [copied, setCopied] = useState(false);
+  const [editingPayout, setEditingPayout] = useState(false);
+  const [payoutForm, setPayoutForm] = useState({ payout_provider: '', payout_number: '', payout_name: '' });
+  const [payoutSaving, setPayoutSaving] = useState(false);
+  const [payoutMessage, setPayoutMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   const authHeaders = useCallback(async (): Promise<HeadersInit> => {
     const { data: { session } } = await supabase.auth.getSession();
@@ -68,7 +72,7 @@ export default function AffiliateDashboardPanel() {
         </div>
         <h3 className="text-lg font-bold text-gray-900 mb-1">Earn with every share</h3>
         <p className="text-gray-500 mb-6 max-w-md mx-auto">
-          Become an affiliate to get your own link, set custom markups (even per product), and earn commission paid straight to your MoMo.
+          Become an affiliate to get your own link, set custom markups (even per product), and earn commission paid to your mobile money.
         </p>
         <Link
           href="/affiliate"
@@ -83,12 +87,67 @@ export default function AffiliateDashboardPanel() {
 
   const refLink = `${origin}/?ref=${affiliate.code}`;
 
+  const startPayoutEdit = () => {
+    setPayoutForm({
+      payout_provider: affiliate.payout_provider || '',
+      payout_number: affiliate.payout_number || '',
+      payout_name: affiliate.payout_name || '',
+    });
+    setPayoutMessage(null);
+    setEditingPayout(true);
+  };
+
+  const savePayout = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setPayoutMessage(null);
+    const digits = payoutForm.payout_number.replace(/\D/g, '');
+    if (!/^0[25]\d{8}$/.test(digits) && !/^233[25]\d{8}$/.test(digits)) {
+      setPayoutMessage({ type: 'error', text: 'Enter a valid mobile money number, for example 024 123 4567.' });
+      return;
+    }
+    if (!payoutForm.payout_provider) {
+      setPayoutMessage({ type: 'error', text: 'Choose the mobile money network.' });
+      return;
+    }
+    setPayoutSaving(true);
+    try {
+      const res = await fetch('/api/affiliate/dashboard', {
+        method: 'PATCH',
+        headers: await authHeaders(),
+        credentials: 'include',
+        body: JSON.stringify({
+          payout_provider: payoutForm.payout_provider,
+          payout_number: payoutForm.payout_number.trim(),
+          payout_name: payoutForm.payout_name.trim(),
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setPayoutMessage({ type: 'error', text: data.error || 'Your payout details could not be saved.' });
+        return;
+      }
+      setAffiliate((a) => (a ? { ...a, ...(data.affiliate || {}), payout_provider: payoutForm.payout_provider, payout_number: payoutForm.payout_number.trim(), payout_name: payoutForm.payout_name.trim() } : a));
+      setEditingPayout(false);
+      setPayoutMessage({ type: 'success', text: 'Payout details saved.' });
+    } catch {
+      setPayoutMessage({ type: 'error', text: 'Network error. Please try again.' });
+    } finally {
+      setPayoutSaving(false);
+    }
+  };
+
+  const STATUS_NOTICE: Record<string, string> = {
+    pending: 'Your application is being reviewed. You can start earning once it is approved.',
+    suspended: 'Your affiliate account is suspended, so new orders through your link do not earn commission. Please contact us for details.',
+    rejected: 'Your application was not approved, so orders through your link do not earn commission. Please contact us if you have questions.',
+  };
+
   return (
     <div>
       {affiliate.status !== 'active' && (
-        <div className="mb-6 p-4 rounded-xl bg-[#FFFFCC] text-[#996633] text-sm flex items-center gap-2">
-          <i className="ri-time-line" />
-          Your application is <span className="font-semibold">{affiliate.status}</span>. You'll be able to earn once it's approved.
+        <div role="status" className={`mb-6 p-4 rounded-xl text-sm flex items-start gap-2 ${affiliate.status === 'pending' ? 'bg-[#FFFFCC] text-[#996633]' : 'bg-red-50 text-red-800'}`}>
+          <i className={`${affiliate.status === 'pending' ? 'ri-time-line' : 'ri-error-warning-line'} mt-0.5`} aria-hidden="true" />
+          <span>{STATUS_NOTICE[affiliate.status] || 'Your affiliate account is not active.'}</span>
         </div>
       )}
 
@@ -98,8 +157,9 @@ export default function AffiliateDashboardPanel() {
           <span className="text-2xl font-bold">{affiliate.commission_pct}%</span>
         </div>
         <div className="flex gap-2">
-          <input readOnly value={refLink} className="flex-1 bg-white/10 rounded-lg px-3 py-2 text-sm" />
+          <input readOnly aria-label="Your referral link" value={refLink} className="flex-1 bg-white/10 rounded-lg px-3 py-2 text-sm" />
           <button
+            type="button"
             onClick={() => { navigator.clipboard.writeText(refLink); setCopied(true); setTimeout(() => setCopied(false), 1500); }}
             className="px-4 py-2 rounded-lg bg-white text-gray-900 text-sm font-medium hover:bg-gray-100 whitespace-nowrap"
           >{copied ? 'Copied!' : 'Copy link'}</button>
@@ -118,6 +178,68 @@ export default function AffiliateDashboardPanel() {
         <AffiliatePricingManager
           onDefaultChange={(pct) => setAffiliate((a) => (a ? { ...a, commission_pct: pct } : a))}
         />
+      </div>
+
+      <h2 className="text-lg font-semibold text-gray-900 mb-3">Payout details</h2>
+      <div className="bg-white border border-gray-200 rounded-xl p-4 mb-8">
+        {payoutMessage && (
+          <p role={payoutMessage.type === 'error' ? 'alert' : 'status'} className={`mb-3 text-sm ${payoutMessage.type === 'error' ? 'text-red-600' : 'text-green-700'}`}>
+            {payoutMessage.text}
+          </p>
+        )}
+        {!editingPayout ? (
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <p className="text-sm text-gray-700">
+              {affiliate.payout_number
+                ? <>Mobile money: <span className="font-semibold">{affiliate.payout_provider || '—'} {affiliate.payout_number}</span>{affiliate.payout_name ? ` (${affiliate.payout_name})` : ''}</>
+                : 'No mobile money number yet. Add one so we can pay your commission.'}
+            </p>
+            <button type="button" onClick={startPayoutEdit} className="px-4 py-2 rounded-lg border border-gray-300 text-sm font-medium hover:bg-gray-50">
+              {affiliate.payout_number ? 'Change' : 'Add'}
+            </button>
+          </div>
+        ) : (
+          <form onSubmit={savePayout} className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <label className="block">
+              <span className="text-sm font-medium text-gray-700">Network</span>
+              <select
+                value={payoutForm.payout_provider}
+                onChange={(e) => setPayoutForm({ ...payoutForm, payout_provider: e.target.value })}
+                className="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2 bg-white"
+              >
+                <option value="">Select…</option>
+                {['MTN', 'Vodafone', 'AirtelTigo'].map((p) => <option key={p} value={p}>{p}</option>)}
+              </select>
+            </label>
+            <label className="block">
+              <span className="text-sm font-medium text-gray-700">MoMo number</span>
+              <input
+                type="tel"
+                inputMode="tel"
+                value={payoutForm.payout_number}
+                onChange={(e) => setPayoutForm({ ...payoutForm, payout_number: e.target.value })}
+                className="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2"
+                placeholder="024 123 4567"
+              />
+            </label>
+            <label className="block">
+              <span className="text-sm font-medium text-gray-700">Name on the wallet</span>
+              <input
+                value={payoutForm.payout_name}
+                onChange={(e) => setPayoutForm({ ...payoutForm, payout_name: e.target.value })}
+                className="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2"
+              />
+            </label>
+            <div className="sm:col-span-3 flex gap-2">
+              <button type="submit" disabled={payoutSaving} className="px-5 py-2 rounded-lg bg-gray-900 text-white text-sm font-medium hover:bg-gray-800 disabled:opacity-50">
+                {payoutSaving ? 'Saving…' : 'Save'}
+              </button>
+              <button type="button" onClick={() => setEditingPayout(false)} className="px-5 py-2 rounded-lg border border-gray-300 text-sm font-medium hover:bg-gray-50">
+                Cancel
+              </button>
+            </div>
+          </form>
+        )}
       </div>
 
       <h2 className="text-lg font-semibold text-gray-900 mb-3">Commissions</h2>

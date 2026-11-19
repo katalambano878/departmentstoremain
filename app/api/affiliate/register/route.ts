@@ -27,6 +27,10 @@ function getAccessToken(request: Request): string | null {
 }
 
 // GET — return the current user's affiliate record (or null)
+// Columns an affiliate may see about themselves (never the admin `notes`).
+const AFFILIATE_SELF_COLUMNS =
+  'id, user_id, code, status, commission_pct, pending_commission_pct, commission_requested_at, full_name, email, phone, payout_method, payout_number, payout_provider, payout_name, total_earned, total_paid, balance_pending, balance_available, approved_at, created_at, updated_at';
+
 export async function GET(request: Request) {
   const token = getAccessToken(request);
   if (!token) return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
@@ -35,7 +39,7 @@ export async function GET(request: Request) {
 
   const { data } = await supabaseAdmin
     .from('affiliates')
-    .select('*')
+    .select(AFFILIATE_SELF_COLUMNS)
     .eq('user_id', user.id)
     .maybeSingle();
 
@@ -111,9 +115,12 @@ export async function POST(request: Request) {
       payout_provider: payout_provider || null,
       payout_name: payout_name || null,
     })
-    .select()
+    .select(AFFILIATE_SELF_COLUMNS)
     .single();
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  if (error) {
+    console.error('[AffiliateRegister] insert failed:', error.message);
+    return NextResponse.json({ error: 'Could not submit your application. Please try again.' }, { status: 500 });
+  }
   return NextResponse.json({ affiliate: data, message: 'Application received! We will review it shortly.' });
 }

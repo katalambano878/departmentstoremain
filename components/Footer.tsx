@@ -67,8 +67,8 @@ export default function Footer() {
                 <ul className="space-y-3 text-emerald-100/60 text-sm">
                   <li><Link href="/shop" className="hover:text-emerald-300 transition-colors">All Products</Link></li>
                   <li><Link href="/categories" className="hover:text-emerald-300 transition-colors">Collections</Link></li>
-                  <li><Link href="/shop?sort=newest" className="hover:text-emerald-300 transition-colors">New Arrivals</Link></li>
-                  <li><Link href="/shop?sort=bestsellers" className="hover:text-emerald-300 transition-colors">Best Sellers</Link></li>
+                  <li><Link href="/shop?sort=new" className="hover:text-emerald-300 transition-colors">New Arrivals</Link></li>
+                  <li><Link href="/sale" className="hover:text-emerald-300 transition-colors">On Sale</Link></li>
                 </ul>
               </div>
 
@@ -78,7 +78,9 @@ export default function Footer() {
                   <li><Link href="/contact" className="hover:text-emerald-300 transition-colors">Contact Us</Link></li>
                   <li><Link href="/order-tracking" className="hover:text-emerald-300 transition-colors">Track Order</Link></li>
                   <li><Link href="/shipping" className="hover:text-emerald-300 transition-colors">Shipping & Delivery</Link></li>
-                  <li><Link href="/returns" className="hover:text-emerald-300 transition-colors">Returns & Exchange</Link></li>
+                  <li><Link href="/returns" className="hover:text-emerald-300 transition-colors">Returns</Link></li>
+                  <li><Link href="/help" className="hover:text-emerald-300 transition-colors">Help Centre</Link></li>
+                  <li><Link href="/faqs" className="hover:text-emerald-300 transition-colors">FAQs</Link></li>
                 </ul>
               </div>
 
@@ -101,10 +103,13 @@ export default function Footer() {
               &copy; {new Date().getFullYear()} {siteName}. All rights reserved. · Powered by{' '}
               <a href="https://doctorbarns.com" target="_blank" rel="noopener" className="hover:text-emerald-400 hover:underline transition-colors">Doctor Barns Tech</a>
             </p>
-            <div className="flex gap-4 opacity-40">
-              <i className="ri-visa-line text-2xl"></i>
-              <i className="ri-mastercard-line text-2xl"></i>
-              <i className="ri-paypal-line text-2xl"></i>
+            <div className="flex items-center gap-3">
+              <span>Pay with mobile money or card through Hubtel</span>
+              <span className="flex gap-3 opacity-60" aria-hidden="true">
+                <i className="ri-smartphone-line text-2xl"></i>
+                <i className="ri-visa-line text-2xl"></i>
+                <i className="ri-mastercard-line text-2xl"></i>
+              </span>
             </div>
           </div>
         </div>

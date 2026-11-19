@@ -154,6 +154,33 @@ export function listEmbedEdges(table: string, sel: string): Array<[string, strin
   return edges;
 }
 
+/** The tables a select string reads, keyed by the property each embed lands on. */
+export interface SelectTree {
+  table: string;
+  embeds: Array<{ alias: string; node: SelectTree }>;
+}
+
+/**
+ * Resolve a select string into the tables it reads, the same way the query
+ * builder resolves embeds at run time (an fk-column embed takes the owning
+ * table's own FK edge). The REST route uses it to validate embedded table
+ * names and to strip staff-only columns from embedded rows.
+ */
+export function describeSelect(table: string, sel: string): SelectTree {
+  const build = (owner: string, parsed: ParsedSelect): SelectTree => ({
+    table: owner,
+    embeds: parsed.embeds.map((e) => {
+      let embedTable = e.table;
+      if (e.fkColumn) {
+        const own = (FK_MAP[owner] || []).find((x) => x.column === e.fkColumn);
+        if (own) embedTable = own.foreignTable;
+      }
+      return { alias: e.alias, node: build(embedTable, e.select) };
+    }),
+  });
+  return build(table, parseSelect(sel || "*"));
+}
+
 // ---- select-string parser (handles nested embeds with parentheses) ---------
 function parseSelect(sel: string): ParsedSelect {
   const result: ParsedSelect = { columns: [], star: false, embeds: [] };
@@ -435,6 +462,20 @@ export class QueryBuilder implements PromiseLike<{ data: any; error: any; count:
   range(from: number, to: number) {
     this.rangeFrom = toNonNegativeInt(from, "range start");
     this.rangeTo = toNonNegativeInt(to, "range end");
+    return this;
+  }
+  /**
+   * Cap the rows a read returns, like PostgREST's `max-rows` (1000 on hosted
+   * Supabase): a smaller `.limit()` / `.range()` still wins, a larger one is
+   * cut to `max` rows starting at the same offset.
+   */
+  capRows(max: number) {
+    const cap = toNonNegativeInt(max, "row cap");
+    if (this.rangeFrom !== null && this.rangeTo !== null) {
+      if (this.rangeTo - this.rangeFrom + 1 > cap) this.rangeTo = this.rangeFrom + cap - 1;
+    } else if (this.limitN === null || this.limitN > cap) {
+      this.limitN = cap;
+    }
     return this;
   }
   /** Server-only: AND a trusted SQL fragment (`?` placeholders) into WHERE. */
@@ -1059,6 +1100,11 @@ function normalizeValue(v: any, table?: string, column?: string): any {
   return v;
 }
 
+export interface RpcOptions {
+  /** Cap the rows a set-returning function answers with (PostgREST `max-rows`). */
+  maxRows?: number;
+}
+
 interface FunctionShape {
   returnsSet: boolean;
   returnsVoid: boolean;
@@ -1095,7 +1141,8 @@ async function functionShape(fn: string): Promise<FunctionShape> {
 
 async function callRpc(
   fn: string,
-  args: Record<string, any> = {}
+  args: Record<string, any> = {},
+  opts?: RpcOptions
 ): Promise<{ data: any; error: any }> {
   if (!PG_IDENT.test(fn)) {
     return { data: null, error: { message: `Unsafe function name: ${fn}` } };
@@ -1120,7 +1167,11 @@ async function callRpc(
     const call = `public.${ident(fn)}(${parts.join(", ")})`;
     if (shape.returnsSet) {
       // RETURNS TABLE / SETOF: PostgREST answers with an array of rows.
-      const res = await pool.query(`SELECT * FROM ${call}`, params);
+      const cap =
+        opts?.maxRows !== undefined && Number.isInteger(opts.maxRows) && opts.maxRows >= 0
+          ? ` LIMIT ${opts.maxRows}`
+          : "";
+      const res = await pool.query(`SELECT * FROM ${call}${cap}`, params);
       return { data: res.rows, error: null };
     }
     const res = await pool.query(`SELECT ${call} AS result`, params);
@@ -1235,7 +1286,7 @@ export interface SupabaseCompatClient {
   from(table: string): QueryBuilder;
   storage: StorageClient;
   auth: ReturnType<typeof createAuthApi>;
-  rpc(fn: string, args?: Record<string, any>): Promise<{ data: any; error: any }>;
+  rpc(fn: string, args?: Record<string, any>, opts?: RpcOptions): Promise<{ data: any; error: any }>;
 }
 
 /**
@@ -1256,15 +1307,15 @@ export function createClient(opts?: { role?: DbRole; auditActor?: AuditActorReso
     storage: createStorageClient(),
     auth: createAuthApi(),
     rpc: runAs
-      ? (fn, args) =>
-          withRequestRole({ role: runAs }, () => callRpc(fn, args)).catch((e) => ({
+      ? (fn, args, rpcOpts) =>
+          withRequestRole({ role: runAs }, () => callRpc(fn, args, rpcOpts)).catch((e) => ({
             data: null,
             error: pgError(e),
           }))
-      : async (fn, args) => {
+      : async (fn, args, rpcOpts) => {
           const actor = await resolveAuditActor(auditActor);
-          if (!actor) return callRpc(fn, args);
-          return withAuditActor(actor, () => callRpc(fn, args)).catch((e) => ({ data: null, error: pgError(e) }));
+          if (!actor) return callRpc(fn, args, rpcOpts);
+          return withAuditActor(actor, () => callRpc(fn, args, rpcOpts)).catch((e) => ({ data: null, error: pgError(e) }));
         },
   };
 }
@@ -1359,8 +1410,23 @@ function coerce(v: string): any {
   if (v === "true") return true;
   if (v === "false") return false;
   if (v === "null") return null;
-  if (/^-?\d+(\.\d+)?$/.test(v)) return Number(v);
+  if (/^-?\d+(\.\d+)?$/.test(v) && looksLikePlainNumber(v)) return Number(v);
   // strip optional double-quotes used by PostgREST
   if (v.startsWith('"') && v.endsWith('"')) return v.slice(1, -1);
   return v;
+}
+
+/**
+ * Whether a digit string is a number rather than an identifier that happens
+ * to be digits: phone numbers (0241234567), codes with leading zeros and
+ * long barcodes must stay strings, or `eq`/`in` on text columns compare
+ * against "241234567" and match nothing. ("+233..." never reaches here: it is
+ * not all digits, so it already stays a string.)
+ */
+function looksLikePlainNumber(v: string): boolean {
+  const unsigned = v.startsWith("-") ? v.slice(1) : v;
+  const intPart = unsigned.split(".")[0];
+  if (intPart.length > 1 && intPart.startsWith("0")) return false; // "0241..." (but "0" and "0.5" are numbers)
+  if (unsigned.replace(".", "").length > 15) return false; // beyond exact double precision
+  return true;
 }

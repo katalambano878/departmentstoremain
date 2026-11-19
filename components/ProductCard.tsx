@@ -1,6 +1,5 @@
 'use client';
 
-import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import LazyImage from './LazyImage';
 import { useCart } from '@/context/CartContext';
@@ -80,17 +79,14 @@ export default function ProductCard({
   const { addToCart } = useCart();
   const { mk } = useAffiliate();
   const { addToWishlist, removeFromWishlist, isInWishlist } = useWishlist();
-  const [activeColor, setActiveColor] = useState<string | null>(null);
-  const [wished, setWished] = useState(false);
+  const wished = isInWishlist(id);
 
   const displayPrice = hasVariants && minVariantPrice ? minVariantPrice : price;
-  const discount = originalPrice ? Math.round((1 - displayPrice / originalPrice) * 100) : 0;
+  // Only treat it as a sale when the "was" price is really higher.
+  const hasComparePrice = typeof originalPrice === 'number' && originalPrice > displayPrice;
+  const discount = hasComparePrice ? Math.round((1 - displayPrice / (originalPrice as number)) * 100) : 0;
   const onSale = discount > 0;
   const MAX_SWATCHES = 5;
-
-  useEffect(() => {
-    setWished(isInWishlist(id));
-  }, [id, isInWishlist]);
 
   // Affiliate markup is display-only; the cart always stores the base price so
   // the order is re-priced authoritatively server-side at checkout.
@@ -99,15 +95,11 @@ export default function ProductCard({
   const toggleWishlist = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    if (isInWishlist(id)) {
+    if (wished) {
       removeFromWishlist(id);
-      setWished(false);
     } else {
-      addToWishlist({ id, name, price: displayPrice, originalPrice, image, rating, reviewCount, badge, inStock, slug });
-      setWished(true);
+      addToWishlist({ id, name, price: displayPrice, originalPrice, image, rating, reviewCount, badge, inStock, slug, hasVariants });
     }
-    // Keep the header badge (which reads localStorage) in sync in the same tab.
-    window.dispatchEvent(new Event('wishlistUpdated'));
   };
 
   const roundedRating = Math.max(0, Math.min(5, Math.round(rating)));
@@ -151,9 +143,10 @@ export default function ProductCard({
         className={`absolute top-3 right-3 z-10 flex size-9 items-center justify-center rounded-full bg-white/95 shadow-md ring-1 ring-black/[0.04] backdrop-blur-sm transition-all duration-200 hover:scale-110 hover:shadow-lg ${
           wished ? 'text-emerald-600' : 'text-[#0B1B3A] hover:text-emerald-600'
         }`}
-        aria-label={wished ? 'Remove from wishlist' : 'Add to wishlist'}
+        aria-label={wished ? `Remove ${name} from wishlist` : `Add ${name} to wishlist`}
+        aria-pressed={wished}
       >
-        <i className={`${wished ? 'ri-heart-fill' : 'ri-heart-line'} text-base transition-transform duration-200 group-hover:scale-105`}></i>
+        <i className={`${wished ? 'ri-heart-fill' : 'ri-heart-line'} text-base transition-transform duration-200 group-hover:scale-105`} aria-hidden="true"></i>
       </button>
 
       <div className="mt-3.5 flex flex-1 flex-col px-0.5">
@@ -178,27 +171,24 @@ export default function ProductCard({
         )}
 
         {colorVariants.length > 0 && (
-          <div className="mt-2 flex items-center gap-1.5">
+          <Link
+            href={`/product/${slug}`}
+            className="mt-2 flex w-fit items-center gap-1.5 rounded-full"
+            aria-label={`See ${name} in ${colorVariants.map((c) => c.name).join(', ')}`}
+          >
             {colorVariants.slice(0, MAX_SWATCHES).map((color) => (
-              <button
+              <span
                 key={color.name}
                 title={color.name}
-                onClick={(e) => {
-                  e.preventDefault();
-                  setActiveColor(activeColor === color.name ? null : color.name);
-                }}
-                className={`h-[18px] w-[18px] rounded-full border transition-all duration-200 flex-shrink-0 ${
-                  activeColor === color.name
-                    ? 'ring-2 ring-offset-1 ring-emerald-500 scale-110'
-                    : 'hover:scale-110'
-                } ${color.hex === '#FFFFFF' ? 'border-gray-300' : 'border-black/5'}`}
+                aria-hidden="true"
+                className={`h-[18px] w-[18px] rounded-full border flex-shrink-0 ${color.hex === '#FFFFFF' ? 'border-gray-300' : 'border-black/5'}`}
                 style={{ backgroundColor: color.hex }}
               />
             ))}
             {colorVariants.length > MAX_SWATCHES && (
-              <span className="text-xs text-gray-400 ml-0.5">+{colorVariants.length - MAX_SWATCHES}</span>
+              <span className="text-xs text-gray-400 ml-0.5" aria-hidden="true">+{colorVariants.length - MAX_SWATCHES}</span>
             )}
-          </div>
+          </Link>
         )}
 
         <div className="mt-2 flex items-baseline gap-2">
@@ -210,8 +200,11 @@ export default function ProductCard({
           ) : (
             <span className={`text-[17px] font-bold ${onSale ? 'text-emerald-700' : 'text-[#0B1B3A]'}`}>{formatPrice(price)}</span>
           )}
-          {originalPrice && (
-            <span className="text-[13px] text-gray-400 line-through">{formatPrice(originalPrice)}</span>
+          {hasComparePrice && (
+            <span className="text-[13px] text-gray-400 line-through">
+              <span className="sr-only">Was </span>
+              {formatPrice(originalPrice as number)}
+            </span>
           )}
         </div>
 

@@ -22,6 +22,7 @@ export default function ContactPage() {
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitStatus, setSubmitStatus] = useState<'idle' | 'success' | 'error'>('idle');
+  const [errorText, setErrorText] = useState('');
   const { getToken, verifying } = useRecaptcha();
 
   useEffect(() => {
@@ -48,41 +49,28 @@ export default function ContactPage() {
     // reCAPTCHA verification
     const isHuman = await getToken('contact');
     if (!isHuman) {
+      setErrorText('Security check failed. Please try again.');
       setSubmitStatus('error');
       setIsSubmitting(false);
       return;
     }
 
     try {
-      // Store in Supabase
-      const { error } = await supabase
-        .from('contact_submissions')
-        .insert({
-          name: formData.name,
-          email: formData.email,
-          phone: formData.phone,
-          subject: formData.subject,
-          message: formData.message,
-        });
-
-      if (error) {
-        // Table might not exist, still show success
-        console.log('Note: contact_submissions table may not exist');
-      }
-
-      // Send Contact Notification
-      fetch('/api/notifications', {
+      const res = await fetch('/api/storefront/contact', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          type: 'contact',
-          payload: formData
-        })
-      }).catch(err => console.error('Contact notification error:', err));
-
+        body: JSON.stringify(formData),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setErrorText(data.error || '');
+        setSubmitStatus('error');
+        return;
+      }
       setSubmitStatus('success');
       setFormData({ name: '', email: '', phone: '', subject: '', message: '' });
-    } catch (error) {
+    } catch {
+      setErrorText('');
       setSubmitStatus('error');
     } finally {
       setIsSubmitting(false);
@@ -113,7 +101,7 @@ export default function ContactPage() {
       title: 'Email Us',
       value: contactEmail,
       link: `mailto:${contactEmail}`,
-      description: 'We respond within 24 hours'
+      description: 'We usually reply within one working day'
     },
     {
       icon: 'ri-whatsapp-line',
@@ -134,15 +122,15 @@ export default function ContactPage() {
   const faqs = [
     {
       question: 'What are your delivery times?',
-      answer: 'Doorstep delivery typically takes 1-3 business days within Ghana. Orders placed before 2pm are dispatched the same day. The rider will tell you the delivery fee at hand-off based on your location. Store pickup from our Accra location is usually ready within 24 hours and is free.'
+      answer: 'Orders are delivered within 24–72 hours after payment. Doorstep delivery is charged at cost: the rider tells you the fee for your location. Pickup from our store is free.'
     },
     {
       question: 'Do you offer international shipping?',
-      answer: 'Currently, we ship within Ghana only. Many of our products are imported from China, so we handle all international logistics on our end. You simply order and receive.'
+      answer: 'No. We deliver within Ghana only.'
     },
     {
       question: 'What payment methods do you accept?',
-      answer: 'We accept mobile money (MTN, Vodafone, AirtelTigo) and credit/debit cards through our secure Moolre payment gateway.'
+      answer: 'You pay online through Hubtel, with mobile money or a bank card. We do not offer cash on delivery.'
     }
   ];
 
@@ -254,26 +242,27 @@ export default function ContactPage() {
                   name="message"
                   required
                   rows={6}
-                  maxLength={500}
+                  minLength={10}
+                  maxLength={2000}
                   value={formData.message}
                   onChange={(e) => setFormData({ ...formData, message: e.target.value })}
                   className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-transparent resize-none text-sm"
                   placeholder="Tell us how we can help you..."
                 ></textarea>
-                <p className="text-xs text-gray-500 mt-1">{formData.message.length}/500 characters</p>
+                <p className="text-xs text-gray-500 mt-1">{formData.message.length}/2000 characters</p>
               </div>
 
               {submitStatus === 'success' && (
-                <div className="bg-emerald-50 border border-emerald-200 text-emerald-700 px-4 py-3 rounded-xl">
+                <div role="status" className="bg-emerald-50 border border-emerald-200 text-emerald-700 px-4 py-3 rounded-xl">
                   <i className="ri-check-line mr-2"></i>
-                  Message sent successfully! We'll respond within 24 hours.
+                  Message sent. We will reply by email, usually within one working day.
                 </div>
               )}
 
               {submitStatus === 'error' && (
-                <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl">
+                <div role="alert" className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl">
                   <i className="ri-error-warning-line mr-2"></i>
-                  Failed to send message. Please try again or contact us directly.
+                  {errorText || 'Your message was not sent. Please try again, or call or WhatsApp us on 0248615775.'}
                 </div>
               )}
 

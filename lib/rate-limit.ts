@@ -98,29 +98,82 @@ export function checkRateLimit(
 }
 
 /**
- * Get client identifier from request (IP address)
- * @param request - The incoming request
- * @returns Client identifier string
+ * Get client identifier from request (IP address).
+ *
+ * Traefik (Coolify) is the only proxy in front of the app. It sets
+ * `X-Real-Ip` to the address it received the connection from and APPENDS
+ * that address to any `X-Forwarded-For` the client sent, so only the last
+ * forwarded entry is trustworthy: earlier entries are whatever the client
+ * typed. Never use the first entry.
  */
 export function getClientIdentifier(request: Request): string {
-  // Try various headers for the real IP
-  const forwardedFor = request.headers.get('x-forwarded-for');
-  if (forwardedFor) {
-    return forwardedFor.split(',')[0].trim();
-  }
-  
-  const realIp = request.headers.get('x-real-ip');
+  const realIp = request.headers.get('x-real-ip')?.trim();
   if (realIp) {
     return realIp;
   }
-  
+
+  const forwardedFor = request.headers.get('x-forwarded-for');
+  if (forwardedFor) {
+    const parts = forwardedFor.split(',').map((p) => p.trim()).filter(Boolean);
+    if (parts.length) return parts[parts.length - 1];
+  }
+
   const cfConnectingIp = request.headers.get('cf-connecting-ip');
   if (cfConnectingIp) {
     return cfConnectingIp;
   }
-  
+
   // Fallback to a default identifier
   return 'unknown';
+}
+
+// ---- per-email sign-in lockout ------------------------------------------------
+
+export const LOGIN_LOCKOUT = {
+  /** Failed password attempts for one email before it is locked. */
+  maxFailures: 10,
+  /** Window the failures are counted in, and how long the lock lasts. */
+  lockSeconds: 15 * 60,
+};
+
+const loginFailures = new Map<string, { count: number; resetTime: number }>();
+
+function loginKey(email: string): string {
+  return email.trim().toLowerCase();
+}
+
+/** Seconds left on an email's sign-in lock, or 0 when it may try again. */
+export function loginLockRemaining(email: string): number {
+  const entry = loginFailures.get(loginKey(email));
+  const now = Date.now();
+  if (!entry || entry.resetTime <= now) return 0;
+  if (entry.count < LOGIN_LOCKOUT.maxFailures) return 0;
+  return Math.ceil((entry.resetTime - now) / 1000);
+}
+
+/** Count one wrong password for an email. Only failures count toward the lock. */
+export function recordLoginFailure(email: string): void {
+  const key = loginKey(email);
+  if (!key) return;
+  const now = Date.now();
+  const entry = loginFailures.get(key);
+  if (!entry || entry.resetTime <= now) {
+    if (loginFailures.size > 10_000) {
+      for (const [k, e] of loginFailures) if (e.resetTime <= now) loginFailures.delete(k);
+    }
+    loginFailures.set(key, { count: 1, resetTime: now + LOGIN_LOCKOUT.lockSeconds * 1000 });
+    return;
+  }
+  entry.count++;
+  // Reaching the limit starts a full lock period from the last failure.
+  if (entry.count >= LOGIN_LOCKOUT.maxFailures) {
+    entry.resetTime = now + LOGIN_LOCKOUT.lockSeconds * 1000;
+  }
+}
+
+/** A correct password clears the failure count. */
+export function clearLoginFailures(email: string): void {
+  loginFailures.delete(loginKey(email));
 }
 
 /**

@@ -19,10 +19,17 @@ const CONFIRM_TTL_HOURS = 24;
 const RECOVERY_TTL_MINUTES = 60;
 const AUTH_CODE_TTL_MINUTES = 10;
 const MIN_PASSWORD_LENGTH = 6; // the Supabase project's password_min_length
+const BCRYPT_ROUNDS = 10;
+/** One account email (confirmation or reset) per address per minute. */
+export const EMAIL_COOLDOWN_SECONDS = 60;
+/** A password change needs a sign-in this recent (or a recovery link). */
+const REAUTH_WINDOW_SEC = 15 * 60;
+const RECOVERY_SESSION_WINDOW_SEC = RECOVERY_TTL_MINUTES * 60;
 
 const USER_COLUMNS = `id, email, phone, encrypted_password, email_confirmed_at,
   phone_confirmed_at, last_sign_in_at, raw_app_meta_data, raw_user_meta_data,
-  created_at, updated_at, banned_until, confirmation_sent_at, recovery_sent_at`;
+  created_at, updated_at, banned_until, confirmation_sent_at, recovery_sent_at,
+  session_version`;
 
 export interface AuthUser {
   id: string;
@@ -107,6 +114,57 @@ function isBanned(row: Record<string, any>): boolean {
   return !!row.banned_until && new Date(row.banned_until).getTime() > Date.now();
 }
 
+/**
+ * The session generation a token was minted for. Tokens from before
+ * `session_version` existed carry no `sv` claim and count as generation 0, so
+ * the deploy signs nobody out.
+ */
+function tokenVersion(payload: Record<string, any>): number {
+  const sv = Number(payload.sv ?? 0);
+  return Number.isFinite(sv) ? sv : 0;
+}
+
+function rowVersion(row: Record<string, any>): number {
+  return Number(row.session_version ?? 0) || 0;
+}
+
+/** Revoke every session of an account: access and refresh tokens minted before now stop working. */
+export async function bumpSessionVersion(userId: string): Promise<void> {
+  await query(
+    `UPDATE auth.users SET session_version = session_version + 1, updated_at = now() WHERE id = $1`,
+    [userId]
+  );
+}
+
+export type AuthMethod = "password" | "otp" | "recovery";
+type AmrEntry = { method: AuthMethod; timestamp: number };
+
+function parseAmr(value: unknown): AmrEntry[] | null {
+  if (!Array.isArray(value)) return null;
+  const out: AmrEntry[] = [];
+  for (const v of value) {
+    const method = v?.method;
+    const timestamp = Number(v?.timestamp);
+    if ((method === "password" || method === "otp" || method === "recovery") && Number.isFinite(timestamp)) {
+      out.push({ method, timestamp });
+    }
+  }
+  return out.length ? out : null;
+}
+
+// bcrypt work runs off the event loop (async), so a burst of sign-ins does
+// not stall every other request this single Node process is serving.
+function hashPassword(password: string): Promise<string> {
+  return bcrypt.hash(password, BCRYPT_ROUNDS);
+}
+
+let dummyHash: Promise<string> | null = null;
+/** Spend the same bcrypt time when there is no account, so timing does not reveal one. */
+async function burnPasswordCheck(password: string): Promise<void> {
+  dummyHash ??= bcrypt.hash("not-a-real-password", BCRYPT_ROUNDS);
+  await bcrypt.compare(password, await dummyHash).catch(() => false);
+}
+
 function hashToken(token: string): string {
   return createHash("sha256").update(token).digest("hex");
 }
@@ -143,11 +201,18 @@ async function userRowByEmail(email: string): Promise<Record<string, any> | null
   return rows[0] ?? null;
 }
 
-async function mintSession(userRow: Record<string, any>): Promise<SessionTokens> {
+async function mintSession(
+  userRow: Record<string, any>,
+  auth: { method: AuthMethod; amr?: AmrEntry[] | null; sessionId?: string }
+): Promise<SessionTokens> {
   const appRole = await loadAppRole(userRow.id);
   const user = rowToUser(userRow, appRole);
   const now = Math.floor(Date.now() / 1000);
-  const sessionId = randomUUID();
+  const sessionId = auth.sessionId || randomUUID();
+  const sv = rowVersion(userRow);
+  // GoTrue-style authentication methods. A refresh keeps the original sign-in
+  // time, so "signed in recently" cannot be renewed by refreshing.
+  const amr: AmrEntry[] = auth.amr?.length ? auth.amr : [{ method: auth.method, timestamp: now }];
 
   const access_token = await new SignJWT({
     aud: "authenticated",
@@ -157,6 +222,9 @@ async function mintSession(userRow: Record<string, any>): Promise<SessionTokens>
     app_metadata: user.app_metadata,
     user_metadata: user.user_metadata,
     session_id: sessionId,
+    aal: "aal1",
+    amr,
+    sv,
   })
     .setProtectedHeader({ alg: "HS256", typ: "JWT" })
     .setSubject(user.id)
@@ -167,6 +235,8 @@ async function mintSession(userRow: Record<string, any>): Promise<SessionTokens>
   const refresh_token = await new SignJWT({
     typ: "refresh",
     session_id: sessionId,
+    amr,
+    sv,
   })
     .setProtectedHeader({ alg: "HS256", typ: "JWT" })
     .setSubject(user.id)
@@ -205,13 +275,43 @@ export async function getUserById(userId: string): Promise<AuthUser | null> {
   return rowToUser(row, await loadAppRole(userId));
 }
 
-/** The signed-in user for an access token: invalid, deleted or banned → null. */
+/**
+ * The signed-in user for an access token: invalid, deleted, banned or revoked
+ * (signed out everywhere, password changed) → null.
+ */
 export async function getUserForToken(token: string): Promise<AuthUser | null> {
   const verified = await verifyAccessToken(token);
   if (!verified) return null;
   const row = await userRowById(verified.userId);
   if (!row || isBanned(row)) return null;
+  if (tokenVersion(verified.payload) < rowVersion(row)) return null;
   return rowToUser(row, await loadAppRole(row.id));
+}
+
+/**
+ * Whether this access token's sign-in is fresh enough to change the password
+ * without the old one: a password/email-link sign-in in the last 15 minutes,
+ * or a session opened from a password-reset link. Tokens minted before this
+ * check existed carry no sign-in time and must sign in again.
+ */
+export function canChangePasswordWith(payload: Record<string, any>): boolean {
+  const amr = parseAmr(payload.amr);
+  if (!amr) return false;
+  const now = Math.floor(Date.now() / 1000);
+  return amr.some((a) =>
+    a.method === "recovery"
+      ? now - a.timestamp <= RECOVERY_SESSION_WINDOW_SEC
+      : now - a.timestamp <= REAUTH_WINDOW_SEC
+  );
+}
+
+/** Sign out everywhere (supabase-js `signOut({ scope: 'global' })`). */
+export async function signOutEverywhere(token: string): Promise<void> {
+  const verified = await verifyAccessToken(token);
+  if (!verified) return;
+  const row = await userRowById(verified.userId);
+  if (!row || tokenVersion(verified.payload) < rowVersion(row)) return;
+  await bumpSessionVersion(row.id);
 }
 
 export async function signInWithPassword(
@@ -219,7 +319,11 @@ export async function signInWithPassword(
   password: string
 ): Promise<{ session: SessionTokens | null; error: AuthFailure | null; userId?: string }> {
   const row = await userRowByEmail(email);
-  if (!row?.encrypted_password || !bcrypt.compareSync(password, row.encrypted_password)) {
+  if (!row?.encrypted_password) {
+    await burnPasswordCheck(password);
+    return { session: null, error: fail("Invalid login credentials", "invalid_credentials") };
+  }
+  if (!(await bcrypt.compare(password, row.encrypted_password).catch(() => false))) {
     return { session: null, error: fail("Invalid login credentials", "invalid_credentials") };
   }
   if (isBanned(row)) {
@@ -234,7 +338,35 @@ export async function signInWithPassword(
     [row.id]
   ).catch(() => {});
 
-  return { session: await mintSession(row), error: null };
+  return { session: await mintSession(row, { method: "password" }), error: null };
+}
+
+/**
+ * What GoTrue answers when a confirmed address signs up again: a user-shaped
+ * object that matches nothing real (random id, no metadata, no real dates),
+ * so the form cannot be used to find out who has an account.
+ */
+function obfuscatedUser(email: string): AuthUser {
+  const now = new Date().toISOString();
+  return {
+    id: randomUUID(),
+    aud: "authenticated",
+    role: "authenticated",
+    email,
+    phone: "",
+    email_confirmed_at: null,
+    phone_confirmed_at: null,
+    confirmed_at: null,
+    confirmation_sent_at: now,
+    recovery_sent_at: null,
+    last_sign_in_at: null,
+    banned_until: null,
+    app_metadata: { provider: "email", providers: ["email"] },
+    user_metadata: {},
+    identities: [],
+    created_at: now,
+    updated_at: now,
+  };
 }
 
 /**
@@ -247,7 +379,13 @@ export async function signUpWithPassword(opts: {
   email: string;
   password: string;
   data?: Record<string, unknown>;
-}): Promise<{ user: AuthUser | null; confirmationToken: string | null; error: AuthFailure | null }> {
+}): Promise<{
+  user: AuthUser | null;
+  confirmationToken: string | null;
+  /** The real unconfirmed account the browser's PKCE flow belongs to (never set for an obfuscated reply). */
+  flowUserId?: string | null;
+  error: AuthFailure | null;
+}> {
   const email = opts.email.trim().toLowerCase();
   if (!email || !email.includes("@")) {
     return { user: null, confirmationToken: null, error: fail("Unable to validate email address: invalid format", "validation_failed") };
@@ -262,11 +400,15 @@ export async function signUpWithPassword(opts: {
 
   const existing = await userRowByEmail(email);
   if (existing) {
+    // Same bcrypt cost as a real sign-up, so response time does not tell.
+    await hashPassword(opts.password);
     if (existing.email_confirmed_at) {
-      return { user: { ...rowToUser(existing), identities: [] }, confirmationToken: null, error: null };
+      return { user: obfuscatedUser(email), confirmationToken: null, error: null };
     }
-    const token = await createConfirmationToken(existing.id);
-    return { user: rowToUser(existing), confirmationToken: token, error: null };
+    // Unconfirmed: a fresh link, at most one per address per minute (the
+    // link already sent keeps working).
+    const token = (await confirmationRecentlySent(existing.id)) ? null : await createConfirmationToken(existing.id);
+    return { user: rowToUser(existing), confirmationToken: token, flowUserId: existing.id, error: null };
   }
 
   const id = randomUUID();
@@ -283,7 +425,7 @@ export async function signUpWithPassword(opts: {
        $2, $3, NULL, '{"provider":"email","providers":["email"]}'::jsonb, $4::jsonb,
        now(), now(), $5, now(), '', '', '', '', '', '', ''
      )`,
-    [id, email, bcrypt.hashSync(opts.password, 10), JSON.stringify(opts.data || {}), hashToken(token)]
+    [id, email, await hashPassword(opts.password), JSON.stringify(opts.data || {}), hashToken(token)]
   );
   // GoTrue keeps an identity row per provider; the dashboard's user list and
   // any later Supabase tooling expect it.
@@ -295,7 +437,17 @@ export async function signUpWithPassword(opts: {
   // The on_auth_user_created trigger creates the customer profile.
 
   const row = await userRowById(id);
-  return { user: row ? rowToUser(row) : null, confirmationToken: token, error: null };
+  return { user: row ? rowToUser(row) : null, confirmationToken: token, flowUserId: id, error: null };
+}
+
+/** True when a confirmation email went to this account within the cooldown. */
+export async function confirmationRecentlySent(userId: string): Promise<boolean> {
+  const { rows } = await query<{ recent: boolean }>(
+    `SELECT coalesce(confirmation_sent_at > now() - ($2 || ' seconds')::interval, false) AS recent
+       FROM auth.users WHERE id = $1`,
+    [userId, String(EMAIL_COOLDOWN_SECONDS)]
+  );
+  return !!rows[0]?.recent;
 }
 
 /** A fresh one-time confirmation token for an unconfirmed account. */
@@ -312,18 +464,22 @@ export async function createConfirmationToken(userId: string): Promise<string> {
 /**
  * Start a password reset. Returns the account and a one-time token to email,
  * or null when no usable account exists (callers must not reveal which).
+ * `token` is null while the previous reset email is under a minute old: send
+ * nothing, the link already sent still works.
  */
 export async function createRecoveryToken(
   email: string
-): Promise<{ userId: string; email: string; token: string } | null> {
+): Promise<{ userId: string; email: string; token: string | null } | null> {
   const row = await userRowByEmail(email);
   if (!row || isBanned(row)) return null;
   const token = newToken();
-  await query(
-    `UPDATE auth.users SET recovery_token = $1, recovery_sent_at = now(), updated_at = now() WHERE id = $2`,
-    [hashToken(token), row.id]
+  const { rowCount } = await query(
+    `UPDATE auth.users SET recovery_token = $1, recovery_sent_at = now(), updated_at = now()
+      WHERE id = $2
+        AND (recovery_sent_at IS NULL OR recovery_sent_at <= now() - ($3 || ' seconds')::interval)`,
+    [hashToken(token), row.id, String(EMAIL_COOLDOWN_SECONDS)]
   );
-  return { userId: row.id, email: row.email, token };
+  return { userId: row.id, email: row.email, token: rowCount > 0 ? token : null };
 }
 
 export type EmailLinkType = "signup" | "recovery";
@@ -416,7 +572,7 @@ export async function exchangeAuthCode(
   const { rows } = await query(
     `DELETE FROM auth.flow_state
       WHERE auth_code = $1 AND auth_code_issued_at > now() - ($2 || ' minutes')::interval
-    RETURNING user_id, code_challenge, code_challenge_method::text AS method`,
+    RETURNING user_id, code_challenge, code_challenge_method::text AS method, authentication_method`,
     [authCode, String(AUTH_CODE_TTL_MINUTES)]
   );
   const flow = rows[0];
@@ -431,7 +587,10 @@ export async function exchangeAuthCode(
   const row = await userRowById(flow.user_id);
   if (!row || isBanned(row)) return invalid;
   await query(`UPDATE auth.users SET last_sign_in_at = now(), updated_at = now() WHERE id = $1`, [row.id]).catch(() => {});
-  return { session: await mintSession(row), error: null };
+  return {
+    session: await mintSession(row, { method: flow.authentication_method === "recovery" ? "recovery" : "otp" }),
+    error: null,
+  };
 }
 
 export async function refreshSession(
@@ -444,7 +603,18 @@ export async function refreshSession(
     const row = await userRowById(payload.sub);
     if (!row) return invalid;
     if (isBanned(row)) return { session: null, error: fail("User is banned", "user_banned") };
-    return { session: await mintSession(row), error: null };
+    // Signed out everywhere, password changed or banned since: revoked.
+    if (tokenVersion(payload as Record<string, any>) < rowVersion(row)) return invalid;
+    return {
+      session: await mintSession(row, {
+        method: "password",
+        // Legacy refresh tokens carry no sign-in time: timestamp 0, so they
+        // never count as a recent sign-in.
+        amr: parseAmr(payload.amr) ?? [{ method: "password", timestamp: 0 }],
+        sessionId: typeof payload.session_id === "string" ? payload.session_id : undefined,
+      }),
+      error: null,
+    };
   } catch {
     return invalid;
   }
@@ -457,9 +627,11 @@ export async function updateUserPassword(
   if (!password || password.length < MIN_PASSWORD_LENGTH) {
     return { user: null, error: fail(`Password should be at least ${MIN_PASSWORD_LENGTH} characters.`, "weak_password", 422) };
   }
+  // A new password ends every session (other devices, stolen tokens). The
+  // caller's own session ends too: the page should ask them to sign in again.
   await query(
-    `UPDATE auth.users SET encrypted_password = $1, updated_at = now() WHERE id = $2`,
-    [bcrypt.hashSync(password, 10), userId]
+    `UPDATE auth.users SET encrypted_password = $1, session_version = session_version + 1, updated_at = now() WHERE id = $2`,
+    [await hashPassword(password), userId]
   );
   return { user: await getUserById(userId), error: null };
 }
@@ -521,7 +693,7 @@ export async function adminCreateUser(attrs: {
     [
       id,
       email,
-      attrs.password ? bcrypt.hashSync(attrs.password, 10) : "",
+      attrs.password ? await hashPassword(attrs.password) : "",
       !!attrs.email_confirm,
       JSON.stringify(appMeta),
       JSON.stringify(attrs.user_metadata || {}),
@@ -557,7 +729,11 @@ export async function adminUpdateUserById(
     sets.push(sql.replace("?", `$${params.length}`));
   };
   if (attrs.email !== undefined) add("email = ?", attrs.email.trim().toLowerCase());
-  if (attrs.password !== undefined) add("encrypted_password = ?", bcrypt.hashSync(attrs.password, 10));
+  let revoke = false;
+  if (attrs.password !== undefined) {
+    add("encrypted_password = ?", await hashPassword(attrs.password));
+    revoke = true;
+  }
   if (attrs.email_confirm === true) sets.push("email_confirmed_at = coalesce(email_confirmed_at, now())");
   if (attrs.user_metadata !== undefined) {
     add("raw_user_meta_data = coalesce(raw_user_meta_data, '{}'::jsonb) || ?::jsonb", JSON.stringify(attrs.user_metadata));
@@ -573,8 +749,12 @@ export async function adminUpdateUserById(
       return { user: null, error: fail(e.message, "validation_failed") };
     }
     if (interval === null) sets.push("banned_until = NULL");
-    else add("banned_until = now() + ?::interval", interval);
+    else {
+      add("banned_until = now() + ?::interval", interval);
+      revoke = true; // a ban cuts live sessions at once, not when the hour runs out
+    }
   }
+  if (revoke) sets.push("session_version = session_version + 1");
   if (sets.length) {
     params.push(userId);
     await query(`UPDATE auth.users SET ${sets.join(", ")}, updated_at = now() WHERE id = $${params.length}`, params);

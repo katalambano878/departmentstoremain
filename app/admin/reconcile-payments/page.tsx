@@ -164,7 +164,8 @@ export default function ReconcilePaymentsPage() {
                                     </td>
                                     <td className="p-3">
                                         <div className="flex flex-col gap-1.5">
-                                            {r.payment_method === 'hubtel' && r.hubtel_client_reference && (
+                                            {/* POS MoMo links are Hubtel even when payment_method says 'moolre', so key on the stored reference. */}
+                                            {(r.hubtel_client_reference || r.payment_method === 'hubtel') && (
                                                 <button
                                                     type="button"
                                                     onClick={() => reverify(r.id)}

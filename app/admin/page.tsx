@@ -1,55 +1,46 @@
 'use client';
 
 import Link from 'next/link';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { supabase } from '@/lib/supabase';
 import { fetchAllPaged } from '@/lib/supabase-paginate';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 
 export default function AdminDashboard() {
-  const [dateRange, setDateRange] = useState('7days'); // logic not implemented for this demo, just UI
+  const [dateRange, setDateRange] = useState<'7days' | '30days'>('7days');
+  // Real sales (paid, not cancelled/refunded) — the chart is built from these for the chosen range.
+  const [realOrders, setRealOrders] = useState<{ total: number | null; created_at: string }[]>([]);
   const [loading, setLoading] = useState(true);
 
   // Real Stats
-  const [stats, setStats] = useState([
-    {
-      title: 'Total Revenue',
-      value: 'GH₵ 0.00',
-      change: '0%', // Placeholder trend
-      trend: 'up',
-      icon: 'ri-money-dollar-circle-line',
-      color: 'blue'
-    },
-    {
-      title: 'Orders',
-      value: '0',
-      change: '0%',
-      trend: 'up',
-      icon: 'ri-shopping-bag-line',
-      color: 'blue'
-    },
-    {
-      title: 'Customers', // This is total active users for us currently
-      value: '0',
-      change: '0%',
-      trend: 'up',
-      icon: 'ri-group-line',
-      color: 'purple'
-    },
-    {
-      title: 'Avg Order Value',
-      value: 'GH₵ 0.00',
-      change: '0%',
-      trend: 'up',
-      icon: 'ri-line-chart-line',
-      color: 'amber'
-    }
+  const [stats, setStats] = useState<{ title: string; value: string; note: string; icon: string; color: string }[]>([
+    { title: 'Revenue (all time)', value: 'GH₵ 0.00', note: 'Paid orders', icon: 'ri-money-dollar-circle-line', color: 'blue' },
+    { title: 'Paid Orders', value: '0', note: 'All time', icon: 'ri-shopping-bag-line', color: 'blue' },
+    { title: 'Paying Customers', value: '0', note: 'Unique emails', icon: 'ri-group-line', color: 'purple' },
+    { title: 'Avg Order Value', value: 'GH₵ 0.00', note: 'Paid orders', icon: 'ri-line-chart-line', color: 'amber' }
   ]);
 
   const [recentOrders, setRecentOrders] = useState<any[]>([]);
   const [lowStockProducts, setLowStockProducts] = useState<any[]>([]);
   const [topProducts, setTopProducts] = useState<any[]>([]);
-  const [chartData, setChartData] = useState<any[]>([]);
+
+  const chartData = useMemo(() => {
+    const days = dateRange === '30days' ? 30 : 7;
+    const keys = Array.from({ length: days }, (_, i) => {
+      const d = new Date();
+      d.setDate(d.getDate() - (days - 1 - i));
+      return d.toISOString().split('T')[0];
+    });
+    const map: Record<string, number> = Object.fromEntries(keys.map((k) => [k, 0]));
+    realOrders.forEach((order) => {
+      const key = new Date(order.created_at).toISOString().split('T')[0];
+      if (map[key] !== undefined) map[key] += Number(order.total || 0);
+    });
+    return keys.map((key) => ({
+      date: new Date(key).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+      revenue: map[key],
+    }));
+  }, [realOrders, dateRange]);
 
   useEffect(() => {
     async function fetchDashboardData() {
@@ -72,85 +63,33 @@ export default function AdminDashboard() {
             .order('created_at', { ascending: false })
         );
 
-        // Only count PAID orders for revenue & avg order value
-        const paidOrders = allOrdersData.filter(o => o.payment_status === 'paid');
-        const totalRevenue = paidOrders.reduce((sum, order) => sum + (order.total || 0), 0);
-        const totalOrders = allOrdersData.length;
+        // Real sales only: paid, and not cancelled or refunded. Unpaid
+        // (abandoned) checkouts and cancelled/refunded orders are not counted.
+        const paidOrders = allOrdersData.filter(
+          o => o.payment_status === 'paid' && o.status !== 'cancelled' && o.status !== 'refunded'
+        );
+        const totalRevenue = paidOrders.reduce((sum, order) => sum + Number(order.total || 0), 0);
         const paidOrderCount = paidOrders.length;
         const avgOrderValue = paidOrderCount > 0 ? totalRevenue / paidOrderCount : 0;
+        const uniqueCustomers = new Set(
+          paidOrders.map(o => (o.email || '').trim().toLowerCase()).filter(Boolean)
+        ).size;
 
-        // 2. Fetch Customers Count (approximation using orders unique emails if we don't have user metrics access)
-        // Since we can't query auth.users directly from client, we'll estimate active customers via orders or just keep it 0 if we can't.
-        // Actually, best to just show "Orders" or "Recent Signups" if we had a public profiles table.
-        // We'll use unique emails from orders as a proxy for "Customers"
-        const uniqueCustomers = new Set(allOrdersData.map(o => o.email)).size;
-
-
-        // Process Chart Data (Last 7 Days) - only count PAID orders as revenue
-        const last7Days = Array.from({ length: 7 }, (_, i) => {
-          const d = new Date();
-          d.setDate(d.getDate() - (6 - i));
-          return d.toISOString().split('T')[0];
-        });
-
-        const chartMap = last7Days.reduce((acc: any, date) => {
-          acc[date] = 0;
-          return acc;
-        }, {});
-
-        paidOrders.forEach(order => {
-          const date = new Date(order.created_at).toISOString().split('T')[0];
-          if (chartMap[date] !== undefined) {
-            chartMap[date] += (order.total || 0);
-          }
-        });
-
-        const processedChartData = Object.keys(chartMap).map(date => ({
-          date: new Date(date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
-          revenue: chartMap[date]
-        }));
-        setChartData(processedChartData);
+        setRealOrders(paidOrders);
 
         setStats([
-          {
-            title: 'Total Revenue',
-            value: `GH₵ ${totalRevenue.toFixed(2)}`,
-            change: '+0%', // Dynamic change requires date filtering logic which is complex
-            trend: 'up',
-            icon: 'ri-money-dollar-circle-line',
-            color: 'blue'
-          },
-          {
-            title: 'Orders',
-            value: totalOrders.toString(),
-            change: '+0%',
-            trend: 'up',
-            icon: 'ri-shopping-bag-line',
-            color: 'blue'
-          },
-          {
-            title: 'Customers (Active)',
-            value: uniqueCustomers.toString(), // Proxy
-            change: '+0%',
-            trend: 'up',
-            icon: 'ri-group-line',
-            color: 'purple'
-          },
-          {
-            title: 'Avg Order Value',
-            value: `GH₵ ${avgOrderValue.toFixed(2)}`,
-            change: '+0%',
-            trend: 'up',
-            icon: 'ri-line-chart-line',
-            color: 'amber'
-          }
+          { title: 'Revenue (all time)', value: `GH₵ ${totalRevenue.toFixed(2)}`, note: 'Paid orders', icon: 'ri-money-dollar-circle-line', color: 'blue' },
+          { title: 'Paid Orders', value: paidOrderCount.toString(), note: 'All time', icon: 'ri-shopping-bag-line', color: 'blue' },
+          { title: 'Paying Customers', value: uniqueCustomers.toString(), note: 'Unique emails', icon: 'ri-group-line', color: 'purple' },
+          { title: 'Avg Order Value', value: `GH₵ ${avgOrderValue.toFixed(2)}`, note: 'Paid orders', icon: 'ri-line-chart-line', color: 'amber' }
         ]);
 
-        // 3. Fetch Recent Orders (only paid orders)
+        // 3. Fetch Recent Orders (paid, not cancelled or refunded)
         const { data: recentOrdersData } = await supabase
           .from('orders')
           .select('id, order_number, user_id, email, created_at, total, status, shipping_address')
           .eq('payment_status', 'paid')
+          .not('status', 'in', '(cancelled,refunded)')
           .order('created_at', { ascending: false })
           .limit(5);
 
@@ -197,7 +136,7 @@ export default function AdminDashboard() {
           setTopProducts(productData.map((p: any) => ({
             id: p.id,
             name: p.name,
-            image: p.product_images?.[0]?.url || 'https://via.placeholder.com/200',
+            image: p.product_images?.[0]?.url || 'data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 width=%2780%27 height=%2780%27 viewBox=%270 0 80 80%27%3E%3Crect width=%2780%27 height=%2780%27 fill=%27%23f3f4f6%27/%3E%3Cpath d=%27M24 54l10-12 8 9 6-7 8 10z%27 fill=%27%23d1d5db%27/%3E%3Ccircle cx=%2730%27 cy=%2730%27 r=%275%27 fill=%27%23d1d5db%27/%3E%3C/svg%3E',
             sales: 0, // Mocked for now
             revenue: 0, // Mocked for now
             stock: p.quantity
@@ -264,8 +203,8 @@ export default function AdminDashboard() {
                 <div className={`w-12 h-12 flex items-center justify-center bg-${stat.color}-100 text-${stat.color}-700 rounded-lg`}>
                   <i className={`${stat.icon} text-2xl`}></i>
                 </div>
-                <span className={`text-sm font-semibold text-blue-700`}>
-                  {stat.change}
+                <span className="text-xs font-medium text-gray-500">
+                  {stat.note}
                 </span>
               </div>
               <h3 className="text-2xl font-bold text-gray-900 mb-1">{stat.value}</h3>
@@ -282,7 +221,7 @@ export default function AdminDashboard() {
               <select
                 className="bg-gray-50 border border-gray-200 text-gray-700 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-2"
                 value={dateRange}
-                onChange={(e) => setDateRange(e.target.value)}
+                onChange={(e) => setDateRange(e.target.value === '30days' ? '30days' : '7days')}
               >
                 <option value="7days">Last 7 Days</option>
                 <option value="30days">Last 30 Days</option>
@@ -380,7 +319,7 @@ export default function AdminDashboard() {
                           <p className="text-sm text-gray-500">{order.email}</p>
                         </td>
                         <td className="py-4 px-4 text-gray-700 whitespace-nowrap">{order.date}</td>
-                        <td className="py-4 px-4 font-semibold text-gray-900 whitespace-nowrap">GH₵ {order.total.toFixed(2)}</td>
+                        <td className="py-4 px-4 font-semibold text-gray-900 whitespace-nowrap">GH₵ {Number(order.total || 0).toFixed(2)}</td>
                         <td className="py-4 px-4">
                           <span className={`px-3 py-1 rounded-full text-xs font-semibold whitespace-nowrap ${statusColors[order.status] || 'bg-gray-100'}`}>
                             {order.status === 'shipped'
@@ -421,8 +360,8 @@ export default function AdminDashboard() {
                   ))}
                 </div>
               )}
-              <Link href="/admin/products?filter=low-stock" className="block text-center mt-4 text-blue-700 hover:text-blue-800 font-medium text-sm whitespace-nowrap cursor-pointer">
-                View All Products <i className="ri-arrow-right-line ml-1"></i>
+              <Link href="/admin/inventory" className="block text-center mt-4 text-blue-700 hover:text-blue-800 font-medium text-sm whitespace-nowrap cursor-pointer">
+                Open Inventory (low stock tab) <i className="ri-arrow-right-line ml-1"></i>
               </Link>
             </div>
           </div>

@@ -99,13 +99,103 @@ export async function disburseViaMoolre(opts: {
   }
 }
 
+
+/**
+ * Markup pricing for an attributed affiliate, read from the database. The
+ * storefront applies exactly this rule for display (context/AffiliateContext):
+ *   pct  = approved per-product override, else the affiliate's default
+ *          commission_pct — both clamped to the program cap
+ *   paid = round2(base * (1 + pct/100)) per unit
+ * Only ACTIVE affiliates get a markup.
+ */
+export interface AffiliatePricing {
+  affiliateId: string;
+  code: string;
+  defaultPct: number;
+  cap: number;
+  markups: ProductMarkupMap;
+}
+
+export async function loadActiveAffiliatePricing(code?: string | null): Promise<AffiliatePricing | null> {
+  const clean = typeof code === 'string' ? code.trim() : '';
+  if (!clean || clean.length > 64) return null;
+  const { data: affiliate } = await supabaseAdmin
+    .from('affiliates')
+    .select('id, code, commission_pct, status')
+    .eq('code', clean)
+    .maybeSingle();
+  if (!affiliate || affiliate.status !== 'active') return null;
+
+  const { cap } = await getAffiliateSettings();
+  const { data: rows } = await supabaseAdmin
+    .from('affiliate_product_markups')
+    .select('product_id, markup_pct')
+    .eq('affiliate_id', affiliate.id)
+    .eq('status', 'approved');
+  const markups: ProductMarkupMap = {};
+  for (const r of rows || []) markups[r.product_id as string] = clampPct(Number(r.markup_pct), cap);
+
+  return {
+    affiliateId: affiliate.id as string,
+    code: affiliate.code as string,
+    defaultPct: clampPct(Number(affiliate.commission_pct) || 0, cap),
+    cap,
+    markups,
+  };
+}
+
+/** Markup percent for one product under the given pricing (0 without an affiliate). */
+export function affiliateMarkupPct(pricing: AffiliatePricing | null, productId: string | null | undefined): number {
+  if (!pricing) return 0;
+  return effectivePct(productId || undefined, pricing.markups, pricing.defaultPct, pricing.cap);
+}
+
+/** Customer unit price: base plus the affiliate markup, rounded like the storefront. */
+export function affiliateUnitPrice(base: number, pct: number): number {
+  return pct > 0 ? round2(base * (1 + pct / 100)) : round2(base);
+}
+
+/**
+ * Current base (pre-markup) unit price of each line, from the catalogue:
+ * the variant's price when the line has a variant, else the product's price.
+ * Keyed by order_items.id. Lines whose price can't be found are left out.
+ */
+export async function catalogBasePrices(
+  items: Array<{ id: string; product_id: string | null; variant_id: string | null }>,
+): Promise<Map<string, number>> {
+  const out = new Map<string, number>();
+  const productIds = Array.from(new Set(items.map((i) => i.product_id).filter(Boolean) as string[]));
+  const variantIds = Array.from(new Set(items.map((i) => i.variant_id).filter(Boolean) as string[]));
+  const productPrice = new Map<string, number>();
+  const variantPrice = new Map<string, number>();
+  if (productIds.length > 0) {
+    const { data } = await supabaseAdmin.from('products').select('id, price').in('id', productIds);
+    for (const p of data || []) if (p.price != null) productPrice.set(p.id as string, Number(p.price));
+  }
+  if (variantIds.length > 0) {
+    const { data } = await supabaseAdmin.from('product_variants').select('id, price').in('id', variantIds);
+    for (const v of data || []) if (v.price != null) variantPrice.set(v.id as string, Number(v.price));
+  }
+  for (const it of items) {
+    const v = it.variant_id ? variantPrice.get(it.variant_id) : undefined;
+    const p = it.product_id ? productPrice.get(it.product_id) : undefined;
+    const base = v ?? p;
+    if (base != null && Number.isFinite(base)) out.set(it.id, base);
+  }
+  return out;
+}
+
 /**
  * Records the affiliate commission for a paid order. Idempotent — safe to call
  * from both the webhook and the verify path. Commission is recomputed
  * authoritatively, per line item, from the affiliate's current markup config
  * (default rate + per-product overrides, clamped to the program cap) applied to
- * each item's base price — so it can't be tampered with client-side and honours
- * per-product custom pricing.
+ * each item's base price.
+ *
+ * Base price comes from the database only: the server-written
+ * metadata.base_unit_price on orders priced by /api/storefront/orders/create
+ * (metadata.server_priced = true), otherwise the current catalogue price.
+ * Client-supplied numbers are never used.
  */
 export async function recordAffiliateCommission(orderRefOrId: string): Promise<void> {
   try {
@@ -139,17 +229,26 @@ export async function recordAffiliateCommission(orderRefOrId: string): Promise<v
     const markups: ProductMarkupMap = {};
     for (const r of markupRows || []) markups[r.product_id as string] = clampPct(Number(r.markup_pct), cap);
 
-    // Recompute commission per line from each item's base price.
     const { data: items } = await supabaseAdmin
       .from('order_items')
-      .select('product_id, quantity, unit_price, metadata')
+      .select('id, product_id, variant_id, quantity, metadata')
       .eq('order_id', order.id);
+
+    const serverPriced = order.metadata?.server_priced === true;
+    const catalog = await catalogBasePrices(
+      (items || []).map((it: any) => ({ id: it.id, product_id: it.product_id, variant_id: it.variant_id })),
+    );
 
     let baseAmount = 0;
     let commission = 0;
     for (const it of items || []) {
       const qty = Number(it.quantity) || 0;
-      const base = Number(it.metadata?.base_unit_price ?? it.unit_price) || 0;
+      if (qty <= 0) continue;
+      const stored = Number(it.metadata?.base_unit_price);
+      const base = serverPriced && Number.isFinite(stored) && stored >= 0
+        ? stored
+        : catalog.get(it.id as string);
+      if (base == null) continue; // product deleted and no trusted price: no commission for this line
       const pct = effectivePct(it.product_id as string, markups, defaultPct, cap);
       baseAmount = round2(baseAmount + base * qty);
       commission = round2(commission + base * qty * (pct / 100));
@@ -163,30 +262,23 @@ export async function recordAffiliateCommission(orderRefOrId: string): Promise<v
 
     const maturesAt = new Date(Date.now() + maturityDays * 24 * 60 * 60 * 1000).toISOString();
 
-    const { error: insErr } = await supabaseAdmin.from('affiliate_commissions').insert({
-      affiliate_id: affiliate.id,
-      order_id: order.id,
-      order_number: order.order_number,
-      base_amount: baseAmount,
-      commission_pct: blendedPct,
-      commission_amount: commission,
-      status: 'pending',
-      matures_at: maturesAt,
+    // Insert + pending-balance increment in one transaction.
+    const { data: inserted, error: rpcErr } = await supabaseAdmin.rpc('affiliate_record_commission', {
+      p_affiliate_id: affiliate.id,
+      p_order_id: order.id,
+      p_order_number: order.order_number,
+      p_base_amount: baseAmount,
+      p_commission_pct: blendedPct,
+      p_commission_amount: commission,
+      p_matures_at: maturesAt,
     });
-    if (insErr) {
-      // Unique-violation = concurrent insert already recorded it; ignore.
-      if (!String(insErr.message || '').toLowerCase().includes('duplicate')) {
-        console.error('[Affiliate] commission insert failed:', insErr.message);
-      }
+    if (rpcErr) {
+      console.error('[Affiliate] affiliate_record_commission failed:', rpcErr.message);
       return;
     }
-
-    await supabaseAdmin
-      .from('affiliates')
-      .update({ balance_pending: round2((affiliate.balance_pending || 0) + commission) })
-      .eq('id', affiliate.id);
-
-    console.log(`[Affiliate] Recorded commission GHS ${commission} for order ${order.order_number}`);
+    if (inserted) {
+      console.log(`[Affiliate] Recorded commission GHS ${commission} for order ${order.order_number}`);
+    }
   } catch (e: any) {
     console.error('[Affiliate] recordAffiliateCommission error:', e?.message || e);
   }
@@ -194,78 +286,34 @@ export async function recordAffiliateCommission(orderRefOrId: string): Promise<v
 
 /**
  * Reverses a commission when its order is refunded/cancelled. Only commissions
- * that haven't been paid out can be clawed back.
+ * that haven't been paid out (or reserved by a payout in progress) can be
+ * clawed back. Atomic in the database.
  */
 export async function clawbackAffiliateCommission(orderId: string): Promise<void> {
   try {
-    const { data: commission } = await supabaseAdmin
-      .from('affiliate_commissions')
-      .select('id, affiliate_id, commission_amount, status')
-      .eq('order_id', orderId)
-      .maybeSingle();
-    if (!commission) return;
-    if (!['pending', 'matured'].includes(commission.status)) return; // already paid/clawed
-
-    const { data: affiliate } = await supabaseAdmin
-      .from('affiliates').select('balance_pending, balance_available').eq('id', commission.affiliate_id).single();
-
-    const amt = round2(commission.commission_amount);
-    const updates: Record<string, number> = {};
-    if (commission.status === 'pending') {
-      updates.balance_pending = round2(Math.max(0, (affiliate?.balance_pending || 0) - amt));
-    } else {
-      updates.balance_available = round2(Math.max(0, (affiliate?.balance_available || 0) - amt));
+    const { data, error } = await supabaseAdmin.rpc('affiliate_clawback_commission', { p_order_id: orderId });
+    if (error) {
+      console.error('[Affiliate] affiliate_clawback_commission failed:', error.message);
+      return;
     }
-
-    await supabaseAdmin.from('affiliate_commissions')
-      .update({ status: 'clawed_back', updated_at: new Date().toISOString() })
-      .eq('id', commission.id);
-    await supabaseAdmin.from('affiliates').update(updates).eq('id', commission.affiliate_id);
-
-    console.log(`[Affiliate] Clawed back commission for order ${orderId}`);
+    if (data) console.log(`[Affiliate] Clawed back commission for order ${orderId}`);
   } catch (e: any) {
     console.error('[Affiliate] clawbackAffiliateCommission error:', e?.message || e);
   }
 }
 
 /**
- * Lazily matures commissions whose hold window has elapsed (pending → matured),
+ * Matures commissions whose hold window has elapsed (pending → matured),
  * moving the amount from pending to available balance. Called on dashboard/admin
- * reads so we don't need a cron. Pass an affiliateId to scope it.
+ * reads so we don't need a cron. Pass an affiliateId to scope it. Runs as one
+ * statement in the database, so concurrent calls can't double-count.
  */
 export async function matureDueCommissions(affiliateId?: string): Promise<void> {
   try {
-    let q = supabaseAdmin
-      .from('affiliate_commissions')
-      .select('id, affiliate_id, commission_amount')
-      .eq('status', 'pending')
-      .lte('matures_at', new Date().toISOString());
-    if (affiliateId) q = q.eq('affiliate_id', affiliateId);
-
-    const { data: due } = await q;
-    if (!due || due.length === 0) return;
-
-    // Group by affiliate and apply balance shifts.
-    const byAffiliate = new Map<string, number>();
-    for (const c of due) {
-      byAffiliate.set(c.affiliate_id, round2((byAffiliate.get(c.affiliate_id) || 0) + Number(c.commission_amount)));
-    }
-
-    const nowIso = new Date().toISOString();
-    await supabaseAdmin
-      .from('affiliate_commissions')
-      .update({ status: 'matured', matured_at: nowIso, updated_at: nowIso })
-      .in('id', due.map((c) => c.id));
-
-    for (const [affId, amount] of byAffiliate) {
-      const { data: aff } = await supabaseAdmin
-        .from('affiliates').select('balance_pending, balance_available, total_earned').eq('id', affId).single();
-      await supabaseAdmin.from('affiliates').update({
-        balance_pending: round2(Math.max(0, (aff?.balance_pending || 0) - amount)),
-        balance_available: round2((aff?.balance_available || 0) + amount),
-        total_earned: round2((aff?.total_earned || 0) + amount),
-      }).eq('id', affId);
-    }
+    const { error } = await supabaseAdmin.rpc('affiliate_mature_due_commissions', {
+      p_affiliate_id: affiliateId ?? null,
+    });
+    if (error) console.error('[Affiliate] affiliate_mature_due_commissions failed:', error.message);
   } catch (e: any) {
     console.error('[Affiliate] matureDueCommissions error:', e?.message || e);
   }

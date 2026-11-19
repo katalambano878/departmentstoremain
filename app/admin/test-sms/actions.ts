@@ -1,89 +1,69 @@
 'use server';
 
+import { cookies } from 'next/headers';
 import { verifyAdminToken } from '@/lib/auth';
+import { sendSMS } from '@/lib/notifications';
+import { checkRateLimit } from '@/lib/rate-limit';
+
+/** Test sends per staff member: enough to debug, not enough to spam. */
+const TEST_SMS_LIMIT = { maxRequests: 5, windowSeconds: 10 * 60 };
+
+function maskPhone(phone: string) {
+    return phone.length < 6 ? '***' : `${phone.slice(0, 4)}****${phone.slice(-2)}`;
+}
 
 export async function testSmsAction(phone: string, message: string, authToken: string) {
-    // SECURITY: Verify admin authentication before allowing SMS sending
-    const auth = await verifyAdminToken(authToken, { requireFullStaff: true });
-    if (!auth.authenticated) {
+    // SECURITY: verify the caller is admin or full staff (not till-only staff).
+    // Use the token the page passes; fall back to the admin session cookie.
+    let token = typeof authToken === 'string' ? authToken.trim() : '';
+    if (!token) {
+        try {
+            const jar = await cookies();
+            token = jar.get('sb-access-token')?.value || '';
+        } catch {
+            token = '';
+        }
+    }
+    const auth = await verifyAdminToken(token, { requireRole: ['admin', 'staff'] });
+    if (!auth.authenticated || !auth.user?.id) {
         return {
             success: false,
             error: 'Unauthorized: ' + (auth.error || 'Admin access required')
         };
     }
 
-    try {
-        console.log('Testing SMS to:', phone, '| by user:', auth.user?.email);
+    // Validate input before spending a rate-limit slot.
+    if (!phone || typeof phone !== 'string' || phone.replace(/\D/g, '').length < 9 || phone.length > 20) {
+        return { success: false, error: 'Enter a valid phone number' };
+    }
+    if (!message || typeof message !== 'string' || !message.trim() || message.length > 480) {
+        return { success: false, error: 'Message is empty or too long (480 characters max)' };
+    }
 
-        // Moolre SMS API only requires X-API-VASKEY for authentication
-        const smsVasKey = process.env.MOOLRE_SMS_API_KEY;
-
-        if (!smsVasKey) {
-            return {
-                success: false,
-                error: 'Missing MOOLRE_SMS_API_KEY environment variable'
-            };
-        }
-
-        // Validate phone input
-        if (!phone || typeof phone !== 'string') {
-            return { success: false, error: 'Invalid phone number' };
-        }
-
-        // Validate message input
-        if (!message || typeof message !== 'string' || message.length > 1000) {
-            return { success: false, error: 'Invalid or too long message' };
-        }
-
-        // Format phone number for Ghana
-        let cleaned = phone.replace(/\D/g, '');
-        if (cleaned.startsWith('0')) {
-            cleaned = '233' + cleaned.slice(1);
-        }
-        if (!cleaned.startsWith('233') && cleaned.length === 9) {
-            cleaned = '233' + cleaned;
-        }
-        const recipient = '+' + cleaned;
-
-        // Make API call per Moolre documentation
-        const response = await fetch('https://api.moolre.com/open/sms/send', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-API-VASKEY': smsVasKey
-            },
-            body: JSON.stringify({
-                type: 1,
-                senderid: process.env.MOOLRE_SMS_SENDER_ID || 'DD Zone',
-                messages: [
-                    {
-                        recipient: recipient,
-                        message: message
-                    }
-                ]
-            })
-        });
-
-        const responseText = await response.text();
-        let result;
-        try {
-            result = JSON.parse(responseText);
-        } catch {
-            result = { rawResponse: responseText };
-        }
-
-        return {
-            success: result?.status === 1,
-            result,
-            formattedPhone: recipient,
-            httpStatus: response.status
-        };
-    } catch (error: any) {
-        // SECURITY: Don't expose stack traces
-        console.error('[Test SMS] Error:', error.message, error.stack);
+    const rl = checkRateLimit(`test-sms:${auth.user.id}`, TEST_SMS_LIMIT);
+    if (!rl.success) {
         return {
             success: false,
-            error: error.message || 'SMS sending failed'
+            error: `Too many test messages. Try again in ${Math.ceil(rl.resetIn / 60)} minute(s).`
+        };
+    }
+
+    try {
+        console.log('[Test SMS] to', maskPhone(phone), '| by user:', auth.user.id);
+        // Same send path as receipts and campaigns (Taysend, then Moolre fallback).
+        const result: any = await sendSMS({ to: phone, message: message.trim() });
+        const ok = !!result && Number(result.status) === 1;
+        return {
+            success: ok,
+            provider: result?.provider || (result ? 'moolre' : null),
+            result: result ?? { error: 'No provider accepted the message. Check the SMS settings and logs.' },
+            remainingThisWindow: rl.remaining,
+        };
+    } catch (error: any) {
+        console.error('[Test SMS] Error:', error?.message);
+        return {
+            success: false,
+            error: 'SMS sending failed'
         };
     }
 }

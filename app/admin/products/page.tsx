@@ -7,6 +7,7 @@ import { fetchAllPaged } from '@/lib/supabase-paginate';
 import { getProductVisibility } from '@/lib/product-visibility';
 import { getOptimizedImageUrl } from '@/lib/imageOptimization';
 import { logActivity } from '@/lib/activity-log';
+import { downloadCsv, csvMoney } from '@/lib/csv';
 
 const PRODUCTS_SCROLL_KEY = 'admin_products_scroll_y';
 const STOCK_PRINT_PART_SIZE = 100;
@@ -105,6 +106,11 @@ export default function ProductsPage() {
     fetchCategories();
   }, [sortBy]);
 
+  // Never keep hidden products selected: changing search or filters clears the selection.
+  useEffect(() => {
+    setSelectedProducts([]);
+  }, [searchQuery, categoryFilter, statusFilter, variantFilter, stockFilter]);
+
   const fetchCategories = async () => {
     const { data } = await supabase.from('categories').select('name');
     if (data) setCategories(data);
@@ -144,7 +150,7 @@ export default function ProductsPage() {
           category: p.categories?.name || 'Uncategorized',
           image: p.product_images?.find((img: any) => img.position === 0)?.url
             || p.product_images?.[0]?.url
-            || 'https://via.placeholder.com/300?text=No+Image',
+            || 'data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 width=%2780%27 height=%2780%27 viewBox=%270 0 80 80%27%3E%3Crect width=%2780%27 height=%2780%27 fill=%27%23f3f4f6%27/%3E%3Cpath d=%27M24 54l10-12 8 9 6-7 8 10z%27 fill=%27%23d1d5db%27/%3E%3Ccircle cx=%2730%27 cy=%2730%27 r=%275%27 fill=%27%23d1d5db%27/%3E%3C/svg%3E',
           variantsCount: p.product_variants?.[0]?.count || 0,
           stock: p.quantity,
           sales: 0, // Placeholder for now
@@ -461,11 +467,8 @@ export default function ProductsPage() {
         (v.name && v.name !== 'Default' ? v.name : '') ||
         'Default';
 
-      // Quote every field so commas, quotes and newlines in names are safe.
-      const cell = (v: any) => `"${String(v ?? '').replace(/"/g, '""')}"`;
-      const lines: string[] = [
-        ['Product', 'Product SKU', 'Category', 'Status', 'Variant', 'Variant SKU', 'Price (GHS)', 'Stock', 'Stock status'].join(','),
-      ];
+      const headers = ['Product', 'Product SKU', 'Category', 'Status', 'Variant', 'Variant SKU', 'Price (GHS)', 'Stock', 'Stock status'];
+      const csvRows: unknown[][] = [];
 
       const stockStatus = (q: number, threshold: number) =>
         q === 0 ? 'Out of stock' : q <= threshold ? 'Low stock' : 'In stock';
@@ -477,36 +480,27 @@ export default function ProductsPage() {
         if (variants.length > 0) {
           for (const v of variants) {
             const q = v.quantity || 0;
-            lines.push([
-              cell(p.name), cell(p.sku || ''), cell(category), cell(p.status),
-              cell(variantLabel(v)), cell(v.sku || ''),
-              cell(Number(v.price ?? p.price ?? 0).toFixed(2)),
-              cell(q), cell(stockStatus(q, threshold)),
-            ].join(','));
+            csvRows.push([
+              p.name, p.sku || '', category, p.status,
+              variantLabel(v), v.sku || '',
+              csvMoney(v.price ?? p.price ?? 0),
+              q, stockStatus(q, threshold),
+            ]);
           }
         } else {
           const q = p.stock ?? p.quantity ?? 0;
-          lines.push([
-            cell(p.name), cell(p.sku || ''), cell(category), cell(p.status),
-            cell(''), cell(''),
-            cell(Number(p.price ?? 0).toFixed(2)),
-            cell(q), cell(stockStatus(q, threshold)),
-          ].join(','));
+          csvRows.push([
+            p.name, p.sku || '', category, p.status,
+            '', '',
+            csvMoney(p.price ?? 0),
+            q, stockStatus(q, threshold),
+          ]);
         }
       }
 
-      // Prepend BOM so Excel reads UTF-8 (GH₵, accents) correctly.
-      const blob = new Blob(['\uFEFF' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8;' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
       const stamp = new Date().toISOString().slice(0, 10);
-      a.href = url;
-      a.download = `stock-list-${stamp}.csv`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
+      downloadCsv(`stock-list-${stamp}.csv`, headers, csvRows);
       void logActivity('export_csv', `Exported stock list CSV (${rows.length} products)`);
-      URL.revokeObjectURL(url);
     } catch (err: any) {
       console.error('Export CSV error:', err);
       alert('Could not export the stock list: ' + (err?.message || 'unknown error'));
@@ -515,12 +509,17 @@ export default function ProductsPage() {
     }
   };
 
+  /** Select-all works on the rows currently shown (search + filters), never the whole catalogue. */
   const handleSelectAll = () => {
-    if (selectedProducts.length === products.length) {
-      setSelectedProducts([]);
-    } else {
-      setSelectedProducts(products.map(p => p.id));
-    }
+    const visibleIds = filteredProducts.map((p) => p.id);
+    const allVisibleSelected = visibleIds.length > 0 && visibleIds.every((id) => selectedProducts.includes(id));
+    setSelectedProducts(allVisibleSelected ? [] : visibleIds);
+  };
+
+  /** Selected products that are still visible under the current filters. */
+  const visibleSelectedIds = () => {
+    const visible = new Set(filteredProducts.map((p) => p.id));
+    return selectedProducts.filter((id) => visible.has(id));
   };
 
   const handleSelectProduct = (productId: string) => {
@@ -569,10 +568,12 @@ export default function ProductsPage() {
   };
 
   const handleBulkDelete = async () => {
-    if (confirm(`Are you sure you want to delete ${selectedProducts.length} products? This action cannot be undone.`)) {
-      const error = await deleteProductWithRelations(selectedProducts);
+    const ids = visibleSelectedIds();
+    if (ids.length === 0) return;
+    if (confirm(`Are you sure you want to delete ${ids.length} product${ids.length === 1 ? '' : 's'}? This action cannot be undone.`)) {
+      const error = await deleteProductWithRelations(ids);
       if (!error) {
-        setProducts(products.filter(p => !selectedProducts.includes(p.id)));
+        setProducts(products.filter(p => !ids.includes(p.id)));
         setSelectedProducts([]);
         alert('Products deleted successfully');
       } else {
@@ -583,20 +584,22 @@ export default function ProductsPage() {
   };
 
   const handleBulkStatusUpdate = async () => {
-    if (selectedProducts.length === 0) return;
+    const ids = visibleSelectedIds();
+    if (ids.length === 0) return;
+    if (!confirm(`Set ${ids.length} product${ids.length === 1 ? '' : 's'} to ${bulkStatus}?`)) return;
     try {
       const { error } = await supabase
         .from('products')
         .update({ status: bulkStatus })
-        .in('id', selectedProducts);
+        .in('id', ids);
 
       if (error) throw error;
 
       setProducts(prev =>
-        prev.map((p) => selectedProducts.includes(p.id) ? { ...p, status: bulkStatus } : p)
+        prev.map((p) => ids.includes(p.id) ? { ...p, status: bulkStatus } : p)
       );
       setSelectedProducts([]);
-      alert(`Updated ${selectedProducts.length} product${selectedProducts.length > 1 ? 's' : ''} to ${bulkStatus}.`);
+      alert(`Updated ${ids.length} product${ids.length > 1 ? 's' : ''} to ${bulkStatus}.`);
     } catch (err: any) {
       console.error('Bulk status update error:', err);
       alert('Error updating status: ' + err.message);
@@ -881,7 +884,7 @@ export default function ProductsPage() {
                   <th className="py-4 px-6">
                     <input
                       type="checkbox"
-                      checked={selectedProducts.length === products.length && products.length > 0}
+                      checked={filteredProducts.length > 0 && filteredProducts.every((p) => selectedProducts.includes(p.id))}
                       onChange={handleSelectAll}
                       className="w-4 h-4 text-blue-700 border-gray-300 rounded focus:ring-blue-500 cursor-pointer"
                     />
