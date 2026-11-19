@@ -1,11 +1,15 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useCMS } from '@/context/CMSContext';
 
+// Same default as lib/birthdays.ts (server); {name} becomes the customer's first name.
+const DEFAULT_BIRTHDAY_MESSAGE =
+  'Happy birthday, {name}! Everyone at Discount Discovery Zone wishes you a wonderful day. Thank you for shopping with us.';
+
 export default function SettingsPage() {
-  const { getSetting, updateSetting, refreshCMS } = useCMS();
+  const { settings, getSetting, updateSetting, refreshCMS } = useCMS();
 
   const [saving, setSaving] = useState<string | null>(null);
   const [uploadingLogo, setUploadingLogo] = useState<'dark' | 'white' | null>(null);
@@ -16,6 +20,46 @@ export default function SettingsPage() {
   const [siteTagline, setSiteTagline] = useState(getSetting('site_tagline'));
   const [contactEmail, setContactEmail] = useState(getSetting('contact_email'));
   const [contactPhone, setContactPhone] = useState(getSetting('contact_phone'));
+  const [whatsappNumber, setWhatsappNumber] = useState(getSetting('whatsapp_number'));
+  const [whatsappEnabled, setWhatsappEnabled] = useState(getSetting('whatsapp_button_enabled') !== 'false');
+  const [birthdayEnabled, setBirthdayEnabled] = useState(getSetting('birthday_messages_enabled') !== 'false');
+  const [birthdayMessage, setBirthdayMessage] = useState(getSetting('birthday_message') || DEFAULT_BIRTHDAY_MESSAGE);
+  const birthdayEdited = useRef(false);
+
+  // Settings can arrive after this page first renders (direct visit). Fill the
+  // form from them until the admin starts typing, so Save never writes defaults.
+  const edited = useRef(false);
+  useEffect(() => {
+    if (edited.current) return;
+    setSiteName(getSetting('site_name'));
+    setSiteTagline(getSetting('site_tagline'));
+    setContactEmail(getSetting('contact_email'));
+    setContactPhone(getSetting('contact_phone'));
+    setWhatsappNumber(getSetting('whatsapp_number'));
+    setWhatsappEnabled(getSetting('whatsapp_button_enabled') !== 'false');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [settings]);
+  useEffect(() => {
+    if (birthdayEdited.current) return;
+    setBirthdayEnabled(getSetting('birthday_messages_enabled') !== 'false');
+    setBirthdayMessage(getSetting('birthday_message') || DEFAULT_BIRTHDAY_MESSAGE);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [settings]);
+
+  const handleSaveBirthday = async () => {
+    setSaving('birthday');
+    try {
+      const text = birthdayMessage.trim();
+      await updateSetting('birthday_messages_enabled', birthdayEnabled ? 'true' : 'false');
+      await updateSetting('birthday_message', text === DEFAULT_BIRTHDAY_MESSAGE ? '' : text);
+      birthdayEdited.current = false;
+      showSuccess('Birthday message settings saved');
+    } catch (err: any) {
+      alert('Failed to save: ' + err.message);
+    } finally {
+      setSaving(null);
+    }
+  };
 
   const currentDarkLogo = getSetting('site_logo') || '/logo.png';
   const currentWhiteLogo = getSetting('site_logo_white') || '/logo-white.png';
@@ -60,6 +104,8 @@ export default function SettingsPage() {
       await updateSetting('site_tagline', siteTagline);
       await updateSetting('contact_email', contactEmail);
       await updateSetting('contact_phone', contactPhone);
+      await updateSetting('whatsapp_number', whatsappNumber.trim());
+      await updateSetting('whatsapp_button_enabled', whatsappEnabled ? 'true' : 'false');
       showSuccess('Settings saved successfully');
     } catch (err: any) {
       alert('Failed to save: ' + err.message);
@@ -164,7 +210,7 @@ export default function SettingsPage() {
       </div>
 
       {/* General Settings */}
-      <div className="bg-white rounded-xl border border-gray-200 p-6">
+      <div className="bg-white rounded-xl border border-gray-200 p-6" onChange={() => { edited.current = true; }}>
         <h2 className="text-lg font-bold text-gray-900 mb-6">General Information</h2>
 
         <div className="space-y-4">
@@ -211,6 +257,33 @@ export default function SettingsPage() {
               />
             </div>
           </div>
+
+          <div className="grid sm:grid-cols-2 gap-4">
+            <div>
+              <label htmlFor="whatsapp-number" className="block text-sm font-semibold text-gray-900 mb-2">WhatsApp chat number</label>
+              <input
+                id="whatsapp-number"
+                type="tel"
+                value={whatsappNumber}
+                onChange={(e) => setWhatsappNumber(e.target.value)}
+                placeholder={contactPhone || '+233 24 861 5775'}
+                className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              />
+              <p className="mt-1 text-xs text-gray-500">The green chat button on the website opens this number. Leave it empty to use the contact phone.</p>
+            </div>
+            <label className="flex items-start gap-3 sm:pt-9 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={whatsappEnabled}
+                onChange={(e) => setWhatsappEnabled(e.target.checked)}
+                className="mt-0.5 size-5 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+              />
+              <span className="text-sm text-gray-700">
+                <span className="block font-semibold text-gray-900">Show the WhatsApp chat button</span>
+                Customers see it in the bottom corner of every store page.
+              </span>
+            </label>
+          </div>
         </div>
 
         <button
@@ -219,6 +292,56 @@ export default function SettingsPage() {
           className="mt-6 px-6 py-3 bg-blue-700 hover:bg-blue-800 text-white rounded-lg font-semibold transition-colors disabled:opacity-50 flex items-center gap-2"
         >
           {saving === 'general' ? (
+            <><i className="ri-loader-4-line animate-spin"></i> Saving...</>
+          ) : (
+            <><i className="ri-save-line"></i> Save Changes</>
+          )}
+        </button>
+      </div>
+
+      {/* Birthday messages */}
+      <div className="bg-white rounded-xl border border-gray-200 p-6" onChange={() => { birthdayEdited.current = true; }}>
+        <h2 className="text-lg font-bold text-gray-900 mb-1">Birthday messages</h2>
+        <p className="text-sm text-gray-600 mb-6">
+          Customers can add their birthday at checkout. On the day, they get this message by SMS and email, once a year.
+        </p>
+
+        <label className="flex items-start gap-3 cursor-pointer mb-5">
+          <input
+            type="checkbox"
+            checked={birthdayEnabled}
+            onChange={(e) => setBirthdayEnabled(e.target.checked)}
+            className="mt-0.5 size-5 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+          />
+          <span className="text-sm text-gray-700">
+            <span className="block font-semibold text-gray-900">Send birthday messages</span>
+            Turn this off to stop all birthday messages.
+          </span>
+        </label>
+
+        <label htmlFor="birthday-message" className="block text-sm font-semibold text-gray-900 mb-2">Message</label>
+        <textarea
+          id="birthday-message"
+          rows={4}
+          maxLength={480}
+          value={birthdayMessage}
+          onChange={(e) => setBirthdayMessage(e.target.value)}
+          className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+        />
+        <div className="mt-1 flex flex-wrap justify-between gap-2 text-xs text-gray-500">
+          <span>{'{name}'} is replaced with the customer&apos;s first name.</span>
+          <span>{birthdayMessage.length} characters{birthdayMessage.length > 160 ? ` (${Math.ceil(birthdayMessage.length / 153)} SMS parts)` : ''}</span>
+        </div>
+        <p className="mt-3 text-sm text-gray-600">
+          Preview: {birthdayMessage.replace(/\{name\}/gi, 'Ama')}
+        </p>
+
+        <button
+          onClick={handleSaveBirthday}
+          disabled={saving === 'birthday'}
+          className="mt-6 px-6 py-3 bg-blue-700 hover:bg-blue-800 text-white rounded-lg font-semibold transition-colors disabled:opacity-50 flex items-center gap-2"
+        >
+          {saving === 'birthday' ? (
             <><i className="ri-loader-4-line animate-spin"></i> Saving...</>
           ) : (
             <><i className="ri-save-line"></i> Save Changes</>

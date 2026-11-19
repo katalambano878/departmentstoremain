@@ -20,18 +20,21 @@ export default function UpdatePasswordPage() {
       const url = new URL(window.location.href);
       const code = url.searchParams.get('code');
 
-      if (code) {
-        const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
-        if (cancelled) return;
-        if (exchangeError) {
-          setError(exchangeError.message);
-          return;
-        }
-      }
-
-      const {
+      // supabase-js already exchanges ?code= while it initializes
+      // (detectSessionInUrl); exchanging it again would fail, so only do it
+      // when that left no session.
+      let {
         data: { session },
       } = await supabase.auth.getSession();
+      if (!session && code) {
+        const { data, error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
+        if (cancelled) return;
+        if (exchangeError) {
+          setError('This link is invalid or has expired. Request a new reset email.');
+          return;
+        }
+        session = data.session;
+      }
       if (cancelled) return;
       if (!session) {
         setError('This link is invalid or has expired. Request a new reset email.');

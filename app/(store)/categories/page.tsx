@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { supabase } from '@/lib/supabase';
+import { supabaseAnon as supabase } from '@/lib/supabase-server';
 import { getOptimizedImageUrl } from '@/lib/imageOptimization';
 import PageHero from '@/components/PageHero';
 

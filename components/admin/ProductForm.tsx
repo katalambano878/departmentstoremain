@@ -78,6 +78,12 @@ export default function ProductForm({ initialData, isEditMode = false }: Product
     const [salePrice, setSalePrice] = useState(initialPricing.sale);
     // Master campaign switch (site_settings.sales_active); defaults to ON.
     const [salesActive, setSalesActive] = useState(true);
+    // Each sale has its own on/off switch (Admin → Sales, Live column). Saving
+    // keeps a saved sale's state; a new sale follows the all-sales switch.
+    const savedSaleState: 'on' | 'off' | null = initialData?.on_sale
+        ? initialData?.metadata?.paused_sale_price != null ? 'off' : 'on'
+        : null;
+    const saleOn = savedSaleState ? savedSaleState === 'on' : salesActive;
     const [sku, setSku] = useState(initialData?.sku || '');
     const [barcode, setBarcode] = useState(initialData?.barcode || '');
     const [posCode, setPosCode] = useState(getPosCodeFromMetadata(initialData?.metadata));
@@ -438,7 +444,7 @@ export default function ProductForm({ initialData, isEditMode = false }: Product
             };
 
             let pricingFields: Record<string, any>;
-            if (hasVariants && anyVariantSale && salesActive) {
+            if (hasVariants && anyVariantSale && saleOn) {
                 delete metadata.paused_sale_price;
                 pricingFields = { price: minCharged, compare_at_price: regularP, on_sale: true };
             } else if (hasVariants && anyVariantSale) {
@@ -455,7 +461,7 @@ export default function ProductForm({ initialData, isEditMode = false }: Product
                     compare_at_price: comparePrice ? parseFloat(comparePrice) : null,
                     on_sale: false,
                 };
-            } else if (hasSale && salesActive) {
+            } else if (hasSale && saleOn) {
                 delete metadata.paused_sale_price;
                 pricingFields = { price: saleP, compare_at_price: regularP, on_sale: true };
             } else if (hasSale) {
@@ -573,7 +579,7 @@ export default function ProductForm({ initialData, isEditMode = false }: Product
                                     ? { color_hex: group.colorHex }
                                     : {})
                             };
-                            if (hasRowSale && !salesActive) {
+                            if (hasRowSale && !saleOn) {
                                 variantMetadata.paused_sale_price = rowSale;
                             } else {
                                 delete variantMetadata.paused_sale_price;
@@ -588,8 +594,8 @@ export default function ProductForm({ initialData, isEditMode = false }: Product
                                     product_id: productId,
                                     name: sizeLabel,
                                     sku: sizeRow.sku || null,
-                                    price: hasRowSale && salesActive ? rowSale : rowRegular,
-                                    compare_at_price: hasRowSale && salesActive ? rowRegular : null,
+                                    price: hasRowSale && saleOn ? rowSale : rowRegular,
+                                    compare_at_price: hasRowSale && saleOn ? rowRegular : null,
                                     quantity: parseInt(sizeRow.stock) || 0,
                                     option1: sizeLabel,
                                     option2: option2Value,
@@ -1014,16 +1020,16 @@ export default function ProductForm({ initialData, isEditMode = false }: Product
                                     <h3 className="text-lg font-bold text-gray-900">Sale</h3>
                                     <span
                                         className={`px-2 py-0.5 rounded-full text-xs font-bold ${
-                                            salesActive ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'
+                                            saleOn ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'
                                         }`}
                                     >
-                                        Sales mode {salesActive ? 'ON' : 'OFF'}
+                                        Sale switch {saleOn ? 'ON' : 'OFF'}
                                     </span>
                                 </div>
                                 <p className="text-sm text-gray-500 mb-4">
-                                    Set a sale price for this product. It only shows to customers while sales mode is ON
-                                    (Admin → Sales). When sales mode is OFF, the product sells at its regular price and
-                                    this sale price is saved for the next campaign.
+                                    Set a sale price for this product. Customers see it while this product&apos;s sale
+                                    switch is ON. Switch it on or off in the Live column on Admin → Sales. While it is OFF,
+                                    the product sells at its regular price and this sale price is kept.
                                 </p>
 
                                 {variantGroups.length > 0 ? (
@@ -1061,9 +1067,9 @@ export default function ProductForm({ initialData, isEditMode = false }: Product
                                                     </span>
                                                 </p>
                                                 <p className="text-red-800 text-sm">
-                                                    {salesActive
+                                                    {saleOn
                                                         ? 'Goes live as soon as you save.'
-                                                        : 'Saved — will go live when you turn sales mode on.'}
+                                                        : 'Saved, but switched off. Turn it on in Admin → Sales.'}
                                                 </p>
                                             </div>
                                         )}

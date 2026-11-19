@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { getPublicSiteUrl } from '@/lib/site-url';
 import { useRecaptcha } from '@/hooks/useRecaptcha';
@@ -12,6 +12,13 @@ export default function ForgotPasswordPage() {
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const { getToken, verifying } = useRecaptcha();
+
+  useEffect(() => {
+    // Sent here when a reset link expired or was opened in another browser.
+    if (new URLSearchParams(window.location.search).get('expired') === '1') {
+      setError('That reset link has expired or was opened in a different browser. Request a new one below.');
+    }
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

@@ -5,11 +5,26 @@ const nextConfig: NextConfig = {
     return [{ source: '/manifest.json', destination: '/api/manifest' }];
   },
   images: {
-    // Bypass Next.js image optimizer in production to avoid 402 errors
-    // from the hosted optimizer endpoint and load Supabase images directly.
+    // Bypass the Next.js image optimizer; images load straight from the
+    // store's own storage route (app/storage/v1).
     unoptimized: true,
     minimumCacheTTL: 2592000, // Cache optimized images for 30 days
     remotePatterns: [
+      {
+        protocol: 'https',
+        hostname: 'discountdiscoveryzone.com',
+        pathname: '/storage/v1/object/public/**',
+      },
+      {
+        protocol: 'https',
+        hostname: 'www.discountdiscoveryzone.com',
+        pathname: '/storage/v1/object/public/**',
+      },
+      {
+        protocol: 'https',
+        hostname: 'departmentstore-staging.169-58-8-203.sslip.io',
+        pathname: '/storage/v1/object/public/**',
+      },
       {
         protocol: 'https',
         hostname: '*.supabase.co',

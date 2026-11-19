@@ -139,6 +139,12 @@ export const RATE_LIMITS = {
     windowSeconds: 60 // 20 requests per minute
   },
 
+  /** Sign-in, sign-up and password-reset requests to /auth/v1 */
+  auth: {
+    maxRequests: 10,
+    windowSeconds: 60,
+  },
+
   /** Public welcome emails after signup — stricter than generic notification */
   welcome: {
     maxRequests: 5,

@@ -22,11 +22,24 @@ export default function AuthCallbackPage() {
         const code = url.searchParams.get('code');
         const next = url.searchParams.get('next') || '/account';
 
+        // supabase-js already exchanges ?code= while it initializes
+        // (detectSessionInUrl); exchanging it again would fail, so only do it
+        // when that left no session.
+        const {
+          data: { session: existing },
+        } = await supabase.auth.getSession();
+        if (cancelled) return;
+        if (existing) {
+          router.replace(next);
+          router.refresh();
+          return;
+        }
+
         if (code) {
           const { error } = await supabase.auth.exchangeCodeForSession(code);
           if (cancelled) return;
           if (error) {
-            setMessage(`Could not complete sign-in: ${error.message}`);
+            setMessage('Your email is confirmed, but this link could not sign you in on this device. Please sign in with your email and password.');
             return;
           }
           router.replace(next);
