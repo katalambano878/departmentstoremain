@@ -115,6 +115,7 @@ export async function computeOrderCharge(
  */
 export async function expectedChargeAmounts(order: {
     id: string;
+    total?: number | string | null;
     metadata?: Record<string, any> | null;
 }): Promise<number[]> {
     const { data: items, error } = await supabaseAdmin
@@ -127,7 +128,14 @@ export async function expectedChargeAmounts(order: {
         if (charge.missing.length === 0 && charge.total > 0) out.push(charge.total);
     }
     const recorded = Number(order.metadata?.payment_server_amount);
-    if (Number.isFinite(recorded) && recorded > 0) out.push(round2(recorded));
+    if (Number.isFinite(recorded) && recorded > 0) {
+        out.push(round2(recorded));
+    } else {
+        // A payment link opened before amounts were recorded (older links): the
+        // amount sent to the gateway then was the order's stored total.
+        const legacyTotal = Number(order.total);
+        if (Number.isFinite(legacyTotal) && legacyTotal > 0) out.push(round2(legacyTotal));
+    }
     return out;
 }
 

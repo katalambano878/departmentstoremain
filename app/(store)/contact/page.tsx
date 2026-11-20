@@ -32,7 +32,7 @@ export default function ContactPage() {
         .select('*')
         .eq('section', 'contact')
         .eq('block_key', 'main')
-        .single();
+        .maybeSingle();
 
       if (data) {
         setPageContent(data);
