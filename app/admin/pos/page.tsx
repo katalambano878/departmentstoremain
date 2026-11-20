@@ -5,6 +5,7 @@ import { createPortal } from 'react-dom';
 import dynamic from 'next/dynamic';
 import { supabase } from '@/lib/supabase';
 import { getPosCodeFromMetadata } from '@/lib/posCode';
+import { setReloadGuard, clearReloadGuard } from '@/lib/app-version';
 import { toPesewas, POS_WALKIN_EMAIL } from '@/app/api/admin/pos/shared';
 
 const BarcodeScanner = dynamic(() => import('@/components/admin/BarcodeScanner'), { ssr: false });
@@ -146,6 +147,14 @@ export default function POSPage() {
         'Northern', 'Volta', 'Upper East', 'Upper West', 'Brong-Ahafo',
         'Ahafo', 'Bono', 'Bono East', 'North East', 'Savannah', 'Oti', 'Western North'
     ];
+
+    // An update must not refresh the till in the middle of a sale: hold it
+    // while there are items in the cart or the payment window is open.
+    const saleInProgress = cart.length > 0 || showCheckoutModal || processing;
+    useEffect(() => {
+        setReloadGuard('pos', saleInProgress);
+    }, [saleInProgress]);
+    useEffect(() => () => clearReloadGuard('pos'), []);
 
     useEffect(() => {
         fetchData();

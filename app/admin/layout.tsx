@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import { useCMS } from '@/context/CMSContext';
+import AppUpdateWatcher from '@/components/AppUpdateWatcher';
 
 type BellCounts = {
   newOrders: number;
@@ -559,6 +560,8 @@ export default function AdminLayout({
 
   return (
     <div className="min-h-screen bg-gray-50">
+      {/* Refreshes this tab after a deploy, so it never runs out-of-date code. */}
+      <AppUpdateWatcher />
 
       {/* Mobile Overlay */}
       {isSidebarOpen && (

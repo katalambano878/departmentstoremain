@@ -1,6 +1,17 @@
 import type { NextConfig } from "next";
 
+// One stamp per build, the same in the server and browser bundles. The build's
+// worker processes inherit the variable, so they all read the first value.
+// `/api/version` reports it and open dashboard tabs compare it with their own
+// (see lib/app-version.ts).
+if (!process.env.DDZ_BUILD_STAMP) {
+  process.env.DDZ_BUILD_STAMP = Date.now().toString(36);
+}
+
 const nextConfig: NextConfig = {
+  env: {
+    NEXT_PUBLIC_APP_BUILD: process.env.DDZ_BUILD_STAMP,
+  },
   async rewrites() {
     return [{ source: '/manifest.json', destination: '/api/manifest' }];
   },
