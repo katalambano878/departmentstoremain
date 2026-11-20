@@ -9,7 +9,7 @@ import {
     getProductVisibility,
     type ProductVisibility,
 } from '@/lib/product-visibility';
-import { slugify } from '@/lib/slug';
+import { nextFreeSlug, slugify } from '@/lib/slug';
 
 interface ProductFormProps {
     initialData?: any;
@@ -312,6 +312,9 @@ export default function ProductForm({ initialData, isEditMode = false }: Product
     const [seoTitle, setSeoTitle] = useState(initialData?.seo_title || '');
     const [metaDescription, setMetaDescription] = useState(initialData?.seo_description || '');
     const [urlSlug, setUrlSlug] = useState(initialData?.slug || '');
+    // A new product's web address follows its name until someone types their
+    // own on the SEO tab.
+    const [slugEdited, setSlugEdited] = useState(false);
     const [keywords, setKeywords] = useState(initialData?.tags?.join(', ') || '');
 
     const tabs = [
@@ -333,11 +336,14 @@ export default function ProductForm({ initialData, isEditMode = false }: Product
         fetchCategories();
     }, [categoryId]);
 
+    // Rebuild the address from the whole name on every change. (It used to be
+    // set once, from the first letter typed, so "Towel" became "t" and the
+    // save failed when a product already had that address.)
     useEffect(() => {
-        if (!isEditMode && productName && !urlSlug) {
+        if (!isEditMode && !slugEdited) {
             setUrlSlug(slugify(productName));
         }
-    }, [productName, isEditMode, urlSlug]);
+    }, [productName, isEditMode, slugEdited]);
 
     useEffect(() => {
         if (!isEditMode && !sku) setSku(generateSku());
@@ -554,9 +560,25 @@ export default function ProductForm({ initialData, isEditMode = false }: Product
                 };
             }
 
+            // Web address: keep a saved one that was not changed; otherwise use
+            // the wanted one, with -2, -3… added when another product has it.
+            const wantedSlug = slugify(urlSlug) || slugify(productName) || `product-${Date.now()}`;
+            let finalSlug = wantedSlug;
+            if (!(isEditMode && initialData?.slug === wantedSlug)) {
+                const { data: sameSlug, error: slugError } = await supabase
+                    .from('products')
+                    .select('id, slug')
+                    .or(`slug.eq.${wantedSlug},slug.like.${wantedSlug}-%`);
+                if (slugError) throw slugError;
+                finalSlug = nextFreeSlug(
+                    wantedSlug,
+                    (sameSlug || []).filter((row: any) => row.id !== initialData?.id).map((row: any) => row.slug)
+                );
+            }
+
             const productData = {
                 name: productName.trim(),
-                slug: slugify(urlSlug) || slugify(productName) || `product-${Date.now()}`,
+                slug: finalSlug,
                 description,
                 category_id: categoryId || null,
                 ...pricingFields,
@@ -597,7 +619,13 @@ export default function ProductForm({ initialData, isEditMode = false }: Product
                     throw new Error(`The price saved as GH₵${Number(saved.price).toFixed(2)}, not GH₵${chargedPrice.toFixed(2)}.`);
                 }
             } else {
-                const { data: newProduct, error: insertError } = await supabase.from('products').insert([productData]).select('id, price').single();
+                let { data: newProduct, error: insertError } = await supabase.from('products').insert([productData]).select('id, price').single();
+                if (insertError && /products_slug_key/.test(insertError.message || '')) {
+                    // The address was taken between the check and the save (or by a
+                    // product this account cannot see): add a short ending and save once more.
+                    productData.slug = `${wantedSlug.slice(0, 68)}-${Date.now().toString(36)}`;
+                    ({ data: newProduct, error: insertError } = await supabase.from('products').insert([productData]).select('id, price').single());
+                }
                 if (newProduct) productId = newProduct.id;
                 error = insertError;
                 if (newProduct && Math.abs(Number(newProduct.price) - chargedPrice) >= 0.001) {
@@ -887,7 +915,10 @@ export default function ProductForm({ initialData, isEditMode = false }: Product
 
         } catch (err: any) {
             console.error('Error saving product:', err);
-            alert(`Error: ${err.message}`);
+            const message = /products_slug_key/.test(err?.message || '')
+                ? 'Another product already uses this web address. Open the SEO tab, change the URL Slug, then save again.'
+                : err.message;
+            alert(`Error: ${message}`);
         } finally {
             setLoading(false);
         }
@@ -1775,8 +1806,16 @@ export default function ProductForm({ initialData, isEditMode = false }: Product
                                     <input
                                         type="text"
                                         value={urlSlug}
-                                        onChange={(e) => setUrlSlug(e.target.value)}
-                                        onBlur={() => setUrlSlug(slugify(urlSlug))}
+                                        onChange={(e) => {
+                                            setSlugEdited(true);
+                                            setUrlSlug(e.target.value);
+                                        }}
+                                        onBlur={() => {
+                                            const cleaned = slugify(urlSlug);
+                                            setUrlSlug(cleaned);
+                                            // Emptied: go back to following the product name.
+                                            if (!cleaned) setSlugEdited(false);
+                                        }}
                                         className="flex-1 px-4 py-3 border-2 border-gray-300 rounded-r-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                                         placeholder="product-slug"
                                     />
