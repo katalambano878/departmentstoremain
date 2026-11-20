@@ -103,6 +103,18 @@ self.addEventListener('fetch', (event) => {
   // Prices, stock, orders and sessions change constantly.
   if (isNeverCached(url)) return;
 
+  // Video and audio: straight to the network. Players ask for byte ranges
+  // (seeking breaks if we answer from here) and the files are too large to
+  // keep in the cache.
+  if (
+    request.headers.has('range') ||
+    request.destination === 'video' ||
+    request.destination === 'audio' ||
+    url.pathname.match(/\.(mp4|webm|mov|m4a|mp3)$/)
+  ) {
+    return;
+  }
+
   // Strategy: Images - Cache First (long-lived)
   if (
     request.destination === 'image' ||

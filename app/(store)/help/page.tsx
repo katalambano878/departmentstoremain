@@ -4,6 +4,18 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { HELP_ARTICLES, HELP_CATEGORIES, STORE_EMAIL, STORE_PHONE } from './articles';
 
+/** The steps shown in /videos/how-to-order.mp4, in the same order. */
+const ORDER_STEPS = [
+  'Go to discountdiscoveryzone.com',
+  'Tap Shop, or search for an item',
+  'Tap the item you want',
+  'Tap Add to Bag',
+  'Open your bag and tap Checkout',
+  'Enter your name, phone number and address',
+  'Choose store pickup or doorstep delivery',
+  'Tap Pay with Mobile Money and approve it on your phone',
+];
+
 export default function HelpCenterPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const query = searchQuery.trim().toLowerCase();
@@ -73,6 +85,56 @@ export default function HelpCenterPage() {
       </div>
 
       <div className="max-w-7xl mx-auto px-4 py-12">
+        <section aria-labelledby="help-order-video" className="mb-12 bg-white rounded-xl shadow-sm p-6 sm:p-8">
+          <div className="grid grid-cols-1 gap-8 md:grid-cols-[260px_minmax(0,1fr)] md:items-center lg:grid-cols-[280px_minmax(0,1fr)] lg:gap-12">
+            <div className="mx-auto w-full max-w-[260px] md:max-w-none">
+              <div className="aspect-[9/16] overflow-hidden rounded-xl bg-emerald-950 shadow-[0_18px_40px_-22px_rgba(6,78,59,0.7)]">
+                <video
+                  controls
+                  playsInline
+                  preload="none"
+                  poster="/videos/how-to-order-poster.jpg"
+                  aria-label="Video: how to order from Discount Discovery Zone"
+                  className="h-full w-full object-cover"
+                >
+                  <source src="/videos/how-to-order.mp4" type="video/mp4" />
+                </video>
+              </div>
+            </div>
+            <div>
+              <h2 id="help-order-video" className="text-2xl font-bold text-gray-900 mb-2">Watch how to order</h2>
+              <p className="text-gray-600 mb-6 max-w-prose">
+                This video shows every step on a phone, from finding an item to paying with Mobile Money. It takes just over a minute.
+              </p>
+              <ol className="grid grid-cols-1 gap-x-8 gap-y-3 sm:grid-flow-col sm:grid-cols-2 sm:grid-rows-4">
+                {ORDER_STEPS.map((step, index) => (
+                  <li key={step} className="flex items-start gap-3 text-gray-700">
+                    <span className="flex h-7 w-7 flex-none items-center justify-center rounded-full bg-emerald-100 text-sm font-bold tabular-nums text-emerald-800" aria-hidden="true">
+                      {index + 1}
+                    </span>
+                    <span className="pt-0.5">{step}</span>
+                  </li>
+                ))}
+              </ol>
+              <div className="mt-6 flex flex-wrap items-center gap-x-6 gap-y-3">
+                <Link
+                  href="/shop"
+                  className="inline-flex items-center gap-2 rounded-lg bg-emerald-700 px-5 py-3 font-semibold text-white transition-colors hover:bg-emerald-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-700"
+                >
+                  Go to the shop
+                  <i className="ri-arrow-right-line" aria-hidden="true"></i>
+                </Link>
+                <Link
+                  href="/help/article/how-to-order"
+                  className="font-semibold text-emerald-700 underline decoration-emerald-700/40 underline-offset-4 hover:text-emerald-900 hover:decoration-emerald-900 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-700"
+                >
+                  Read the steps instead
+                </Link>
+              </div>
+            </div>
+          </div>
+        </section>
+
         <h2 className="text-2xl font-bold text-gray-900 mb-8">Browse by topic</h2>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {HELP_CATEGORIES.map((category) => {
