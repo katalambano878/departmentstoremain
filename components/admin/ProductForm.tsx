@@ -12,6 +12,7 @@ import {
 import { nextFreeSlug, slugify } from '@/lib/slug';
 import { uploadProductPhoto } from '@/lib/product-photo';
 import { reportStuck } from '@/lib/client-diagnostics';
+import PhotoFirstDetails from '@/components/admin/PhotoFirstDetails';
 
 interface ProductFormProps {
     initialData?: any;
@@ -1079,6 +1080,20 @@ export default function ProductForm({ initialData, isEditMode = false }: Product
                     {/* ── GENERAL TAB ── */}
                     {activeTab === 'general' && (
                         <div className="space-y-6 max-w-3xl">
+                            <PhotoFirstDetails
+                                images={images}
+                                onPhotosAdded={(urls) =>
+                                    setImages(prev => [...prev, ...urls.map((url, i) => ({ url, position: prev.length + i }))])
+                                }
+                                name={productName}
+                                description={description}
+                                onNameChange={(value) => {
+                                    setProductName(value);
+                                    if (formErrors.name) setFormErrors(prev => ({ ...prev, name: undefined }));
+                                }}
+                                onDescriptionChange={setDescription}
+                            />
+
                             <div>
                                 <label className="block text-sm font-semibold text-gray-900 mb-2">Product Name *</label>
                                 <input
