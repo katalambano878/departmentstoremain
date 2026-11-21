@@ -754,10 +754,10 @@ export default function ProductsPage() {
               </div>
             </div>
 
-            <div className="flex items-center gap-2 sm:gap-3">
+            <div className="flex flex-wrap items-center gap-2 sm:flex-nowrap sm:gap-3">
               <button
                 onClick={() => setShowFilters(!showFilters)}
-                className="px-4 py-3 border-2 border-gray-300 text-gray-700 rounded-lg hover:border-gray-400 transition-colors font-medium whitespace-nowrap cursor-pointer"
+                className="flex-1 sm:flex-none px-4 py-3 border-2 border-gray-300 text-gray-700 rounded-lg hover:border-gray-400 transition-colors font-medium whitespace-nowrap cursor-pointer"
               >
                 <i className="ri-filter-line mr-2"></i>
                 Filters
@@ -766,7 +766,7 @@ export default function ProductsPage() {
                 value={sortBy}
                 onChange={(e) => setSortBy(e.target.value)}
                 aria-label="Sort products"
-                className="min-w-0 flex-1 lg:flex-none px-3 sm:px-4 py-3 pr-8 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 font-medium cursor-pointer"
+                className="order-last basis-full sm:order-none sm:basis-auto min-w-0 sm:flex-1 lg:flex-none px-3 sm:px-4 py-3 pr-8 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 font-medium cursor-pointer"
               >
                 <option value="newest">Newest First</option>
                 <option value="name">Sort by Name</option>

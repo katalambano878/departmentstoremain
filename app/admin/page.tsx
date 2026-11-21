@@ -198,7 +198,7 @@ export default function AdminDashboard() {
 
         <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-6 mb-6 sm:mb-8">
           {stats.map((stat, index) => (
-            <div key={stat.title} className={`min-w-0 bg-white rounded-xl shadow-sm border border-gray-200 p-4 sm:p-6 hover:shadow-md transition-shadow ${index === 0 ? 'col-span-2 md:col-span-1' : ''}`}>
+            <div key={stat.title} className={`min-w-0 bg-white rounded-xl shadow-sm border border-gray-200 p-4 sm:p-6 hover:shadow-md transition-shadow ${index === 0 || (stats.length % 2 === 0 && index === stats.length - 1) ? 'col-span-2 md:col-span-1' : ''}`}>
               <div className="flex items-center justify-between gap-2 mb-3 sm:mb-4">
                 <div className={`w-10 h-10 sm:w-12 sm:h-12 shrink-0 flex items-center justify-center bg-${stat.color}-100 text-${stat.color}-700 rounded-lg`}>
                   <i className={`${stat.icon} text-xl sm:text-2xl`}></i>
