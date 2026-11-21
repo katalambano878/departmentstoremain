@@ -331,7 +331,12 @@ export default function ProductForm({ initialData, isEditMode = false }: Product
         setCategoriesState('loading');
         for (let attempt = 1; attempt <= 3; attempt++) {
             try {
-                const { data, error } = await supabase.from('categories').select('id, name').eq('status', 'active');
+                // A short limit of its own: a short list, and the form cannot be saved without it.
+                const { data, error } = await supabase
+                    .from('categories')
+                    .select('id, name')
+                    .eq('status', 'active')
+                    .abortSignal(AbortSignal.timeout(12_000));
                 if (!error && data) {
                     setCategories(data);
                     setCategoriesState('ready');
