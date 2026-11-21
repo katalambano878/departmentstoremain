@@ -1,4 +1,5 @@
 import { createClient, processLock } from '@supabase/supabase-js';
+import { recordAuthStep } from '@/lib/client-diagnostics';
 
 // The store serves the Supabase REST, auth and storage APIs from its own
 // origin (app/rest, app/auth/v1, app/storage), backed by plain Postgres.
@@ -57,5 +58,8 @@ export const supabase = createClient(supabaseUrl, supabaseKey, {
         // sign-in renewals are independent signed tokens, so two tabs renewing
         // at the same moment is harmless.
         lock: processLock,
+        // Keep a short log of the sign-in library's steps, so a page stuck on
+        // a phone can report where it stopped (lib/client-diagnostics.ts).
+        debug: typeof window !== 'undefined' ? recordAuthStep : false,
     },
 });

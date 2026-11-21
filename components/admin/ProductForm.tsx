@@ -11,6 +11,7 @@ import {
 } from '@/lib/product-visibility';
 import { nextFreeSlug, slugify } from '@/lib/slug';
 import { uploadProductPhoto } from '@/lib/product-photo';
+import { reportStuck } from '@/lib/client-diagnostics';
 
 interface ProductFormProps {
     initialData?: any;
@@ -329,6 +330,40 @@ export default function ProductForm({ initialData, isEditMode = false }: Product
     // request used to leave "Loading categories..." on screen for good.)
     const loadCategories = useCallback(async () => {
         setCategoriesState('loading');
+        let settled = false;
+        // Categories are public. If the usual route has not answered within 8
+        // seconds, fetch them directly (no sign-in step involved) and send a
+        // report of what the page was waiting on, so a phone-only stall can be
+        // traced from the server log.
+        const watchdog = setTimeout(async () => {
+            if (settled) return;
+            const started = Date.now();
+            let direct: string;
+            try {
+                const res = await fetch('/rest/v1/categories?select=id,name&status=eq.active', {
+                    headers: { apikey: 'public-anon-key', Accept: 'application/json' },
+                    cache: 'no-store',
+                    signal: AbortSignal.timeout(12_000),
+                });
+                const rows = res.ok ? await res.json() : null;
+                direct = `HTTP ${res.status} in ${Date.now() - started} ms, ${Array.isArray(rows) ? rows.length : 0} rows`;
+                if (!settled && Array.isArray(rows) && rows.length > 0) {
+                    settled = true;
+                    setCategories(rows);
+                    setCategoriesState('ready');
+                }
+            } catch (err: any) {
+                direct = `failed after ${Date.now() - started} ms: ${err?.name || 'Error'}`;
+            }
+            reportStuck('product-form-categories', { directFetch: direct });
+        }, 8_000);
+        const finish = (state: 'ready' | 'failed', rows?: any[]) => {
+            if (settled) return;
+            settled = true;
+            clearTimeout(watchdog);
+            if (rows) setCategories(rows);
+            setCategoriesState(state);
+        };
         for (let attempt = 1; attempt <= 3; attempt++) {
             try {
                 // A short limit of its own: a short list, and the form cannot be saved without it.
@@ -338,16 +373,16 @@ export default function ProductForm({ initialData, isEditMode = false }: Product
                     .eq('status', 'active')
                     .abortSignal(AbortSignal.timeout(12_000));
                 if (!error && data) {
-                    setCategories(data);
-                    setCategoriesState('ready');
+                    finish('ready', data);
                     return;
                 }
             } catch {
                 // A dropped connection: try again below.
             }
+            if (settled) return;
             if (attempt < 3) await new Promise((resolve) => setTimeout(resolve, attempt * 1500));
         }
-        setCategoriesState('failed');
+        finish('failed');
     }, []);
 
     useEffect(() => {
@@ -460,6 +495,10 @@ export default function ProductForm({ initialData, isEditMode = false }: Product
     const handleSubmit = async () => {
         if (loading) return;
         if (!validateForm()) return;
+        // A save still running after 20 seconds sends a report of what the page waits on.
+        const saveWatch = setTimeout(() => {
+            reportStuck('product-form-save', { editing: isEditMode, photos: images.length });
+        }, 20_000);
         try {
             setLoading(true);
 
@@ -962,6 +1001,7 @@ export default function ProductForm({ initialData, isEditMode = false }: Product
                     : err.message;
             alert(`Error: ${message}`);
         } finally {
+            clearTimeout(saveWatch);
             setLoading(false);
         }
     };
