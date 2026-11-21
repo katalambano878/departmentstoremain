@@ -10,6 +10,7 @@ import {
     type ProductVisibility,
 } from '@/lib/product-visibility';
 import { nextFreeSlug, slugify } from '@/lib/slug';
+import { uploadProductPhoto } from '@/lib/product-photo';
 
 interface ProductFormProps {
     initialData?: any;
@@ -46,6 +47,7 @@ export default function ProductForm({ initialData, isEditMode = false }: Product
     const router = useRouter();
     const [loading, setLoading] = useState(false);
     const [categories, setCategories] = useState<any[]>([]);
+    const [categoriesState, setCategoriesState] = useState<'loading' | 'ready' | 'failed'>('loading');
 
     // ── Sale-aware pricing initialisation ─────────────────────────────────
     // DB model: while a product is ON SALE, `price` holds the discounted
@@ -289,11 +291,7 @@ export default function ProductForm({ initialData, isEditMode = false }: Product
         if (!e.target.files?.[0]) return;
         setUploadingVariantId(tempId);
         try {
-            const file = e.target.files[0];
-            const fileName = `variants/${Math.random().toString(36).slice(2)}.${file.name.split('.').pop()}`;
-            const { error } = await supabase.storage.from('products').upload(fileName, file);
-            if (error) throw error;
-            const { data: { publicUrl } } = supabase.storage.from('products').getPublicUrl(fileName);
+            const publicUrl = await uploadProductPhoto(e.target.files[0], { folder: 'variants' });
             updateGroup(tempId, 'imageUrl', publicUrl);
         } catch (err: any) {
             alert('Upload failed: ' + err.message);
@@ -307,6 +305,8 @@ export default function ProductForm({ initialData, isEditMode = false }: Product
         (initialData?.product_images || []).filter((img: any) => !img.variant_id)
     );
     const [uploading, setUploading] = useState(false);
+    const [uploadProgress, setUploadProgress] = useState<{ done: number; total: number } | null>(null);
+    const [uploadProblem, setUploadProblem] = useState<string | null>(null);
 
     // SEO
     const [seoTitle, setSeoTitle] = useState(initialData?.seo_title || '');
@@ -325,16 +325,41 @@ export default function ProductForm({ initialData, isEditMode = false }: Product
         { id: 'seo', label: 'SEO', icon: 'ri-search-line' }
     ];
 
-    useEffect(() => {
-        async function fetchCategories() {
-            const { data } = await supabase.from('categories').select('id, name').eq('status', 'active');
-            if (data) {
-                setCategories(data);
-                if (data.length > 0 && !categoryId) setCategoryId(data[0].id);
+    // Load the category list, trying three times before giving up. (One failed
+    // request used to leave "Loading categories..." on screen for good.)
+    const loadCategories = useCallback(async () => {
+        setCategoriesState('loading');
+        for (let attempt = 1; attempt <= 3; attempt++) {
+            try {
+                const { data, error } = await supabase.from('categories').select('id, name').eq('status', 'active');
+                if (!error && data) {
+                    setCategories(data);
+                    setCategoriesState('ready');
+                    return;
+                }
+            } catch {
+                // A dropped connection: try again below.
             }
+            if (attempt < 3) await new Promise((resolve) => setTimeout(resolve, attempt * 1500));
         }
-        fetchCategories();
-    }, [categoryId]);
+        setCategoriesState('failed');
+    }, []);
+
+    useEffect(() => {
+        loadCategories();
+    }, [loadCategories]);
+
+    // Once the connection is back, load the list without being asked.
+    useEffect(() => {
+        if (categoriesState !== 'failed') return;
+        window.addEventListener('online', loadCategories);
+        return () => window.removeEventListener('online', loadCategories);
+    }, [categoriesState, loadCategories]);
+
+    // A product always has a category: start on the first one.
+    useEffect(() => {
+        if (!categoryId && categories.length > 0) setCategoryId(categories[0].id);
+    }, [categoryId, categories]);
 
     // Rebuild the address from the whole name on every change. (It used to be
     // set once, from the first letter typed, so "Towel" became "t" and the
@@ -366,26 +391,36 @@ export default function ProductForm({ initialData, isEditMode = false }: Product
     }, []);
 
     const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-        try {
-            if (!e.target.files || e.target.files.length === 0) return;
-            setUploading(true);
-            const files = Array.from(e.target.files);
-            const uploaded: { url: string; position: number }[] = [];
-            for (const file of files) {
-                const fileExt = file.name.split('.').pop();
-                const fileName = `${Math.random().toString(36).slice(2)}.${fileExt}`;
-                const { error: uploadError } = await supabase.storage.from('products').upload(fileName, file);
-                if (uploadError) throw uploadError;
-                const { data: { publicUrl } } = supabase.storage.from('products').getPublicUrl(fileName);
-                uploaded.push({ url: publicUrl, position: images.length + uploaded.length });
+        const input = e.target;
+        const files = Array.from(input.files || []);
+        if (files.length === 0) return;
+        setUploading(true);
+        setUploadProblem(null);
+        setUploadProgress({ done: 0, total: files.length });
+        let failed = 0;
+        let reason = '';
+        for (let i = 0; i < files.length; i++) {
+            try {
+                const url = await uploadProductPhoto(files[i]);
+                // Show each photo as soon as it is saved, so a later failure does not lose it.
+                setImages(prev => [...prev, { url, position: prev.length }]);
+            } catch (err: any) {
+                failed += 1;
+                reason = err?.message || '';
             }
-            setImages(prev => [...prev, ...uploaded]);
-        } catch (error: any) {
-            alert('Error uploading image: ' + error.message);
-        } finally {
-            setUploading(false);
-            e.target.value = '';
+            setUploadProgress({ done: i + 1, total: files.length });
         }
+        if (failed > 0) {
+            const what = files.length === 1
+                ? 'The photo did not upload.'
+                : failed === files.length
+                    ? 'None of the photos uploaded.'
+                    : `${failed} of ${files.length} photos did not upload.`;
+            setUploadProblem(`${what} ${reason}`.trim());
+        }
+        setUploading(false);
+        setUploadProgress(null);
+        input.value = '';
     };
 
     const handleRemoveImage = (indexToRemove: number) => {
@@ -917,7 +952,9 @@ export default function ProductForm({ initialData, isEditMode = false }: Product
             console.error('Error saving product:', err);
             const message = /products_slug_key/.test(err?.message || '')
                 ? 'Another product already uses this web address. Open the SEO tab, change the URL Slug, then save again.'
-                : err.message;
+                : /failed to fetch|networkerror|load failed|network request failed/i.test(err?.message || '')
+                    ? 'The connection dropped before the product was saved. Check your internet connection, then save again.'
+                    : err.message;
             alert(`Error: ${message}`);
         } finally {
             setLoading(false);
@@ -1036,12 +1073,32 @@ export default function ProductForm({ initialData, isEditMode = false }: Product
                                         onChange={(e) => setCategoryId(e.target.value)}
                                         className="w-full px-4 py-3 pr-8 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 cursor-pointer"
                                     >
-                                        {categories.length === 0 && <option value="">Loading categories...</option>}
+                                        {categories.length === 0 && (
+                                            <option value="">
+                                                {categoriesState === 'loading'
+                                                    ? 'Loading categories...'
+                                                    : categoriesState === 'failed'
+                                                        ? 'Categories did not load'
+                                                        : 'No categories yet'}
+                                            </option>
+                                        )}
                                         {categories.length > 0 && <option value="">Select a category</option>}
                                         {categories.map(cat => (
                                             <option key={cat.id} value={cat.id}>{cat.name}</option>
                                         ))}
                                     </select>
+                                    {categoriesState === 'failed' && categories.length === 0 && (
+                                        <p role="alert" className="mt-2 text-sm text-red-700">
+                                            The category list did not load. Check your internet connection.{' '}
+                                            <button
+                                                type="button"
+                                                onClick={loadCategories}
+                                                className="inline-flex min-h-[44px] items-center font-semibold underline underline-offset-2 hover:text-red-900 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-700"
+                                            >
+                                                Try again
+                                            </button>
+                                        </p>
+                                    )}
                                 </div>
                                 <div>
                                     <label className="block text-sm font-semibold text-gray-900 mb-2">Status</label>
@@ -1752,15 +1809,27 @@ export default function ProductForm({ initialData, isEditMode = false }: Product
 
                                 <label className={`aspect-square border-2 border-dashed border-gray-300 rounded-xl hover:border-blue-700 transition-colors flex flex-col items-center justify-center space-y-2 text-gray-600 hover:text-blue-700 cursor-pointer ${uploading ? 'opacity-50 cursor-not-allowed' : ''}`}>
                                     {uploading ? <i className="ri-loader-4-line animate-spin text-3xl"></i> : <i className="ri-upload-2-line text-3xl"></i>}
-                                    <span className="text-sm font-semibold text-center px-2">{uploading ? 'Uploading...' : 'Upload Images'}</span>
+                                    <span className="text-sm font-semibold text-center px-2" aria-live="polite">
+                                        {!uploading
+                                            ? 'Upload Images'
+                                            : uploadProgress && uploadProgress.total > 1
+                                                ? `Uploading ${Math.min(uploadProgress.done + 1, uploadProgress.total)} of ${uploadProgress.total}...`
+                                                : 'Uploading...'}
+                                    </span>
                                     <span className="text-xs text-gray-400">Tap to select multiple</span>
                                     <input type="file" accept="image/jpeg,image/png,image/webp,image/gif" multiple className="hidden" onChange={handleImageUpload} disabled={uploading} />
                                 </label>
                             </div>
 
+                            {uploadProblem && (
+                                <p role="alert" className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-800">
+                                    {uploadProblem}
+                                </p>
+                            )}
+
                             <div className="p-4 bg-gray-50 border border-gray-200 rounded-lg">
                                 <p className="text-sm text-gray-700">
-                                    <strong>Image Guidelines:</strong> Use high-quality images (min 1000x1000px), white or neutral backgrounds work best. Supported formats: JPG, PNG, WebP (max 5MB each).
+                                    <strong>Image Guidelines:</strong> Use high-quality images (min 1000x1000px), white or neutral backgrounds work best. Supported formats: JPG, PNG, WebP. Large photos are made smaller before they are sent, so they upload faster.
                                 </p>
                             </div>
                         </div>
