@@ -678,7 +678,7 @@ export default function POSPage() {
     };
 
     return (
-        <div className="flex flex-col lg:flex-row h-[calc(100vh-90px)] -m-4 lg:-m-6 overflow-hidden bg-gray-100 relative">
+        <div className="flex flex-col lg:flex-row h-[calc(100vh-90px)] supports-[height:100dvh]:h-[calc(100dvh-90px)] -m-4 lg:-m-6 overflow-hidden bg-gray-100 relative">
 
             {/* LEFT: Product Grid */}
             <div className={`flex-1 flex flex-col h-full min-w-0 ${isMobileCartOpen ? 'hidden lg:flex' : 'flex'}`}>
@@ -740,8 +740,9 @@ export default function POSPage() {
                         </div>
                         <button
                             onClick={() => setShowScanner(true)}
-                            className="flex items-center gap-2 px-4 py-2 bg-blue-700 hover:bg-blue-800 text-white rounded-lg font-semibold text-sm transition-colors whitespace-nowrap"
+                            className="flex shrink-0 items-center gap-2 px-4 py-2 min-h-[44px] bg-blue-700 hover:bg-blue-800 text-white rounded-lg font-semibold text-sm transition-colors whitespace-nowrap"
                             title="Scan barcode"
+                            aria-label="Scan barcode"
                         >
                             <i className="ri-barcode-line text-lg"></i>
                             <span className="hidden sm:inline">Scan</span>
@@ -751,7 +752,7 @@ export default function POSPage() {
                     <div className="flex md:hidden items-center gap-2">
                         <button
                             onClick={showPreviousCategory}
-                            className="w-9 h-9 rounded-full border border-gray-300 text-gray-600 hover:bg-gray-100 transition-colors"
+                            className="w-11 h-11 shrink-0 rounded-full border border-gray-300 text-gray-600 hover:bg-gray-100 transition-colors"
                             title="Previous category"
                         >
                             <i className="ri-arrow-left-s-line text-lg"></i>
@@ -765,7 +766,7 @@ export default function POSPage() {
                         </button>
                         <button
                             onClick={showNextCategory}
-                            className="w-9 h-9 rounded-full border border-gray-300 text-gray-600 hover:bg-gray-100 transition-colors"
+                            className="w-11 h-11 shrink-0 rounded-full border border-gray-300 text-gray-600 hover:bg-gray-100 transition-colors"
                             title="Next category"
                         >
                             <i className="ri-arrow-right-s-line text-lg"></i>
@@ -1481,7 +1482,7 @@ export default function POSPage() {
                     </p>
                     {completedOrder.customerName && <p>Customer: {completedOrder.customerName}</p>}
                     <hr />
-                    <table>
+                    <table data-no-cards>
                         <tbody>
                             {(completedOrder.items || []).map((it: any, idx: number) => (
                                 <tr key={idx}>
@@ -1495,7 +1496,7 @@ export default function POSPage() {
                         </tbody>
                     </table>
                     <hr />
-                    <table>
+                    <table data-no-cards>
                         <tbody>
                             <tr><td><strong>Total</strong></td><td style={{ textAlign: 'right' }}><strong>{formatCedis(completedOrder.total)}</strong></td></tr>
                             <tr><td>Paid by</td><td style={{ textAlign: 'right' }}>{completedOrder.paymentMethod === 'card' ? 'Card' : 'Cash'}</td></tr>

@@ -274,14 +274,14 @@ export default function AdminAffiliatesPage() {
       {actionError && (
         <div className="flex items-start gap-2 bg-red-50 border border-red-200 text-red-800 px-4 py-3 rounded-lg text-sm" role="alert">
           <i className="ri-error-warning-line text-red-600 mt-0.5"></i>
-          <span className="flex-1">{actionError}</span>
-          <button onClick={() => setActionError('')} aria-label="Dismiss" className="opacity-70 hover:opacity-100"><i className="ri-close-line"></i></button>
+          <span className="min-w-0 flex-1 break-words">{actionError}</span>
+          <button onClick={() => setActionError('')} aria-label="Dismiss" className="-m-2 flex h-11 w-11 shrink-0 items-center justify-center opacity-70 hover:opacity-100 sm:m-0 sm:block sm:h-auto sm:w-auto"><i className="ri-close-line"></i></button>
         </div>
       )}
       {/* Header */}
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <div className="flex items-center gap-3">
+      <div className="flex flex-col gap-4 sm:flex-row sm:flex-wrap sm:items-start sm:justify-between">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
             <h1 className="text-2xl font-bold text-gray-900">Affiliates</h1>
             <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border ${settings.enabled ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-gray-100 text-gray-500 border-gray-200'}`}>
               <span className={`w-1.5 h-1.5 rounded-full ${settings.enabled ? 'bg-emerald-500' : 'bg-gray-400'}`} />
@@ -290,17 +290,17 @@ export default function AdminAffiliatesPage() {
           </div>
           <p className="text-sm text-gray-500 mt-1">Approve affiliates, tune commissions, and pay out earnings.</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex w-full sm:w-auto items-center gap-2">
           <button
             onClick={() => fetchAffiliates()}
-            className="px-3 py-2 rounded-lg border border-gray-200 text-gray-600 text-sm font-medium hover:bg-gray-50 flex items-center gap-1.5"
+            className="flex-1 sm:flex-none justify-center min-h-[44px] sm:min-h-0 px-3 py-2 rounded-lg border border-gray-200 text-gray-600 text-sm font-medium hover:bg-gray-50 flex items-center gap-1.5"
           >
             <i className={`ri-refresh-line ${loading ? 'animate-spin' : ''}`} />
             Refresh
           </button>
           <button
             onClick={() => { setSettingsForm(settings); setSettingsOpen(true); }}
-            className="px-3 py-2 rounded-lg bg-gray-900 text-white text-sm font-medium hover:bg-gray-800 flex items-center gap-1.5"
+            className="flex-1 sm:flex-none justify-center min-h-[44px] sm:min-h-0 px-3 py-2 rounded-lg bg-gray-900 text-white text-sm font-medium hover:bg-gray-800 flex items-center gap-1.5"
           >
             <i className="ri-settings-3-line" />
             Program Settings
@@ -309,18 +309,18 @@ export default function AdminAffiliatesPage() {
       </div>
 
       {/* KPIs */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
         {kpis.map((k) => {
           const tone = toneClasses[k.tone] ?? toneClasses.gray;
           return (
-            <div key={k.label} className="bg-white rounded-xl border border-gray-100 p-5 shadow-sm">
-              <div className="flex items-center justify-between mb-3">
-                <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">{k.label}</span>
-                <span className={`w-9 h-9 rounded-lg ${tone.bg} ${tone.text} flex items-center justify-center text-lg`}>
+            <div key={k.label} className="min-w-0 bg-white rounded-xl border border-gray-100 p-4 sm:p-5 shadow-sm">
+              <div className="flex items-center justify-between gap-2 mb-3">
+                <span className="min-w-0 text-xs font-medium text-gray-500 uppercase tracking-wide">{k.label}</span>
+                <span className={`w-9 h-9 shrink-0 rounded-lg ${tone.bg} ${tone.text} flex items-center justify-center text-lg`}>
                   <i className={k.icon} />
                 </span>
               </div>
-              <p className="text-2xl font-bold text-gray-900 leading-none">{loading && !stats ? '…' : k.value}</p>
+              <p className="text-lg sm:text-2xl font-bold text-gray-900 leading-tight sm:leading-none break-words">{loading && !stats ? '…' : k.value}</p>
               <p className="text-xs text-gray-400 mt-1.5">{k.sub}</p>
             </div>
           );
@@ -334,28 +334,28 @@ export default function AdminAffiliatesPage() {
           className="w-full flex items-center gap-3 bg-amber-50 border border-amber-200 text-amber-800 rounded-xl px-4 py-3 text-sm hover:bg-amber-100 transition text-left"
         >
           <i className="ri-error-warning-line text-lg" />
-          <span><strong>{counts.pending}</strong> affiliate{counts.pending === 1 ? '' : 's'} waiting for approval.</span>
-          <span className="ml-auto font-medium flex items-center gap-1">Review <i className="ri-arrow-right-line" /></span>
+          <span className="min-w-0"><strong>{counts.pending}</strong> affiliate{counts.pending === 1 ? '' : 's'} waiting for approval.</span>
+          <span className="ml-auto shrink-0 font-medium flex items-center gap-1">Review <i className="ri-arrow-right-line" /></span>
         </button>
       )}
 
       {/* Toolbar */}
       <div className="flex flex-col lg:flex-row lg:items-center gap-3">
-        <div className="relative flex-1 max-w-sm">
+        <div className="relative w-full flex-1 sm:max-w-sm">
           <i className="ri-search-line absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search name, email or code…"
-            className="w-full pl-9 pr-3 py-2 rounded-lg border border-gray-200 text-sm focus:ring-2 focus:ring-gray-900/10 focus:border-gray-300"
+            className="w-full min-h-[44px] sm:min-h-0 pl-9 pr-3 py-2 rounded-lg border border-gray-200 text-base sm:text-sm focus:ring-2 focus:ring-gray-900/10 focus:border-gray-300"
           />
         </div>
-        <div className="flex flex-wrap gap-2 flex-1">
+        <div className="flex gap-2 overflow-x-auto sm:flex-wrap sm:overflow-visible flex-1">
           {['', 'pending', 'active', 'suspended', 'rejected'].map((s) => (
             <button
               key={s || 'all'}
               onClick={() => setFilter(s)}
-              className={`px-3 py-1.5 rounded-full text-sm border transition ${filter === s ? 'bg-gray-900 text-white border-gray-900' : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50'}`}
+              className={`shrink-0 whitespace-nowrap min-h-[44px] sm:min-h-0 px-3 py-1.5 rounded-full text-sm border transition ${filter === s ? 'bg-gray-900 text-white border-gray-900' : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50'}`}
             >
               {s === '' ? 'All' : s.charAt(0).toUpperCase() + s.slice(1)}
               {s && counts[s] ? ` (${counts[s]})` : ''}
@@ -365,7 +365,7 @@ export default function AdminAffiliatesPage() {
         <select
           value={sortBy}
           onChange={(e) => setSortBy(e.target.value as any)}
-          className="px-3 py-2 rounded-lg border border-gray-200 text-sm bg-white"
+          className="min-h-[44px] sm:min-h-0 px-3 py-2 rounded-lg border border-gray-200 text-base sm:text-sm bg-white"
         >
           <option value="recent">Newest first</option>
           <option value="earnings">Top earners</option>
@@ -438,7 +438,7 @@ export default function AdminAffiliatesPage() {
                         <button
                           onClick={() => copy(a.code)}
                           title="Copy code"
-                          className="inline-flex items-center gap-1.5 bg-gray-100 hover:bg-gray-200 px-2 py-1 rounded text-xs font-mono text-gray-700 transition"
+                          className="inline-flex min-h-[44px] md:min-h-0 items-center gap-1.5 bg-gray-100 hover:bg-gray-200 px-2 py-1 rounded text-xs font-mono break-all text-gray-700 transition"
                         >
                           {a.code}
                           <i className={copied === a.code ? 'ri-check-line text-emerald-600' : 'ri-file-copy-line text-gray-400'} />
@@ -452,8 +452,8 @@ export default function AdminAffiliatesPage() {
                               <i className="ri-arrow-right-up-line" /> wants {a.pending_commission_pct}%
                             </div>
                             <div className="flex items-center justify-center gap-1 mt-1">
-                              <button disabled={busyId === a.id} onClick={() => commissionAction(a, 'approve')} className="px-2 py-0.5 rounded bg-emerald-600 text-white text-[11px] hover:bg-emerald-700 disabled:opacity-50">Approve</button>
-                              <button disabled={busyId === a.id} onClick={() => commissionAction(a, 'reject')} className="px-2 py-0.5 rounded bg-gray-100 text-gray-700 text-[11px] hover:bg-gray-200 disabled:opacity-50">Reject</button>
+                              <button disabled={busyId === a.id} onClick={() => commissionAction(a, 'approve')} className="min-h-[44px] md:min-h-0 px-2 py-0.5 rounded bg-emerald-600 text-white text-[11px] hover:bg-emerald-700 disabled:opacity-50">Approve</button>
+                              <button disabled={busyId === a.id} onClick={() => commissionAction(a, 'reject')} className="min-h-[44px] md:min-h-0 px-2 py-0.5 rounded bg-gray-100 text-gray-700 text-[11px] hover:bg-gray-200 disabled:opacity-50">Reject</button>
                             </div>
                           </div>
                         )}
@@ -469,21 +469,21 @@ export default function AdminAffiliatesPage() {
                         <span className={`inline-block px-2 py-1 rounded-full text-xs border capitalize ${STATUS_BADGE[a.status]}`}>{a.status}</span>
                       </td>
                       <td className="px-4 py-3">
-                        <div className="flex items-center justify-end gap-1.5">
+                        <div className="flex flex-wrap md:flex-nowrap items-center justify-end gap-1.5">
                           {a.status === 'pending' && (
                             <>
-                              <button disabled={busyId === a.id} onClick={() => setStatus(a, 'active')} className="px-2.5 py-1 rounded-md bg-emerald-600 text-white text-xs hover:bg-emerald-700 disabled:opacity-50">Approve</button>
-                              <button disabled={busyId === a.id} onClick={() => setStatus(a, 'rejected')} className="px-2.5 py-1 rounded-md bg-rose-100 text-rose-700 text-xs hover:bg-rose-200 disabled:opacity-50">Reject</button>
+                              <button disabled={busyId === a.id} onClick={() => setStatus(a, 'active')} className="min-h-[44px] md:min-h-0 px-2.5 py-1 rounded-md bg-emerald-600 text-white text-xs hover:bg-emerald-700 disabled:opacity-50">Approve</button>
+                              <button disabled={busyId === a.id} onClick={() => setStatus(a, 'rejected')} className="min-h-[44px] md:min-h-0 px-2.5 py-1 rounded-md bg-rose-100 text-rose-700 text-xs hover:bg-rose-200 disabled:opacity-50">Reject</button>
                             </>
                           )}
                           {a.status === 'active' && (
-                            <button disabled={busyId === a.id} onClick={() => setStatus(a, 'suspended')} className="px-2.5 py-1 rounded-md bg-gray-100 text-gray-700 text-xs hover:bg-gray-200 disabled:opacity-50">Suspend</button>
+                            <button disabled={busyId === a.id} onClick={() => setStatus(a, 'suspended')} className="min-h-[44px] md:min-h-0 px-2.5 py-1 rounded-md bg-gray-100 text-gray-700 text-xs hover:bg-gray-200 disabled:opacity-50">Suspend</button>
                           )}
                           {(a.status === 'suspended' || a.status === 'rejected') && (
-                            <button disabled={busyId === a.id} onClick={() => setStatus(a, 'active')} className="px-2.5 py-1 rounded-md bg-emerald-600 text-white text-xs hover:bg-emerald-700 disabled:opacity-50">Reactivate</button>
+                            <button disabled={busyId === a.id} onClick={() => setStatus(a, 'active')} className="min-h-[44px] md:min-h-0 px-2.5 py-1 rounded-md bg-emerald-600 text-white text-xs hover:bg-emerald-700 disabled:opacity-50">Reactivate</button>
                           )}
-                          <Link href={`/admin/affiliates/${a.id}`} className="px-2.5 py-1 rounded-md bg-gray-100 text-gray-700 text-xs hover:bg-gray-200">Ledger</Link>
-                          <button onClick={() => openEdit(a)} className="w-7 h-7 flex items-center justify-center rounded-md bg-gray-900 text-white text-xs hover:bg-gray-800" title="Edit">
+                          <Link href={`/admin/affiliates/${a.id}`} className="inline-flex min-h-[44px] md:min-h-0 items-center px-2.5 py-1 rounded-md bg-gray-100 text-gray-700 text-xs hover:bg-gray-200">Ledger</Link>
+                          <button onClick={() => openEdit(a)} className="w-11 h-11 md:w-7 md:h-7 flex items-center justify-center rounded-md bg-gray-900 text-white text-xs hover:bg-gray-800" title="Edit">
                             <i className="ri-pencil-line" />
                           </button>
                         </div>
@@ -500,10 +500,10 @@ export default function AdminAffiliatesPage() {
       {/* Edit modal */}
       {editing && (
         <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4" onClick={() => setEditing(null)}>
-          <form onClick={(e) => e.stopPropagation()} onSubmit={saveEdit} className="bg-white rounded-xl w-full max-w-md p-6 space-y-4 shadow-xl">
+          <form onClick={(e) => e.stopPropagation()} onSubmit={saveEdit} className="bg-white rounded-xl w-full max-w-md p-4 sm:p-6 space-y-4 shadow-xl max-h-[90dvh] overflow-y-auto">
             <div>
               <h2 className="text-lg font-bold text-gray-900">Edit affiliate</h2>
-              <p className="text-sm text-gray-500">{editing.full_name || editing.email} · <code className="text-xs">{editing.code}</code></p>
+              <p className="text-sm text-gray-500 break-words">{editing.full_name || editing.email} · <code className="text-xs">{editing.code}</code></p>
             </div>
 
             <label className="block">
@@ -514,7 +514,7 @@ export default function AdminAffiliatesPage() {
               <span className="text-xs text-gray-400">Markup the customer pays on top of the base price.</span>
             </label>
 
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <label className="block">
                 <span className="text-sm font-medium text-gray-700">MoMo network</span>
                 <select value={form.payout_provider} onChange={(e) => setForm({ ...form, payout_provider: e.target.value })}
@@ -543,9 +543,9 @@ export default function AdminAffiliatesPage() {
             </label>
 
             {editError && <p className="text-sm text-red-700" role="alert">Not saved: {editError}</p>}
-            <div className="flex justify-end gap-2 pt-2">
-              <button type="button" onClick={() => setEditing(null)} className="px-4 py-2 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50">Cancel</button>
-              <button type="submit" disabled={saving} className="px-4 py-2 rounded-lg bg-gray-900 text-white hover:bg-gray-800 disabled:opacity-50">{saving ? 'Saving…' : 'Save'}</button>
+            <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-2 pt-2">
+              <button type="button" onClick={() => setEditing(null)} className="min-h-[44px] sm:min-h-0 px-4 py-2 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50">Cancel</button>
+              <button type="submit" disabled={saving} className="min-h-[44px] sm:min-h-0 px-4 py-2 rounded-lg bg-gray-900 text-white hover:bg-gray-800 disabled:opacity-50">{saving ? 'Saving…' : 'Save'}</button>
             </div>
           </form>
         </div>
@@ -554,7 +554,7 @@ export default function AdminAffiliatesPage() {
       {/* Settings modal */}
       {settingsOpen && (
         <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4" onClick={() => setSettingsOpen(false)}>
-          <form onClick={(e) => e.stopPropagation()} onSubmit={saveSettings} className="bg-white rounded-xl w-full max-w-lg p-6 space-y-5 shadow-xl max-h-[90vh] overflow-y-auto">
+          <form onClick={(e) => e.stopPropagation()} onSubmit={saveSettings} className="bg-white rounded-xl w-full max-w-lg p-4 sm:p-6 space-y-5 shadow-xl max-h-[90dvh] overflow-y-auto">
             <div>
               <h2 className="text-lg font-bold text-gray-900">Program settings</h2>
               <p className="text-sm text-gray-500">Defaults and rules for the whole affiliate program.</p>
@@ -573,7 +573,7 @@ export default function AdminAffiliatesPage() {
               onChange={(v) => setSettingsForm({ ...settingsForm, auto_disburse: v })}
             />
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <label className="block">
                 <span className="text-sm font-medium text-gray-700">Default commission %</span>
                 <input type="number" min={0} max={100} step={0.5} value={settingsForm.default_commission_pct}
@@ -612,9 +612,9 @@ export default function AdminAffiliatesPage() {
             </div>
 
             {settingsError && <p className="text-sm text-red-700" role="alert">{settingsError}</p>}
-            <div className="flex justify-end gap-2 pt-2">
-              <button type="button" onClick={() => setSettingsOpen(false)} className="px-4 py-2 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50">Cancel</button>
-              <button type="submit" disabled={savingSettings} className="px-4 py-2 rounded-lg bg-gray-900 text-white hover:bg-gray-800 disabled:opacity-50">{savingSettings ? 'Saving…' : 'Save settings'}</button>
+            <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-2 pt-2">
+              <button type="button" onClick={() => setSettingsOpen(false)} className="min-h-[44px] sm:min-h-0 px-4 py-2 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50">Cancel</button>
+              <button type="submit" disabled={savingSettings} className="min-h-[44px] sm:min-h-0 px-4 py-2 rounded-lg bg-gray-900 text-white hover:bg-gray-800 disabled:opacity-50">{savingSettings ? 'Saving…' : 'Save settings'}</button>
             </div>
           </form>
         </div>
@@ -626,14 +626,14 @@ export default function AdminAffiliatesPage() {
 function Toggle({ label, hint, checked, onChange }: { label: string; hint: string; checked: boolean; onChange: (v: boolean) => void }) {
   return (
     <div className="flex items-start justify-between gap-4 rounded-lg border border-gray-200 p-3">
-      <div>
+      <div className="min-w-0 flex-1">
         <div className="text-sm font-medium text-gray-800">{label}</div>
         <div className="text-xs text-gray-400">{hint}</div>
       </div>
       <button
         type="button"
         onClick={() => onChange(!checked)}
-        className={`relative w-11 h-6 rounded-full transition-colors shrink-0 ${checked ? 'bg-emerald-500' : 'bg-gray-300'}`}
+        className={`relative w-11 h-6 rounded-full transition-colors shrink-0 after:absolute after:-inset-x-1 after:-inset-y-2.5 after:content-[''] ${checked ? 'bg-emerald-500' : 'bg-gray-300'}`}
         role="switch"
         aria-checked={checked}
       >

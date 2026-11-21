@@ -213,13 +213,13 @@ export default function NotificationsPage() {
 
     return (
         <div className="max-w-4xl mx-auto">
-            <h1 className="text-3xl font-bold text-gray-900 mb-6">Marketing & Notifications</h1>
+            <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-6">Marketing & Notifications</h1>
 
-            <div className="bg-white p-8 rounded-xl shadow-sm border border-gray-200">
-                <h2 className="text-xl font-semibold mb-6">Send New Campaign</h2>
+            <div className="bg-white p-4 sm:p-8 rounded-xl shadow-sm border border-gray-200">
+                <h2 className="text-lg sm:text-xl font-semibold mb-4 sm:mb-6">Send New Campaign</h2>
 
-                {success && <div className="bg-blue-50 text-blue-700 p-4 rounded-lg mb-4">{success}</div>}
-                {error && <div className="bg-red-50 text-red-700 p-4 rounded-lg mb-4">{error}</div>}
+                {success && <div className="bg-blue-50 text-blue-700 p-4 rounded-lg mb-4 break-words">{success}</div>}
+                {error && <div className="bg-red-50 text-red-700 p-4 rounded-lg mb-4 break-words">{error}</div>}
 
                 <form onSubmit={handleSend} className="space-y-6">
                     <div>
@@ -246,8 +246,8 @@ export default function NotificationsPage() {
                         </p>
                     </div>
 
-                    <div className="flex gap-6 p-4 bg-gray-50 rounded-lg border border-gray-100">
-                        <label className="flex items-center gap-2 cursor-pointer">
+                    <div className="flex flex-wrap gap-x-6 gap-y-2 p-4 bg-gray-50 rounded-lg border border-gray-100">
+                        <label className="flex min-h-[44px] sm:min-h-0 items-center gap-2 cursor-pointer">
                             <input
                                 type="checkbox"
                                 checked={form.channels.email}
@@ -256,7 +256,7 @@ export default function NotificationsPage() {
                             />
                             <span className="font-medium text-gray-900">Send Email</span>
                         </label>
-                        <label className={`flex items-center gap-2 ${smsAvailable ? 'cursor-pointer' : 'opacity-50 cursor-not-allowed'}`} title={smsAvailable ? undefined : 'Newsletter subscribers have no phone numbers'}>
+                        <label className={`flex min-h-[44px] sm:min-h-0 items-center gap-2 ${smsAvailable ? 'cursor-pointer' : 'opacity-50 cursor-not-allowed'}`} title={smsAvailable ? undefined : 'Newsletter subscribers have no phone numbers'}>
                             <input
                                 type="checkbox"
                                 disabled={!smsAvailable}

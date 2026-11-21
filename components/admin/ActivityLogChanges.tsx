@@ -14,15 +14,15 @@ function isDiff(value: unknown): value is { from: unknown; to: unknown } {
 
 export default function ActivityLogChanges({ action, changes }: { action: string; changes: Record<string, unknown> | null }) {
   if (!changes || Object.keys(changes).length === 0) {
-    return <p className="text-sm text-gray-500">No extra details were recorded for this action.</p>;
+    return <p className="text-sm text-left text-gray-500">No extra details were recorded for this action.</p>;
   }
 
   const entries = Object.entries(changes);
   const showDiff = action === 'update' || entries.every(([, v]) => isDiff(v));
 
   return (
-    <div className="overflow-x-auto">
-      <table className="w-full text-sm">
+    <div className="overflow-x-auto text-left">
+      <table data-no-cards className="w-full text-sm">
         <thead>
           <tr className="text-left text-xs uppercase tracking-wide text-gray-500">
             <th className="py-2 pr-4 font-semibold">Field</th>

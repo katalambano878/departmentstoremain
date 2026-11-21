@@ -194,9 +194,9 @@ export default function AdminCategoriesPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900">Categories</h1>
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="min-w-0">
+          <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Categories</h1>
           <p className="text-gray-600 mt-1">Organize your products into categories</p>
         </div>
         <button
@@ -205,25 +205,25 @@ export default function AdminCategoriesPage() {
             setFormData({ name: '', slug: '', description: '', image_url: '', parent_id: '', featured: false, status: 'active' });
             setShowAddModal(true);
           }}
-          className="bg-blue-700 hover:bg-blue-800 text-white px-6 py-3 rounded-lg font-semibold transition-colors whitespace-nowrap cursor-pointer"
+          className="w-full sm:w-auto bg-blue-700 hover:bg-blue-800 text-white px-6 py-3 rounded-lg font-semibold transition-colors whitespace-nowrap cursor-pointer"
         >
           <i className="ri-add-line mr-2"></i>
           Add Category
         </button>
       </div>
 
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <div className="bg-white rounded-xl border-2 border-gray-200 p-4">
-          <p className="text-sm text-gray-600 mb-1">Total Categories</p>
-          <p className="text-2xl font-bold text-gray-900">{categories.length}</p>
+      <div className="grid grid-cols-3 md:grid-cols-4 gap-3 sm:gap-4">
+        <div className="bg-white rounded-xl border-2 border-gray-200 p-3 sm:p-4 min-w-0">
+          <p className="text-xs sm:text-sm text-gray-600 mb-1">Total Categories</p>
+          <p className="text-xl sm:text-2xl font-bold text-gray-900">{categories.length}</p>
         </div>
-        <div className="bg-white rounded-xl border-2 border-gray-200 p-4">
-          <p className="text-sm text-gray-600 mb-1">Active</p>
-          <p className="text-2xl font-bold text-blue-700">{categories.filter(c => c.status === 'active').length}</p>
+        <div className="bg-white rounded-xl border-2 border-gray-200 p-3 sm:p-4 min-w-0">
+          <p className="text-xs sm:text-sm text-gray-600 mb-1">Active</p>
+          <p className="text-xl sm:text-2xl font-bold text-blue-700">{categories.filter(c => c.status === 'active').length}</p>
         </div>
-        <div className="bg-white rounded-xl border-2 border-gray-200 p-4">
-          <p className="text-sm text-gray-600 mb-1">Featured</p>
-          <p className="text-2xl font-bold text-blue-700">{categories.filter(c => c.metadata?.featured).length}</p>
+        <div className="bg-white rounded-xl border-2 border-gray-200 p-3 sm:p-4 min-w-0">
+          <p className="text-xs sm:text-sm text-gray-600 mb-1">Featured</p>
+          <p className="text-xl sm:text-2xl font-bold text-blue-700">{categories.filter(c => c.metadata?.featured).length}</p>
         </div>
       </div>
 
@@ -249,8 +249,8 @@ export default function AdminCategoriesPage() {
                 categories.map((category) => (
                   <tr key={category.id} className="border-b border-gray-100 hover:bg-gray-50 transition-colors">
                     <td className="py-4 px-4">
-                      <div className="flex items-center space-x-3">
-                        <div className="w-16 h-16 bg-gray-100 rounded-lg overflow-hidden border border-gray-200">
+                      <div className="flex items-center space-x-3 min-w-0">
+                        <div className="w-16 h-16 shrink-0 bg-gray-100 rounded-lg overflow-hidden border border-gray-200">
                           {category.image_url ? (
                             <img src={category.image_url} alt={category.name} className="w-full h-full object-cover" />
                           ) : (
@@ -259,10 +259,10 @@ export default function AdminCategoriesPage() {
                             </div>
                           )}
                         </div>
-                        <span className="font-semibold text-gray-900">{category.name}</span>
+                        <span className="min-w-0 break-words font-semibold text-gray-900">{category.name}</span>
                       </div>
                     </td>
-                    <td className="py-4 px-4 text-gray-700 text-sm font-mono">{category.slug}</td>
+                    <td className="py-4 px-4 text-gray-700 text-sm font-mono break-all">{category.slug}</td>
                     <td className="py-4 px-4 text-sm text-gray-600">
                       {categories.find(c => c.id === category.parent_id)?.name || '-'}
                     </td>
@@ -285,13 +285,13 @@ export default function AdminCategoriesPage() {
                       <div className="flex items-center space-x-2">
                         <button
                           onClick={() => handleEdit(category)}
-                          className="w-8 h-8 flex items-center justify-center text-gray-600 hover:text-blue-700 hover:bg-blue-50 rounded-lg transition-colors cursor-pointer"
+                          className="w-11 h-11 md:w-8 md:h-8 flex items-center justify-center text-gray-600 hover:text-blue-700 hover:bg-blue-50 rounded-lg transition-colors cursor-pointer"
                         >
                           <i className="ri-edit-line text-lg w-4 h-4 flex items-center justify-center"></i>
                         </button>
                         <button
                           onClick={() => handleDelete(category.id)}
-                          className="w-8 h-8 flex items-center justify-center text-gray-600 hover:text-red-700 hover:bg-red-50 rounded-lg transition-colors cursor-pointer"
+                          className="w-11 h-11 md:w-8 md:h-8 flex items-center justify-center text-gray-600 hover:text-red-700 hover:bg-red-50 rounded-lg transition-colors cursor-pointer"
                         >
                           <i className="ri-delete-bin-line text-lg w-4 h-4 flex items-center justify-center"></i>
                         </button>
@@ -307,9 +307,9 @@ export default function AdminCategoriesPage() {
 
       {(showAddModal || showEditModal) && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
-            <div className="p-6 border-b border-gray-200 flex items-center justify-between sticky top-0 bg-white z-10">
-              <h2 className="text-2xl font-bold text-gray-900">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90dvh] overflow-y-auto">
+            <div className="p-4 sm:p-6 border-b border-gray-200 flex items-center justify-between gap-2 sticky top-0 bg-white z-10">
+              <h2 className="text-xl sm:text-2xl font-bold text-gray-900">
                 {showAddModal ? 'Add New Category' : 'Edit Category'}
               </h2>
               <button
@@ -318,14 +318,14 @@ export default function AdminCategoriesPage() {
                   setShowEditModal(false);
                   setEditingCategory(null);
                 }}
-                className="w-10 h-10 flex items-center justify-center text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors cursor-pointer"
+                className="w-11 h-11 sm:w-10 sm:h-10 shrink-0 flex items-center justify-center text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors cursor-pointer"
               >
                 <i className="ri-close-line text-2xl w-6 h-6 flex items-center justify-center"></i>
               </button>
             </div>
 
-            <div className="p-6 space-y-5">
-              <div className="grid md:grid-cols-2 gap-6">
+            <div className="p-4 sm:p-6 space-y-5">
+              <div className="grid md:grid-cols-2 gap-5 md:gap-6">
                 <div>
                   <label className="block text-sm font-semibold text-gray-900 mb-2">
                     Category Name *
@@ -390,7 +390,7 @@ export default function AdminCategoriesPage() {
                 <label className="block text-sm font-semibold text-gray-900 mb-2">
                   Category Image
                 </label>
-                <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center hover:border-blue-700 hover:bg-blue-50 transition-colors relative">
+                <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 sm:p-8 text-center hover:border-blue-700 hover:bg-blue-50 transition-colors relative">
                   {uploading ? (
                     <div className="flex flex-col items-center">
                       <i className="ri-loader-4-line animate-spin text-3xl mb-2 text-blue-700"></i>
@@ -399,7 +399,7 @@ export default function AdminCategoriesPage() {
                   ) : formData.image_url ? (
                     <div className="relative group">
                       <img src={formData.image_url} alt="Category" className="h-40 mx-auto object-contain rounded-lg shadow-sm" />
-                      <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity rounded-lg">
+                      <div className="absolute inset-0 bg-black/40 opacity-100 md:opacity-0 md:group-hover:opacity-100 flex items-center justify-center transition-opacity rounded-lg">
                         <label className="cursor-pointer bg-white px-4 py-2 rounded-lg font-semibold text-sm hover:bg-gray-100">
                           Change Image
                           <input type="file" accept="image/*" className="hidden" onChange={handleImageUpload} />
@@ -417,7 +417,7 @@ export default function AdminCategoriesPage() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-semibold text-gray-900 mb-2">Status</label>
                   <select
@@ -429,7 +429,7 @@ export default function AdminCategoriesPage() {
                     <option value="inactive">Inactive</option>
                   </select>
                 </div>
-                <div className="flex items-center space-x-3 mt-6">
+                <div className="flex items-center space-x-3 min-h-[44px] sm:min-h-0 sm:mt-6">
                   <input
                     type="checkbox"
                     checked={formData.featured}
@@ -444,7 +444,7 @@ export default function AdminCategoriesPage() {
 
             </div>
 
-            <div className="p-6 border-t border-gray-200 flex items-center justify-end space-x-3 bg-gray-50 rounded-b-2xl">
+            <div className="p-4 sm:p-6 border-t border-gray-200 flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-end sm:gap-0 sm:space-x-3 bg-gray-50 rounded-b-2xl">
               <button
                 onClick={() => {
                   setShowAddModal(false);
@@ -459,7 +459,7 @@ export default function AdminCategoriesPage() {
               <button
                 onClick={handleSubmit}
                 disabled={saving || uploading}
-                className={`px-6 py-3 bg-blue-700 hover:bg-blue-800 text-white rounded-lg font-semibold transition-colors whitespace-nowrap cursor-pointer flex items-center ${saving ? 'opacity-70' : ''}`}
+                className={`px-6 py-3 bg-blue-700 hover:bg-blue-800 text-white rounded-lg font-semibold transition-colors whitespace-nowrap cursor-pointer flex items-center justify-center ${saving ? 'opacity-70' : ''}`}
               >
                 {saving && <i className="ri-loader-4-line animate-spin mr-2"></i>}
                 {showAddModal ? 'Add Category' : 'Save Changes'}

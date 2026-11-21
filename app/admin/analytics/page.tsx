@@ -328,25 +328,25 @@ export default function AnalyticsPage() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-6">
+      <div className="max-w-7xl mx-auto sm:px-6 lg:px-8 sm:py-8">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 md:gap-6 mb-6">
           <div>
             <h1 className="text-2xl md:text-3xl font-bold text-gray-900">Advanced Analytics</h1>
             <p className="text-gray-600 mt-1 md:mt-2 text-sm md:text-base">
               Audit paid sales by day, week, or month
             </p>
           </div>
-          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+          <div className="flex flex-wrap items-stretch sm:items-center gap-2 sm:gap-3">
             <button
               onClick={exportCsv}
-              className="bg-blue-700 hover:bg-blue-800 text-white px-6 py-3 rounded-lg font-semibold transition-colors whitespace-nowrap cursor-pointer flex items-center justify-center"
+              className="flex-1 sm:flex-none bg-blue-700 hover:bg-blue-800 text-white px-6 py-3 rounded-lg font-semibold transition-colors whitespace-nowrap cursor-pointer flex items-center justify-center"
             >
               <i className="ri-download-line mr-2"></i>
               Export
             </button>
             <Link
               href="/admin"
-              className="border-2 border-gray-300 hover:border-gray-400 text-gray-700 px-6 py-3 rounded-lg font-semibold transition-colors whitespace-nowrap text-center"
+              className="flex-1 sm:flex-none border-2 border-gray-300 hover:border-gray-400 text-gray-700 px-6 py-3 rounded-lg font-semibold transition-colors whitespace-nowrap text-center"
             >
               Back
             </Link>
@@ -357,13 +357,13 @@ export default function AnalyticsPage() {
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 mb-6">
           <div className="flex flex-col lg:flex-row lg:items-center gap-4 justify-between">
             <div className="flex flex-wrap items-center gap-3">
-              <div className="inline-flex rounded-xl border border-gray-200 overflow-hidden self-start">
+              <div className="flex w-full sm:inline-flex sm:w-auto rounded-xl border border-gray-200 overflow-hidden self-start">
                 {rangeTabs.map(tab => (
                   <button
                     key={tab.key}
                     type="button"
                     onClick={() => setTimeRange(tab.key)}
-                    className={`px-4 py-2.5 text-sm font-semibold transition-colors cursor-pointer ${
+                    className={`min-h-[44px] flex-1 sm:min-h-0 sm:flex-none px-3 sm:px-4 py-2.5 text-sm font-semibold transition-colors cursor-pointer ${
                       timeRange === tab.key
                         ? 'bg-blue-700 text-white'
                         : 'bg-white text-gray-600 hover:bg-gray-50'
@@ -373,7 +373,7 @@ export default function AnalyticsPage() {
                   </button>
                 ))}
               </div>
-              <div className="inline-flex rounded-xl border border-gray-200 overflow-hidden self-start">
+              <div className="flex w-full sm:inline-flex sm:w-auto rounded-xl border border-gray-200 overflow-hidden self-start">
                 {([
                   { key: 'all', label: 'All sales' },
                   { key: 'website', label: 'Website' },
@@ -383,7 +383,7 @@ export default function AnalyticsPage() {
                     key={tab.key}
                     type="button"
                     onClick={() => setChannel(tab.key)}
-                    className={`px-4 py-2.5 text-sm font-semibold transition-colors cursor-pointer ${
+                    className={`min-h-[44px] flex-1 sm:min-h-0 sm:flex-none px-3 sm:px-4 py-2.5 text-sm font-semibold transition-colors cursor-pointer ${
                       channel === tab.key
                         ? 'bg-emerald-700 text-white'
                         : 'bg-white text-gray-600 hover:bg-gray-50'
@@ -399,7 +399,7 @@ export default function AnalyticsPage() {
               <button
                 type="button"
                 onClick={() => shiftPeriod(-1)}
-                className="px-3 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 cursor-pointer"
+                className="min-h-[44px] min-w-[44px] sm:min-h-0 sm:min-w-0 px-3 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 cursor-pointer"
                 aria-label="Previous period"
               >
                 <i className="ri-arrow-left-s-line text-lg"></i>
@@ -411,7 +411,7 @@ export default function AnalyticsPage() {
                   value={anchorDate}
                   max={todayYmd}
                   onChange={(e) => e.target.value && setAnchorDate(e.target.value)}
-                  className="px-3 py-2 border border-gray-300 rounded-lg text-sm font-medium focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  className="min-h-[44px] min-w-0 flex-1 sm:min-h-0 sm:flex-none px-3 py-2 border border-gray-300 rounded-lg text-base sm:text-sm font-medium focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 />
               )}
 
@@ -421,7 +421,7 @@ export default function AnalyticsPage() {
                   value={mondayOf(anchorDate)}
                   max={todayYmd}
                   onChange={(e) => e.target.value && setAnchorDate(e.target.value)}
-                  className="px-3 py-2 border border-gray-300 rounded-lg text-sm font-medium focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  className="min-h-[44px] min-w-0 flex-1 sm:min-h-0 sm:flex-none px-3 py-2 border border-gray-300 rounded-lg text-base sm:text-sm font-medium focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   title="Pick any day in the week"
                 />
               )}
@@ -435,7 +435,7 @@ export default function AnalyticsPage() {
                     if (!e.target.value) return;
                     setAnchorDate(`${e.target.value}-01`);
                   }}
-                  className="px-3 py-2 border border-gray-300 rounded-lg text-sm font-medium focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  className="min-h-[44px] min-w-0 flex-1 sm:min-h-0 sm:flex-none px-3 py-2 border border-gray-300 rounded-lg text-base sm:text-sm font-medium focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 />
               )}
 
@@ -443,7 +443,7 @@ export default function AnalyticsPage() {
                 type="button"
                 onClick={() => shiftPeriod(1)}
                 disabled={period.isCurrent}
-                className="px-3 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+                className="min-h-[44px] min-w-[44px] sm:min-h-0 sm:min-w-0 px-3 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
                 aria-label="Next period"
               >
                 <i className="ri-arrow-right-s-line text-lg"></i>
@@ -453,7 +453,7 @@ export default function AnalyticsPage() {
                 <button
                   type="button"
                   onClick={goToCurrent}
-                  className="px-3 py-2 bg-emerald-50 border border-emerald-200 text-emerald-700 rounded-lg text-sm font-semibold hover:bg-emerald-100 cursor-pointer"
+                  className="min-h-[44px] w-full sm:min-h-0 sm:w-auto px-3 py-2 bg-emerald-50 border border-emerald-200 text-emerald-700 rounded-lg text-sm font-semibold hover:bg-emerald-100 cursor-pointer"
                 >
                   {timeRange === 'day' ? 'Today' : timeRange === 'week' ? 'This Week' : 'This Month'}
                 </button>
@@ -479,8 +479,8 @@ export default function AnalyticsPage() {
         </div>
 
         {/* Metrics Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-          <div className="bg-white rounded-xl shadow-sm p-6">
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-4 md:gap-6 mb-8">
+          <div className="col-span-2 md:col-span-1 bg-white rounded-xl shadow-sm p-4 sm:p-6">
             <div className="flex items-center justify-between mb-4">
               <div className="w-12 h-12 flex items-center justify-center bg-blue-100 rounded-lg">
                 <i className="ri-money-dollar-circle-line text-2xl text-blue-700"></i>
@@ -488,34 +488,34 @@ export default function AnalyticsPage() {
               <span className="text-blue-700 font-semibold text-sm capitalize">{timeRange}</span>
             </div>
             <p className="text-sm text-gray-600 mb-1">Revenue</p>
-            <p className="text-3xl font-bold text-gray-900">GH₵{metrics.revenue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+            <p className="text-xl sm:text-3xl font-bold text-gray-900 break-words">GH₵{metrics.revenue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
           </div>
 
-          <div className="bg-white rounded-xl shadow-sm p-6">
+          <div className="min-w-0 bg-white rounded-xl shadow-sm p-4 sm:p-6">
             <div className="flex items-center justify-between mb-4">
               <div className="w-12 h-12 flex items-center justify-center bg-blue-100 rounded-lg">
                 <i className="ri-shopping-cart-line text-2xl text-blue-700"></i>
               </div>
             </div>
             <p className="text-sm text-gray-600 mb-1">Paid Orders</p>
-            <p className="text-3xl font-bold text-gray-900">{metrics.orders}</p>
+            <p className="text-xl sm:text-3xl font-bold text-gray-900 break-words">{metrics.orders}</p>
           </div>
 
-          <div className="bg-white rounded-xl shadow-sm p-6">
+          <div className="min-w-0 bg-white rounded-xl shadow-sm p-4 sm:p-6">
             <div className="flex items-center justify-between mb-4">
               <div className="w-12 h-12 flex items-center justify-center bg-purple-100 rounded-lg">
                 <i className="ri-bar-chart-box-line text-2xl text-purple-700"></i>
               </div>
             </div>
             <p className="text-sm text-gray-600 mb-1">Avg. Order Value</p>
-            <p className="text-3xl font-bold text-gray-900">GH₵{metrics.aov.toFixed(2)}</p>
+            <p className="text-xl sm:text-3xl font-bold text-gray-900 break-words">GH₵{metrics.aov.toFixed(2)}</p>
           </div>
         </div>
 
         {/* Sales breakdown table — for end-of-day / week / month audits */}
-        <div className="bg-white rounded-xl shadow-sm p-6 mb-6">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-xl font-bold text-gray-900">
+        <div className="bg-white rounded-xl shadow-sm p-4 sm:p-6 mb-6">
+          <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between mb-4">
+            <h2 className="text-lg sm:text-xl font-bold text-gray-900">
               {timeRange === 'day' ? 'Day Sales Detail' : timeRange === 'week' ? 'Daily Breakdown (This Week)' : 'Daily Breakdown (This Month)'}
               {channel !== 'all' && (
                 <span className="ml-2 text-sm font-semibold text-emerald-700">
@@ -568,9 +568,9 @@ export default function AnalyticsPage() {
         </div>
 
         {/* Charts */}
-        <div className="bg-white rounded-xl shadow-sm p-6 mb-6">
+        <div className="bg-white rounded-xl shadow-sm p-4 sm:p-6 mb-6">
           <div className="flex items-center justify-between mb-6">
-            <h2 className="text-xl font-bold text-gray-900">Revenue & Performance Trends</h2>
+            <h2 className="text-lg sm:text-xl font-bold text-gray-900">Revenue & Performance Trends</h2>
           </div>
           <div style={{ width: '100%', height: 350 }}>
             <ResponsiveContainer>
@@ -593,8 +593,8 @@ export default function AnalyticsPage() {
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-          <div className="bg-white rounded-xl shadow-sm p-6">
-            <h2 className="text-xl font-bold text-gray-900 mb-6">Revenue by Category</h2>
+          <div className="bg-white rounded-xl shadow-sm p-4 sm:p-6">
+            <h2 className="text-lg sm:text-xl font-bold text-gray-900 mb-6">Revenue by Category</h2>
             <div className="flex items-center justify-center mb-6">
               <div style={{ width: '100%', height: 250 }}>
                 <ResponsiveContainer>
@@ -620,8 +620,8 @@ export default function AnalyticsPage() {
             </div>
           </div>
 
-          <div className="bg-white rounded-xl shadow-sm p-6">
-            <h2 className="text-xl font-bold text-gray-900 mb-4">Top Performing Products</h2>
+          <div className="bg-white rounded-xl shadow-sm p-4 sm:p-6">
+            <h2 className="text-lg sm:text-xl font-bold text-gray-900 mb-4">Top Performing Products</h2>
             <div className="overflow-x-auto">
               <table className="w-full">
                 <thead className="border-b border-gray-100">

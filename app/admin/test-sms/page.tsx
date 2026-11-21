@@ -22,11 +22,11 @@ export default function TestSmsPage() {
     };
 
     return (
-        <div className="p-6">
+        <div className="sm:p-6">
             <h1 className="text-2xl font-bold mb-6">Test SMS Integration</h1>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="bg-white p-6 rounded-lg shadow border border-gray-100">
+                <div className="min-w-0 bg-white p-4 sm:p-6 rounded-lg shadow border border-gray-100">
                     <h2 className="text-lg font-semibold mb-4">Send Test Request</h2>
 
                     <div className="space-y-4">
@@ -36,7 +36,7 @@ export default function TestSmsPage() {
                             </label>
                             <input
                                 type="text"
-                                className="w-full border rounded-md p-2 bg-gray-50 focus:bg-white focus:ring-2 focus:ring-blue-500 outline-none"
+                                className="w-full min-h-[44px] sm:min-h-0 border rounded-md p-2 bg-gray-50 focus:bg-white focus:ring-2 focus:ring-blue-500 outline-none"
                                 placeholder="e.g. 024XXXXXXX"
                                 value={phone}
                                 onChange={(e) => setPhone(e.target.value)}
@@ -61,7 +61,7 @@ export default function TestSmsPage() {
                         <button
                             onClick={handleSend}
                             disabled={isPending}
-                            className={`w-full py-2 px-4 rounded-md text-white font-medium transition-colors ${isPending
+                            className={`w-full min-h-[44px] sm:min-h-0 py-2 px-4 rounded-md text-white font-medium transition-colors ${isPending
                                     ? 'bg-gray-400 cursor-not-allowed'
                                     : 'bg-blue-600 hover:bg-blue-700'
                                 }`}
@@ -71,7 +71,7 @@ export default function TestSmsPage() {
                     </div>
                 </div>
 
-                <div className="bg-white p-6 rounded-lg shadow border border-gray-100">
+                <div className="min-w-0 bg-white p-4 sm:p-6 rounded-lg shadow border border-gray-100">
                     <h2 className="text-lg font-semibold mb-4">Response & Debug Log</h2>
 
                     {result ? (

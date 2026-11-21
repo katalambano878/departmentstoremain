@@ -331,14 +331,14 @@ export default function AdminCustomersPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900">Customers</h1>
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="min-w-0">
+          <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Customers</h1>
           <p className="text-gray-600 mt-1">Manage your customer base and relationships</p>
         </div>
         <button
           onClick={() => handleExportCustomers()}
-          className="bg-blue-700 hover:bg-blue-800 text-white px-6 py-3 rounded-lg font-semibold transition-colors whitespace-nowrap cursor-pointer"
+          className="w-full sm:w-auto bg-blue-700 hover:bg-blue-800 text-white px-6 py-3 rounded-lg font-semibold transition-colors whitespace-nowrap cursor-pointer"
         >
           <i className="ri-download-line mr-2"></i>
           Export Customers ({filteredCustomers.length})
@@ -348,26 +348,26 @@ export default function AdminCustomersPage() {
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <div className="bg-white rounded-xl border-2 border-gray-200 p-4">
           <p className="text-sm text-gray-600 mb-1">Total Customers</p>
-          <p className="text-2xl font-bold text-gray-900">{stats.total}</p>
+          <p className="text-xl sm:text-2xl break-words font-bold text-gray-900">{stats.total}</p>
         </div>
         <div className="bg-white rounded-xl border-2 border-gray-200 p-4">
           <p className="text-sm text-gray-600 mb-1">New This Month</p>
-          <p className="text-2xl font-bold text-blue-700">{stats.newThisMonth}</p>
+          <p className="text-xl sm:text-2xl break-words font-bold text-blue-700">{stats.newThisMonth}</p>
         </div>
         <div className="bg-white rounded-xl border-2 border-gray-200 p-4">
           <p className="text-sm text-gray-600 mb-1">VIP Customers</p>
-          <p className="text-2xl font-bold text-purple-700">{stats.vip}</p>
+          <p className="text-xl sm:text-2xl break-words font-bold text-purple-700">{stats.vip}</p>
         </div>
         <div className="bg-white rounded-xl border-2 border-gray-200 p-4">
           <p className="text-sm text-gray-600 mb-1">Avg Lifetime Value</p>
-          <p className="text-2xl font-bold text-gray-900">GH₵ {stats.avgLTV.toLocaleString(undefined, { maximumFractionDigits: 0 })}</p>
+          <p className="text-xl sm:text-2xl break-words font-bold text-gray-900">GH₵ {stats.avgLTV.toLocaleString(undefined, { maximumFractionDigits: 0 })}</p>
         </div>
       </div>
 
       <div className="bg-white rounded-xl shadow-sm border border-gray-200">
-        <div className="p-6 border-b border-gray-200">
+        <div className="p-4 sm:p-6 border-b border-gray-200">
           <div className="flex flex-col md:flex-row md:items-center md:justify-between space-y-4 md:space-y-0">
-            <div className="flex-1 max-w-md">
+            <div className="w-full md:flex-1 md:max-w-md">
               <div className="relative">
                 <i className="ri-search-line absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 text-lg flex items-center justify-center"></i>
                 <input
@@ -375,16 +375,16 @@ export default function AdminCustomersPage() {
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   placeholder="Search by name, email, or phone..."
-                  className="w-full pl-12 pr-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
+                  className="w-full pl-12 pr-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-base sm:text-sm"
                 />
               </div>
             </div>
 
-            <div className="flex items-center space-x-3">
+            <div className="flex items-center gap-2 sm:gap-3">
               <select
                 value={filterStatus}
                 onChange={(e) => setFilterStatus(e.target.value)}
-                className="px-4 py-3 pr-8 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 font-medium cursor-pointer"
+                className="min-w-0 flex-1 sm:flex-none px-4 py-3 pr-8 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 font-medium cursor-pointer"
               >
                 <option>All Customers</option>
                 <option>New</option>
@@ -395,7 +395,7 @@ export default function AdminCustomersPage() {
               <select
                 value={sortOption}
                 onChange={(e) => setSortOption(e.target.value)}
-                className="px-4 py-3 pr-8 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 font-medium cursor-pointer"
+                className="min-w-0 flex-1 sm:flex-none px-4 py-3 pr-8 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 font-medium cursor-pointer"
               >
                 <option>Sort by Join Date</option>
                 <option>Sort by Name</option>
@@ -407,11 +407,11 @@ export default function AdminCustomersPage() {
         </div>
 
         {selectedCustomers.length > 0 && (
-          <div className="p-4 bg-blue-50 border-b border-blue-200 flex items-center justify-between">
+          <div className="p-4 bg-blue-50 border-b border-blue-200 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <p className="text-blue-800 font-semibold">
               {selectedCustomers.length} customer{selectedCustomers.length > 1 ? 's' : ''} selected
             </p>
-            <div className="flex items-center space-x-2">
+            <div className="flex items-center gap-2">
               <button
                 onClick={() => {
                   // Bcc so customers never see each other's addresses.
@@ -425,14 +425,14 @@ export default function AdminCustomersPage() {
                   const bcc = emails.map(e => encodeURIComponent(e)).join(',');
                   window.open(`mailto:?bcc=${bcc}&subject=${encodeURIComponent('Hello from Discount Discovery Zone')}`);
                 }}
-                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors whitespace-nowrap cursor-pointer"
+                className="flex-1 sm:flex-none min-h-[44px] sm:min-h-0 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors whitespace-nowrap cursor-pointer"
               >
                 <i className="ri-mail-line mr-2"></i>
                 Send Email
               </button>
               <button
                 onClick={handleBulkExport}
-                className="px-4 py-2 bg-gray-700 hover:bg-gray-800 text-white rounded-lg text-sm font-medium transition-colors whitespace-nowrap cursor-pointer"
+                className="flex-1 sm:flex-none min-h-[44px] sm:min-h-0 px-4 py-2 bg-gray-700 hover:bg-gray-800 text-white rounded-lg text-sm font-medium transition-colors whitespace-nowrap cursor-pointer"
               >
                 <i className="ri-download-line mr-2"></i>
                 Export
@@ -479,12 +479,12 @@ export default function AdminCustomersPage() {
                       />
                     </td>
                     <td className="py-4 px-4">
-                      <div className="flex items-center space-x-3">
-                        <div className="w-10 h-10 flex items-center justify-center bg-blue-100 text-blue-700 rounded-full font-semibold">
+                      <div className="flex items-center space-x-3 min-w-0">
+                        <div className="w-10 h-10 shrink-0 flex items-center justify-center bg-blue-100 text-blue-700 rounded-full font-semibold">
                           {customer.avatar}
                         </div>
-                        <div>
-                          <Link href={`/admin/customers/${customer.id}`} className="font-semibold text-gray-900 hover:text-blue-700 whitespace-nowrap">
+                        <div className="min-w-0">
+                          <Link href={`/admin/customers/${customer.id}`} className="font-semibold text-gray-900 hover:text-blue-700 break-words md:whitespace-nowrap">
                             {customer.name}
                           </Link>
                           <p className="text-sm text-gray-500">Joined {customer.joined}</p>
@@ -492,8 +492,10 @@ export default function AdminCustomersPage() {
                       </div>
                     </td>
                     <td className="py-4 px-4">
-                      <p className="text-gray-700 text-sm">{customer.email}</p>
-                      <p className="text-gray-600 text-sm">{customer.phone}</p>
+                      <div className="min-w-0">
+                        <p className="text-gray-700 text-sm break-all">{customer.email}</p>
+                        <p className="text-gray-600 text-sm">{customer.phone}</p>
+                      </div>
                     </td>
                     <td className="py-4 px-4 font-semibold text-gray-900">{customer.orders}</td>
                     <td className="py-4 px-4 font-semibold text-blue-700 whitespace-nowrap">GH₵ {customer.totalSpent.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
@@ -514,20 +516,20 @@ export default function AdminCustomersPage() {
                       <div className="flex items-center space-x-2">
                         <Link
                           href={`/admin/customers/${customer.id}`}
-                          className="w-8 h-8 flex items-center justify-center text-gray-600 hover:text-blue-700 hover:bg-blue-50 rounded-lg transition-colors"
+                          className="w-11 h-11 md:w-8 md:h-8 flex items-center justify-center text-gray-600 hover:text-blue-700 hover:bg-blue-50 rounded-lg transition-colors"
                         >
                           <i className="ri-eye-line text-lg"></i>
                         </Link>
                         <button
                           onClick={() => handleEmailCustomer(customer)}
-                          className="w-8 h-8 flex items-center justify-center text-gray-600 hover:text-blue-700 hover:bg-blue-50 rounded-lg transition-colors cursor-pointer"
+                          className="w-11 h-11 md:w-8 md:h-8 flex items-center justify-center text-gray-600 hover:text-blue-700 hover:bg-blue-50 rounded-lg transition-colors cursor-pointer"
                           title="Send Email"
                         >
                           <i className="ri-mail-line text-lg"></i>
                         </button>
                         <button
                           onClick={() => handleDeleteCustomer(customer.id)}
-                          className="w-8 h-8 flex items-center justify-center text-gray-600 hover:text-red-700 hover:bg-red-50 rounded-lg transition-colors cursor-pointer"
+                          className="w-11 h-11 md:w-8 md:h-8 flex items-center justify-center text-gray-600 hover:text-red-700 hover:bg-red-50 rounded-lg transition-colors cursor-pointer"
                           title="Delete Customer"
                         >
                           <i className="ri-delete-bin-line text-lg"></i>
@@ -541,7 +543,7 @@ export default function AdminCustomersPage() {
           </table>
         </div>
 
-        <div className="p-6 border-t border-gray-200 flex items-center justify-between">
+        <div className="p-4 sm:p-6 border-t border-gray-200 flex items-center justify-between">
           <p className="text-gray-600">Showing {filteredCustomers.length} of {customers.length} customers</p>
           <div className="flex items-center space-x-2">
             {/* Simple pagination place holder logic or hidden if few */}

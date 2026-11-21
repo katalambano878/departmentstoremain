@@ -160,24 +160,24 @@ export default function AdminSupportPage() {
         <div className="flex items-start gap-2 bg-red-50 border border-red-200 text-red-800 px-4 py-3 rounded-lg" role="alert">
           <i className="ri-error-warning-line text-red-600 mt-0.5"></i>
           <span className="flex-1">{error}</span>
-          <button onClick={() => setError('')} aria-label="Dismiss" className="opacity-70 hover:opacity-100"><i className="ri-close-line"></i></button>
+          <button onClick={() => setError('')} aria-label="Dismiss" className="shrink-0 -my-3 -mr-3 p-3 opacity-70 hover:opacity-100"><i className="ri-close-line"></i></button>
         </div>
       )}
 
       <div className="grid lg:grid-cols-5 gap-6 items-start">
         {/* List */}
-        <div className="lg:col-span-2 bg-white rounded-xl border border-gray-200 overflow-hidden">
+        <div className="min-w-0 lg:col-span-2 bg-white rounded-xl border border-gray-200 overflow-hidden">
           <div className="p-3 border-b border-gray-100 flex items-center gap-2">
             {(['open', 'all'] as const).map(f => (
               <button
                 key={f}
                 onClick={() => setFilter(f)}
-                className={`px-3 py-1.5 rounded-lg text-sm font-medium ${filter === f ? 'bg-blue-700 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}
+                className={`min-h-[44px] sm:min-h-0 px-3 py-1.5 rounded-lg text-sm font-medium ${filter === f ? 'bg-blue-700 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}
               >
                 {f === 'open' ? `Open (${openCount})` : `All (${tickets.length})`}
               </button>
             ))}
-            <button onClick={load} className="ml-auto w-9 h-9 flex items-center justify-center rounded-lg text-gray-600 hover:bg-gray-100" aria-label="Refresh">
+            <button onClick={load} className="ml-auto w-11 h-11 sm:w-9 sm:h-9 shrink-0 flex items-center justify-center rounded-lg text-gray-600 hover:bg-gray-100" aria-label="Refresh">
               <i className={`ri-refresh-line ${loading ? 'animate-spin' : ''}`}></i>
             </button>
           </div>
@@ -186,7 +186,7 @@ export default function AdminSupportPage() {
           ) : visible.length === 0 ? (
             <p className="p-8 text-center text-gray-500">{tickets.length === 0 ? 'No tickets yet.' : 'No open tickets.'}</p>
           ) : (
-            <ul className="divide-y divide-gray-100 max-h-[70vh] overflow-y-auto">
+            <ul className="divide-y divide-gray-100 max-h-[50dvh] lg:max-h-[70vh] overflow-y-auto">
               {visible.map(t => (
                 <li key={t.id}>
                   <button
@@ -209,9 +209,9 @@ export default function AdminSupportPage() {
         </div>
 
         {/* Detail */}
-        <div className="lg:col-span-3 bg-white rounded-xl border border-gray-200 p-5">
+        <div className="min-w-0 lg:col-span-3 bg-white rounded-xl border border-gray-200 p-4 sm:p-5">
           {!selected ? (
-            <p className="py-16 text-center text-gray-500">Choose a ticket to read it.</p>
+            <p className="py-8 lg:py-16 text-center text-gray-500">Choose a ticket to read it.</p>
           ) : (
             <div className="space-y-5">
               <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
@@ -223,7 +223,7 @@ export default function AdminSupportPage() {
                   </p>
                   <h2 className="text-lg font-bold text-gray-900 break-words">{selected.subject}</h2>
                   <p className="text-sm text-gray-600">
-                    <a href={`mailto:${selected.email}?subject=${encodeURIComponent(`Re: ${selected.subject} (ticket #${selected.ticket_number})`)}`} className="text-blue-700 hover:underline">{selected.email}</a>
+                    <a href={`mailto:${selected.email}?subject=${encodeURIComponent(`Re: ${selected.subject} (ticket #${selected.ticket_number})`)}`} className="text-blue-700 hover:underline break-all">{selected.email}</a>
                     {' · '}opened {formatDateTime(selected.created_at)}
                   </p>
                 </div>
@@ -232,7 +232,7 @@ export default function AdminSupportPage() {
                   disabled={statusSaving}
                   onChange={(e) => changeStatus(selected, e.target.value as TicketStatus)}
                   aria-label="Ticket status"
-                  className="px-3 py-2 border-2 border-gray-300 rounded-lg text-sm cursor-pointer disabled:opacity-50"
+                  className="min-h-[44px] sm:min-h-0 px-3 py-2 border-2 border-gray-300 rounded-lg text-base sm:text-sm cursor-pointer disabled:opacity-50"
                 >
                   {(Object.keys(STATUS_LABEL) as TicketStatus[]).map(s => (
                     <option key={s} value={s}>{STATUS_LABEL[s]}</option>
@@ -272,9 +272,9 @@ export default function AdminSupportPage() {
                   rows={4}
                   value={reply}
                   onChange={(e) => setReply(e.target.value)}
-                  className="w-full px-3 py-2 border-2 border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  className="w-full px-3 py-2 border-2 border-gray-300 rounded-lg text-base sm:text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 />
-                <p className="text-xs text-gray-500">
+                <p className="text-xs text-gray-500 break-words">
                   Replies are saved on the ticket. The customer is not emailed or texted automatically, so contact them at {selected.email} as well.
                 </p>
                 <div className="flex flex-wrap items-center justify-between gap-3">
@@ -285,7 +285,7 @@ export default function AdminSupportPage() {
                   <button
                     type="submit"
                     disabled={sending || !reply.trim()}
-                    className="px-5 py-2.5 bg-blue-700 hover:bg-blue-800 text-white rounded-lg font-semibold text-sm disabled:opacity-50"
+                    className="min-h-[44px] w-full sm:min-h-0 sm:w-auto px-5 py-2.5 bg-blue-700 hover:bg-blue-800 text-white rounded-lg font-semibold text-sm disabled:opacity-50"
                   >
                     {sending ? 'Saving...' : internal ? 'Save note' : 'Save reply'}
                   </button>

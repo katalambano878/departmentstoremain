@@ -680,27 +680,27 @@ export default function BarcodesPage() {
             {notice && (
                 <div className={`flex items-start gap-2 px-4 py-3 rounded-lg border ${notice.kind === 'ok' ? 'bg-green-50 border-green-200 text-green-800' : 'bg-red-50 border-red-200 text-red-800'}`} role="status">
                     <i className={`${notice.kind === 'ok' ? 'ri-checkbox-circle-line' : 'ri-error-warning-line'} mt-0.5`}></i>
-                    <span className="flex-1">{notice.text}</span>
-                    <button onClick={() => setNotice(null)} aria-label="Dismiss" className="opacity-70 hover:opacity-100"><i className="ri-close-line"></i></button>
+                    <span className="min-w-0 flex-1 break-words">{notice.text}</span>
+                    <button onClick={() => setNotice(null)} aria-label="Dismiss" className="-m-2 flex h-11 w-11 shrink-0 items-center justify-center opacity-70 hover:opacity-100 sm:m-0 sm:block sm:h-auto sm:w-auto"><i className="ri-close-line"></i></button>
                 </div>
             )}
             {/* Header */}
             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-                <div className="flex items-center gap-4">
-                    <Link href="/admin/products" className="w-10 h-10 flex items-center justify-center border-2 border-gray-300 rounded-lg hover:border-gray-400 transition-colors">
+                <div className="flex min-w-0 items-center gap-4">
+                    <Link href="/admin/products" className="w-11 h-11 sm:w-10 sm:h-10 shrink-0 flex items-center justify-center border-2 border-gray-300 rounded-lg hover:border-gray-400 transition-colors">
                         <i className="ri-arrow-left-line text-xl text-gray-700"></i>
                     </Link>
-                    <div>
+                    <div className="min-w-0">
                         <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Barcode Manager</h1>
                         <p className="text-gray-600 mt-1">Generate, view and print barcodes for your products</p>
                     </div>
                 </div>
-                <div className="flex items-center gap-2 flex-wrap">
+                <div className="flex w-full sm:w-auto items-center gap-2 flex-wrap">
                     {missingCount > 0 && (
                         <button
                             onClick={generateForAll}
                             disabled={generating}
-                            className="flex items-center gap-2 px-4 py-2.5 bg-green-600 hover:bg-green-700 text-white rounded-lg font-semibold text-sm transition-colors cursor-pointer disabled:opacity-50"
+                            className="flex flex-auto sm:flex-none justify-center sm:justify-start min-h-[44px] sm:min-h-0 items-center gap-2 px-4 py-2.5 bg-green-600 hover:bg-green-700 text-white rounded-lg font-semibold text-sm transition-colors cursor-pointer disabled:opacity-50"
                         >
                             {generating ? (
                                 <><i className="ri-loader-4-line animate-spin"></i> Generating...</>
@@ -713,7 +713,7 @@ export default function BarcodesPage() {
                         <button
                             onClick={generatePosCodesForAll}
                             disabled={generating}
-                            className="flex items-center gap-2 px-4 py-2.5 bg-purple-600 hover:bg-purple-700 text-white rounded-lg font-semibold text-sm transition-colors cursor-pointer disabled:opacity-50"
+                            className="flex flex-auto sm:flex-none justify-center sm:justify-start min-h-[44px] sm:min-h-0 items-center gap-2 px-4 py-2.5 bg-purple-600 hover:bg-purple-700 text-white rounded-lg font-semibold text-sm transition-colors cursor-pointer disabled:opacity-50"
                         >
                             {generating ? (
                                 <><i className="ri-loader-4-line animate-spin"></i> Generating...</>
@@ -724,14 +724,14 @@ export default function BarcodesPage() {
                     )}
                     <button
                         onClick={handlePrintSelected}
-                        className="flex items-center gap-2 px-4 py-2.5 bg-blue-700 hover:bg-blue-800 text-white rounded-lg font-semibold text-sm transition-colors cursor-pointer"
+                        className="flex flex-auto sm:flex-none justify-center sm:justify-start min-h-[44px] sm:min-h-0 items-center gap-2 px-4 py-2.5 bg-blue-700 hover:bg-blue-800 text-white rounded-lg font-semibold text-sm transition-colors cursor-pointer"
                     >
                         <i className="ri-printer-line"></i>
                         Print {selected.size > 0 ? `Selected (${selected.size})` : 'All'} ({totalSelectedLabels} labels)
                     </button>
                     <button
                         onClick={handlePrintPosCodes}
-                        className="flex items-center gap-2 px-4 py-2.5 bg-violet-700 hover:bg-violet-800 text-white rounded-lg font-semibold text-sm transition-colors cursor-pointer"
+                        className="flex flex-auto sm:flex-none justify-center sm:justify-start min-h-[44px] sm:min-h-0 items-center gap-2 px-4 py-2.5 bg-violet-700 hover:bg-violet-800 text-white rounded-lg font-semibold text-sm transition-colors cursor-pointer"
                     >
                         <i className="ri-price-tag-3-line"></i>
                         Print POS Codes
@@ -740,30 +740,30 @@ export default function BarcodesPage() {
             </div>
 
             {/* Stats */}
-            <div className="grid grid-cols-2 sm:grid-cols-6 gap-4">
+            <div className="grid grid-cols-2 sm:grid-cols-6 gap-3 sm:gap-4">
                 <div className="bg-white rounded-xl border border-gray-200 p-4">
                     <p className="text-sm text-gray-500">{statusFilter === 'all' ? 'Total Products' : statusFilter === 'draft' ? 'Draft Products' : 'Active Products'}</p>
-                    <p className="text-2xl font-bold text-gray-900">{statusScoped.length}</p>
+                    <p className="text-xl sm:text-2xl font-bold text-gray-900">{statusScoped.length}</p>
                 </div>
                 <div className="bg-white rounded-xl border border-gray-200 p-4">
                     <p className="text-sm text-gray-500">With Barcode</p>
-                    <p className="text-2xl font-bold text-green-600">{statusScoped.filter(p => p.barcode).length}</p>
+                    <p className="text-xl sm:text-2xl font-bold text-green-600">{statusScoped.filter(p => p.barcode).length}</p>
                 </div>
                 <div className="bg-white rounded-xl border border-gray-200 p-4">
                     <p className="text-sm text-gray-500">Missing Barcode</p>
-                    <p className="text-2xl font-bold text-amber-600">{statusScoped.filter(p => !p.barcode).length}</p>
+                    <p className="text-xl sm:text-2xl font-bold text-amber-600">{statusScoped.filter(p => !p.barcode).length}</p>
                 </div>
                 <div className="bg-white rounded-xl border border-gray-200 p-4">
                     <p className="text-sm text-gray-500">Missing POS Code</p>
-                    <p className="text-2xl font-bold text-purple-600">{statusScoped.filter(p => !p.pos_code).length}</p>
+                    <p className="text-xl sm:text-2xl font-bold text-purple-600">{statusScoped.filter(p => !p.pos_code).length}</p>
                 </div>
                 <div className="bg-white rounded-xl border border-gray-200 p-4">
                     <p className="text-sm text-gray-500">Printed</p>
-                    <p className="text-2xl font-bold text-green-700">{statusScoped.filter(p => p.barcode_printed_at).length}</p>
+                    <p className="text-xl sm:text-2xl font-bold text-green-700">{statusScoped.filter(p => p.barcode_printed_at).length}</p>
                 </div>
                 <div className="bg-white rounded-xl border border-gray-200 p-4">
                     <p className="text-sm text-gray-500">Selected</p>
-                    <p className="text-2xl font-bold text-blue-600">{selected.size}</p>
+                    <p className="text-xl sm:text-2xl font-bold text-blue-600">{selected.size}</p>
                 </div>
             </div>
 
@@ -778,7 +778,7 @@ export default function BarcodesPage() {
             {/* Search & Filters */}
             <div className="bg-white rounded-xl border border-gray-200 p-4 space-y-3">
                 <div className="flex flex-col sm:flex-row gap-3">
-                    <div className="flex-1 relative">
+                    <div className="min-w-0 flex-1 relative">
                         <i className="ri-search-line absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"></i>
                         <input
                             type="text"
@@ -788,7 +788,7 @@ export default function BarcodesPage() {
                             className="w-full pl-10 pr-4 py-2.5 border-2 border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                         />
                     </div>
-                    <div className="flex rounded-lg border border-gray-200 overflow-hidden flex-wrap">
+                    <div className="flex rounded-lg border border-gray-200 overflow-x-auto sm:overflow-hidden sm:flex-wrap">
                         {([
                             { key: 'all', label: 'All' },
                             { key: 'with', label: 'Has Barcode' },
@@ -799,7 +799,7 @@ export default function BarcodesPage() {
                             <button
                                 key={f.key}
                                 onClick={() => setFilter(f.key)}
-                                className={`px-3 py-2.5 text-xs sm:text-sm font-semibold transition-colors cursor-pointer ${filter === f.key ? 'bg-blue-700 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'}`}
+                                className={`shrink-0 whitespace-nowrap min-h-[44px] sm:min-h-0 px-3 py-2.5 text-xs sm:text-sm font-semibold transition-colors cursor-pointer ${filter === f.key ? 'bg-blue-700 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'}`}
                             >
                                 {f.label}
                             </button>
@@ -818,7 +818,7 @@ export default function BarcodesPage() {
                         <button
                             key={s.key}
                             onClick={() => setStatusFilter(s.key)}
-                            className={`px-3 py-1.5 rounded-lg text-xs sm:text-sm font-semibold border transition-colors cursor-pointer ${statusFilter === s.key ? 'bg-gray-900 text-white border-gray-900' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}`}
+                            className={`min-h-[44px] sm:min-h-0 px-3 py-1.5 rounded-lg text-xs sm:text-sm font-semibold border transition-colors cursor-pointer ${statusFilter === s.key ? 'bg-gray-900 text-white border-gray-900' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}`}
                         >
                             {s.label} <span className={statusFilter === s.key ? 'text-gray-300' : 'text-gray-400'}>({s.count})</span>
                         </button>
@@ -840,7 +840,7 @@ export default function BarcodesPage() {
                     </div>
                 ) : (
                     <>
-                        <div className="px-5 py-3 bg-gray-50 border-b border-gray-200 flex items-center justify-between gap-3 text-sm">
+                        <div className="px-4 sm:px-5 py-3 bg-gray-50 border-b border-gray-200 flex flex-wrap items-center justify-between gap-x-3 gap-y-1 text-sm">
                             <p className="text-gray-600">
                                 Showing <strong>{pageStart + 1}</strong>-<strong>{Math.min(pageEnd, filtered.length)}</strong> of <strong>{filtered.length}</strong> products
                             </p>
@@ -867,13 +867,13 @@ export default function BarcodesPage() {
                         {/* Rows */}
                         <div className="divide-y divide-gray-100">
                             {paginatedProducts.map(product => (
-                                <div key={product.id} className="grid grid-cols-1 lg:grid-cols-[40px_1fr_1fr_100px_100px_100px] gap-3 px-5 py-3 items-center hover:bg-gray-50 transition-colors">
+                                <div key={product.id} className="grid grid-cols-1 lg:grid-cols-[40px_1fr_1fr_100px_100px_100px] gap-3 px-4 sm:px-5 py-3 items-center hover:bg-gray-50 transition-colors">
                                     <div>
                                         <input
                                             type="checkbox"
                                             checked={selected.has(product.id)}
                                             onChange={() => toggleSelect(product.id)}
-                                            className="w-4 h-4 cursor-pointer"
+                                            className="w-5 h-5 sm:w-4 sm:h-4 cursor-pointer"
                                         />
                                     </div>
 
@@ -913,14 +913,14 @@ export default function BarcodesPage() {
                                         </div>
                                     </div>
 
-                                    <div>
-                                        <div className="space-y-2">
+                                    <div className="min-w-0">
+                                        <div className="space-y-2 overflow-x-auto">
                                             {product.barcode ? (
                                                 <BarcodeImage value={product.barcode} width={1.1} height={30} />
                                             ) : (
                                                 <button
                                                     onClick={() => generateForOne(product.id)}
-                                                    className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-50 border border-amber-200 rounded-lg text-xs font-semibold text-amber-700 hover:bg-amber-100 transition-colors cursor-pointer"
+                                                    className="flex min-h-[44px] lg:min-h-0 items-center gap-1.5 px-3 py-1.5 bg-amber-50 border border-amber-200 rounded-lg text-xs font-semibold text-amber-700 hover:bg-amber-100 transition-colors cursor-pointer"
                                                 >
                                                     <i className="ri-add-line"></i> Generate Barcode
                                                 </button>
@@ -930,7 +930,7 @@ export default function BarcodesPage() {
                                             ) : (
                                                 <button
                                                     onClick={() => generatePosCodeForOne(product.id)}
-                                                    className="flex items-center gap-1.5 px-3 py-1.5 bg-purple-50 border border-purple-200 rounded-lg text-xs font-semibold text-purple-700 hover:bg-purple-100 transition-colors cursor-pointer"
+                                                    className="flex min-h-[44px] lg:min-h-0 items-center gap-1.5 px-3 py-1.5 bg-purple-50 border border-purple-200 rounded-lg text-xs font-semibold text-purple-700 hover:bg-purple-100 transition-colors cursor-pointer"
                                                 >
                                                     <i className="ri-hashtag"></i> Generate POS Code
                                                 </button>
@@ -948,17 +948,17 @@ export default function BarcodesPage() {
                                             min="1"
                                             value={labelCounts[product.id] || 1}
                                             onChange={(e) => updateLabelCount(product.id, parseInt(e.target.value) || 1)}
-                                            className="w-full px-2 py-1.5 border border-gray-200 rounded-lg text-sm text-center font-semibold focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+                                            className="w-full min-h-[44px] sm:min-h-0 px-2 py-1.5 border border-gray-200 rounded-lg text-base sm:text-sm text-center font-semibold focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
                                             title="Number of barcode labels to print"
                                         />
                                     </div>
 
                                     <div>
-                                        <div className="flex flex-col gap-1.5">
+                                        <div className="flex flex-wrap gap-2 lg:flex-col lg:flex-nowrap lg:gap-1.5">
                                             {product.barcode && (
                                                 <button
                                                     onClick={() => printSingleProduct(product)}
-                                                    className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 border border-blue-200 rounded-lg text-xs font-semibold text-blue-700 hover:bg-blue-100 transition-colors cursor-pointer"
+                                                    className="flex min-h-[44px] lg:min-h-0 items-center gap-1.5 px-3 py-1.5 bg-blue-50 border border-blue-200 rounded-lg text-xs font-semibold text-blue-700 hover:bg-blue-100 transition-colors cursor-pointer"
                                                 >
                                                     <i className="ri-printer-line"></i> Print Barcode
                                                 </button>
@@ -966,7 +966,7 @@ export default function BarcodesPage() {
                                             {product.pos_code && (
                                                 <button
                                                     onClick={() => printSinglePosCode(product)}
-                                                    className="flex items-center gap-1.5 px-3 py-1.5 bg-purple-50 border border-purple-200 rounded-lg text-xs font-semibold text-purple-700 hover:bg-purple-100 transition-colors cursor-pointer"
+                                                    className="flex min-h-[44px] lg:min-h-0 items-center gap-1.5 px-3 py-1.5 bg-purple-50 border border-purple-200 rounded-lg text-xs font-semibold text-purple-700 hover:bg-purple-100 transition-colors cursor-pointer"
                                                 >
                                                     <i className="ri-price-tag-3-line"></i> Print POS Code
                                                 </button>
@@ -974,7 +974,7 @@ export default function BarcodesPage() {
                                             {!product.barcode && !product.pos_code && (
                                                 <Link
                                                     href={`/admin/products/${product.id}`}
-                                                    className="text-blue-600 hover:text-blue-800 text-xs font-medium"
+                                                    className="inline-flex min-h-[44px] items-center lg:min-h-0 text-blue-600 hover:text-blue-800 text-xs font-medium"
                                                 >
                                                     Edit
                                                 </Link>
@@ -985,17 +985,17 @@ export default function BarcodesPage() {
                             ))}
                         </div>
 
-                        <div className="px-5 py-4 border-t border-gray-200 bg-white flex items-center justify-between gap-3">
+                        <div className="px-4 sm:px-5 py-4 border-t border-gray-200 bg-white flex flex-wrap sm:flex-nowrap items-center justify-between gap-3">
                             <button
                                 onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
                                 disabled={currentPage === 1}
-                                className="inline-flex items-center gap-2 px-3 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                                className="inline-flex min-h-[44px] sm:min-h-0 items-center gap-2 px-3 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
                             >
                                 <i className="ri-arrow-left-s-line"></i>
                                 Previous
                             </button>
 
-                            <div className="flex items-center gap-1 flex-wrap justify-center">
+                            <div className="order-last sm:order-none w-full sm:w-auto flex items-center gap-1 flex-wrap justify-center">
                                 {Array.from({ length: totalPages }, (_, i) => i + 1)
                                     .filter(page =>
                                         page === 1 ||
@@ -1010,7 +1010,7 @@ export default function BarcodesPage() {
                                                 {showEllipsis && <span className="px-1 text-gray-400">...</span>}
                                                 <button
                                                     onClick={() => setCurrentPage(page)}
-                                                    className={`w-9 h-9 rounded-lg text-sm font-semibold transition-colors ${
+                                                    className={`w-11 h-11 sm:w-9 sm:h-9 rounded-lg text-sm font-semibold transition-colors ${
                                                         currentPage === page
                                                             ? 'bg-blue-700 text-white'
                                                             : 'border border-gray-300 text-gray-700 hover:bg-gray-50'
@@ -1026,7 +1026,7 @@ export default function BarcodesPage() {
                             <button
                                 onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
                                 disabled={currentPage === totalPages}
-                                className="inline-flex items-center gap-2 px-3 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                                className="inline-flex min-h-[44px] sm:min-h-0 items-center gap-2 px-3 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
                             >
                                 Next
                                 <i className="ri-arrow-right-s-line"></i>

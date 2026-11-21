@@ -243,79 +243,79 @@ export default function CustomerInsightsPage() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-8">
-          <div>
+      <div className="max-w-7xl mx-auto sm:px-6 lg:px-8 sm:py-8">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 md:gap-6 mb-6 sm:mb-8">
+          <div className="min-w-0">
             <h1 className="text-2xl md:text-3xl font-bold text-gray-900">Customer Insights</h1>
             <p className="text-gray-600 mt-1 md:mt-2 text-sm md:text-base">Deep dive into customer behavior and lifetime value</p>
           </div>
-          <div className="flex flex-col sm:flex-row gap-3">
+          <div className="flex flex-wrap gap-2 sm:gap-3">
             <button
               onClick={handleExport}
               disabled={filteredCustomers.length === 0}
-              className="border-2 border-gray-300 hover:border-gray-400 text-gray-700 px-6 py-3 rounded-lg font-semibold transition-colors whitespace-nowrap flex items-center justify-center cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+              className="flex-1 sm:flex-none border-2 border-gray-300 hover:border-gray-400 text-gray-700 px-4 sm:px-6 py-3 rounded-lg font-semibold transition-colors whitespace-nowrap flex items-center justify-center cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <i className="ri-download-line mr-2"></i>
               Export List ({filteredCustomers.length})
             </button>
             <Link
               href="/admin"
-              className="bg-gray-900 hover:bg-gray-800 text-white px-6 py-3 rounded-lg font-semibold transition-colors whitespace-nowrap text-center"
+              className="flex-1 sm:flex-none bg-gray-900 hover:bg-gray-800 text-white px-4 sm:px-6 py-3 rounded-lg font-semibold transition-colors whitespace-nowrap text-center"
             >
               Back to Dashboard
             </Link>
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-          <div className="bg-white rounded-xl shadow-sm p-6">
-            <div className="flex items-center justify-between mb-4">
-              <div className="w-12 h-12 flex items-center justify-center bg-blue-100 rounded-lg">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 sm:gap-6 mb-6 sm:mb-8">
+          <div className="bg-white rounded-xl shadow-sm p-4 sm:p-6 min-w-0">
+            <div className="flex items-center justify-between mb-3 sm:mb-4">
+              <div className="w-10 h-10 sm:w-12 sm:h-12 flex items-center justify-center bg-blue-100 rounded-lg">
                 <i className="ri-vip-crown-line text-2xl text-blue-700"></i>
               </div>
             </div>
             <p className="text-sm text-gray-600 mb-1">VIP Customers</p>
-            <p className="text-3xl font-bold text-gray-900">{stats.vip}</p>
+            <p className="text-2xl sm:text-3xl font-bold text-gray-900 break-words">{stats.vip}</p>
             <p className="text-sm text-blue-700 font-semibold mt-2">Spent &gt; GH₵1,000</p>
           </div>
 
-          <div className="bg-white rounded-xl shadow-sm p-6">
-            <div className="flex items-center justify-between mb-4">
-              <div className="w-12 h-12 flex items-center justify-center bg-blue-100 rounded-lg">
+          <div className="bg-white rounded-xl shadow-sm p-4 sm:p-6 min-w-0">
+            <div className="flex items-center justify-between mb-3 sm:mb-4">
+              <div className="w-10 h-10 sm:w-12 sm:h-12 flex items-center justify-center bg-blue-100 rounded-lg">
                 <i className="ri-refresh-line text-2xl text-blue-700"></i>
               </div>
             </div>
             <p className="text-sm text-gray-600 mb-1">Returning Customers</p>
-            <p className="text-3xl font-bold text-gray-900">{stats.returning}</p>
+            <p className="text-2xl sm:text-3xl font-bold text-gray-900 break-words">{stats.returning}</p>
             <p className="text-sm text-blue-700 font-semibold mt-2">More than 1 order</p>
           </div>
 
-          <div className="bg-white rounded-xl shadow-sm p-6">
-            <div className="flex items-center justify-between mb-4">
-              <div className="w-12 h-12 flex items-center justify-center bg-red-100 rounded-lg">
+          <div className="bg-white rounded-xl shadow-sm p-4 sm:p-6 min-w-0">
+            <div className="flex items-center justify-between mb-3 sm:mb-4">
+              <div className="w-10 h-10 sm:w-12 sm:h-12 flex items-center justify-center bg-red-100 rounded-lg">
                 <i className="ri-alert-line text-2xl text-red-700"></i>
               </div>
             </div>
             <p className="text-sm text-gray-600 mb-1">At Risk</p>
-            <p className="text-3xl font-bold text-gray-900">{stats.atRisk}</p>
+            <p className="text-2xl sm:text-3xl font-bold text-gray-900 break-words">{stats.atRisk}</p>
             <p className="text-sm text-red-700 font-semibold mt-2">Inactive &gt; 90 days</p>
           </div>
 
-          <div className="bg-white rounded-xl shadow-sm p-6">
-            <div className="flex items-center justify-between mb-4">
-              <div className="w-12 h-12 flex items-center justify-center bg-purple-100 rounded-lg">
+          <div className="bg-white rounded-xl shadow-sm p-4 sm:p-6 min-w-0">
+            <div className="flex items-center justify-between mb-3 sm:mb-4">
+              <div className="w-10 h-10 sm:w-12 sm:h-12 flex items-center justify-center bg-purple-100 rounded-lg">
                 <i className="ri-line-chart-line text-2xl text-purple-700"></i>
               </div>
             </div>
             <p className="text-sm text-gray-600 mb-1">Avg. Lifetime Value</p>
-            <p className="text-3xl font-bold text-gray-900">{formatCurrency(stats.avgCLV)}</p>
+            <p className="text-2xl sm:text-3xl font-bold text-gray-900 break-words">{formatCurrency(stats.avgCLV)}</p>
             <p className="text-sm text-gray-500 mt-2">Per paying customer</p>
           </div>
         </div>
 
-        <div className="bg-white rounded-xl shadow-sm p-6 mb-6">
+        <div className="bg-white rounded-xl shadow-sm p-4 sm:p-6 mb-6">
           <div className="flex flex-col md:flex-row md:items-center md:justify-between space-y-4 md:space-y-0">
-            <div className="flex-1 max-w-md">
+            <div className="w-full md:flex-1 md:max-w-md">
               <div className="relative">
                 <i className="ri-search-line absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 text-xl"></i>
                 <input
@@ -323,12 +323,12 @@ export default function CustomerInsightsPage() {
                   placeholder="Search customers by name or email..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full pl-12 pr-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
+                  className="w-full pl-12 pr-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-base sm:text-sm"
                 />
               </div>
             </div>
 
-            <div className="flex flex-wrap gap-2 bg-gray-100 rounded-lg p-1">
+            <div className="flex gap-2 overflow-x-auto md:flex-wrap md:overflow-visible bg-gray-100 rounded-lg p-1">
               {[
                 { value: 'all', label: 'All', count: customers.length },
                 { value: 'vip', label: 'VIP', count: stats.vip },
@@ -340,7 +340,7 @@ export default function CustomerInsightsPage() {
                 <button
                   key={segment.value}
                   onClick={() => setSelectedSegment(segment.value)}
-                  className={`px-3 py-2 rounded-md font-medium text-sm transition-colors whitespace-nowrap flex-grow sm:flex-grow-0 ${selectedSegment === segment.value
+                  className={`px-3 py-2 rounded-md font-medium text-sm transition-colors whitespace-nowrap shrink-0 min-h-[44px] md:min-h-0 flex-grow md:flex-grow-0 ${selectedSegment === segment.value
                     ? 'bg-white text-gray-900 shadow-sm'
                     : 'text-gray-600 hover:text-gray-900'
                     }`}
@@ -359,16 +359,16 @@ export default function CustomerInsightsPage() {
             </div>
           ) : (
             filteredCustomers.map((customer) => (
-              <div key={customer.id} className="bg-white rounded-xl shadow-sm p-6 hover:shadow-md transition-shadow">
+              <div key={customer.id} className="bg-white rounded-xl shadow-sm p-4 sm:p-6 hover:shadow-md transition-shadow">
                 <div className="flex items-start justify-between mb-4">
-                  <div className="flex items-start space-x-4">
-                    <div className="w-16 h-16 flex items-center justify-center bg-gradient-to-br from-blue-500 to-blue-700 rounded-full text-white text-2xl font-bold">
+                  <div className="flex items-start gap-3 sm:gap-0 sm:space-x-4 min-w-0">
+                    <div className="w-12 h-12 sm:w-16 sm:h-16 shrink-0 flex items-center justify-center bg-gradient-to-br from-blue-500 to-blue-700 rounded-full text-white text-xl sm:text-2xl font-bold">
                       {customer.name?.charAt(0).toUpperCase() || 'U'}
                     </div>
-                    <div>
-                      <h3 className="text-xl font-bold text-gray-900">{customer.name}</h3>
-                      <div className="flex items-center space-x-3 mt-1 text-sm text-gray-600">
-                        <span className="flex items-center">
+                    <div className="min-w-0">
+                      <h3 className="text-lg sm:text-xl font-bold text-gray-900 break-words">{customer.name}</h3>
+                      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1 text-sm text-gray-600">
+                        <span className="flex items-center min-w-0 break-all">
                           <i className="ri-mail-line mr-1"></i>
                           {customer.email}
                         </span>
@@ -377,7 +377,7 @@ export default function CustomerInsightsPage() {
                           {customer.phone}
                         </span>
                       </div>
-                      <div className="flex items-center space-x-2 mt-3">
+                      <div className="flex flex-wrap items-center gap-2 mt-3">
                         <span className={`px-3 py-1 rounded-full text-sm font-medium ${getSegmentBadge(customer.segment)} whitespace-nowrap`}>
                           {getSegmentLabel(customer.segment)}
                         </span>
@@ -394,24 +394,24 @@ export default function CustomerInsightsPage() {
                     </button> */}
                 </div>
 
-                <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-4">
-                  <div className="bg-gray-50 rounded-lg p-4">
+                <div className="grid grid-cols-2 md:grid-cols-5 gap-3 sm:gap-4 mb-4">
+                  <div className="bg-gray-50 rounded-lg p-3 sm:p-4 min-w-0">
                     <p className="text-sm text-gray-600 mb-1">Total Spent</p>
-                    <p className="text-2xl font-bold text-gray-900">{formatCurrency(customer.totalSpent)}</p>
+                    <p className="text-lg sm:text-2xl break-words font-bold text-gray-900">{formatCurrency(customer.totalSpent)}</p>
                   </div>
-                  <div className="bg-gray-50 rounded-lg p-4">
+                  <div className="bg-gray-50 rounded-lg p-3 sm:p-4 min-w-0">
                     <p className="text-sm text-gray-600 mb-1">Orders</p>
-                    <p className="text-2xl font-bold text-gray-900">{customer.orders}</p>
+                    <p className="text-lg sm:text-2xl break-words font-bold text-gray-900">{customer.orders}</p>
                   </div>
-                  <div className="bg-gray-50 rounded-lg p-4">
+                  <div className="bg-gray-50 rounded-lg p-3 sm:p-4 min-w-0">
                     <p className="text-sm text-gray-600 mb-1">Avg. Order</p>
-                    <p className="text-2xl font-bold text-gray-900">{formatCurrency(customer.avgOrderValue)}</p>
+                    <p className="text-lg sm:text-2xl break-words font-bold text-gray-900">{formatCurrency(customer.avgOrderValue)}</p>
                   </div>
-                  <div className="bg-gray-50 rounded-lg p-4">
+                  <div className="bg-gray-50 rounded-lg p-3 sm:p-4 min-w-0">
                     <p className="text-sm text-gray-600 mb-1">Lifetime Value</p>
-                    <p className="text-2xl font-bold text-blue-700">{formatCurrency(customer.lifetimeValue)}</p>
+                    <p className="text-lg sm:text-2xl break-words font-bold text-blue-700">{formatCurrency(customer.lifetimeValue)}</p>
                   </div>
-                  <div className="bg-gray-50 rounded-lg p-4">
+                  <div className="bg-gray-50 rounded-lg p-3 sm:p-4 col-span-2 md:col-span-1">
                     <p className="text-sm text-gray-600 mb-1">Engagement</p>
                     <div className="flex items-center space-x-2">
                       <div className="flex-1 bg-gray-200 rounded-full h-2">
@@ -429,7 +429,7 @@ export default function CustomerInsightsPage() {
                 </div>
 
                 <div className="flex items-center justify-between pt-4 border-t border-gray-200">
-                  <div className="flex items-center space-x-6 text-sm text-gray-600">
+                  <div className="flex flex-wrap items-center gap-x-6 gap-y-1 text-sm text-gray-600">
                     <span>
                       <span className="font-medium">Joined:</span> {new Date(customer.joinDate).toLocaleDateString('en-GB')}
                     </span>

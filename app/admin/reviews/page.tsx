@@ -151,9 +151,9 @@ export default function AdminReviewsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">Reviews</h1>
+          <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Reviews</h1>
           <p className="text-gray-600 mt-1">
             New customer reviews stay hidden until approved.
             {!loading && ` ${stats.pending} waiting for approval.`}
@@ -204,15 +204,15 @@ export default function AdminReviewsPage() {
       </div>
 
       <div className="bg-white rounded-xl shadow-sm border border-gray-200">
-        <div className="p-6 border-b border-gray-200">
-          <div className="flex items-center justify-between">
+        <div className="p-4 sm:p-6 border-b border-gray-200">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <h2 className="text-lg font-bold text-gray-900 text-transform capitalize">
               {statusFilter === 'all' ? 'All Reviews' : `${statusFilter} Reviews`}
             </h2>
             <select
               value={sortBy}
               onChange={(e) => setSortBy(e.target.value)}
-              className="px-4 py-2 pr-8 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 font-medium cursor-pointer"
+              className="min-h-[44px] w-full sm:min-h-0 sm:w-auto px-4 py-2 pr-8 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 font-medium cursor-pointer"
             >
               <option value="date">Sort by Date</option>
               <option value="rating">Sort by Rating</option>
@@ -222,21 +222,21 @@ export default function AdminReviewsPage() {
         </div>
 
         {selectedReviews.length > 0 && (
-          <div className="p-4 bg-blue-50 border-b border-blue-200 flex items-center justify-between">
+          <div className="p-4 bg-blue-50 border-b border-blue-200 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <p className="text-blue-800 font-semibold">
               {selectedReviews.length} review{selectedReviews.length > 1 ? 's' : ''} selected
             </p>
-            <div className="flex items-center space-x-2">
+            <div className="flex items-center gap-2">
               <button
                 onClick={() => handleBulkAction('Approve')}
-                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors whitespace-nowrap cursor-pointer"
+                className="min-h-[44px] flex-1 sm:min-h-0 sm:flex-none px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors whitespace-nowrap cursor-pointer"
               >
                 <i className="ri-check-line mr-2"></i>
                 Approve
               </button>
               <button
                 onClick={() => handleBulkAction('Reject')}
-                className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg text-sm font-medium transition-colors whitespace-nowrap cursor-pointer"
+                className="min-h-[44px] flex-1 sm:min-h-0 sm:flex-none px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg text-sm font-medium transition-colors whitespace-nowrap cursor-pointer"
               >
                 <i className="ri-close-line mr-2"></i>
                 Reject
@@ -297,20 +297,20 @@ export default function AdminReviewsPage() {
                       </div>
                     </td>
                     <td className="py-4 px-4">
-                      <div className="flex items-center space-x-3">
-                        <div className="w-8 h-8 flex items-center justify-center bg-blue-100 text-blue-700 rounded-full text-xs font-semibold">
+                      <div className="flex min-w-0 items-center space-x-3">
+                        <div className="w-8 h-8 shrink-0 flex items-center justify-center bg-blue-100 text-blue-700 rounded-full text-xs font-semibold">
                           {review.customer.avatar}
                         </div>
-                        <div>
-                          <p className="text-sm font-medium text-gray-900">{review.customer.name}</p>
-                          <p className="text-xs text-gray-500">{review.customer.email}</p>
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium text-gray-900 break-words">{review.customer.name}</p>
+                          <p className="text-xs text-gray-500 break-all">{review.customer.email}</p>
                         </div>
                       </div>
                     </td>
                     <td className="py-4 px-4">
                       <div className="space-y-1">
                         {renderStars(review.rating)}
-                        <p className="text-sm font-bold text-gray-900">{review.title}</p>
+                        <p className="text-sm font-bold text-gray-900 break-words">{review.title}</p>
                         <p className="text-sm text-gray-600 line-clamp-2">{review.comment}</p>
                       </div>
                     </td>
@@ -327,7 +327,7 @@ export default function AdminReviewsPage() {
           </table>
         </div>
 
-        <div className="p-6 border-t border-gray-200">
+        <div className="p-4 sm:p-6 border-t border-gray-200">
           <p className="text-gray-600 text-sm">Showing {filteredReviews.length} reviews</p>
         </div>
       </div>

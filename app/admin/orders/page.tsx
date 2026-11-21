@@ -548,20 +548,20 @@ export default function AdminOrdersPage() {
     <div className="space-y-6">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">Orders</h1>
+          <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Orders</h1>
           <p className="text-gray-600 mt-1">Manage and track all customer orders</p>
         </div>
         <div className="flex items-center gap-3 w-full md:w-auto">
           <button
             onClick={() => setShowProductStats(true)}
-            className="flex-1 md:flex-none bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 px-6 py-3 rounded-lg font-semibold transition-colors whitespace-nowrap cursor-pointer shadow-sm flex items-center justify-center"
+            className="flex-1 md:flex-none bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 px-4 sm:px-6 py-3 rounded-lg font-semibold transition-colors whitespace-nowrap cursor-pointer shadow-sm flex items-center justify-center"
           >
             <i className="ri-bar-chart-groupped-line mr-2"></i>
             Stats
           </button>
           <button
             onClick={handleExportAll}
-            className="flex-1 md:flex-none bg-blue-700 hover:bg-blue-800 text-white px-6 py-3 rounded-lg font-semibold transition-colors whitespace-nowrap cursor-pointer shadow-sm flex items-center justify-center"
+            className="flex-1 md:flex-none bg-blue-700 hover:bg-blue-800 text-white px-4 sm:px-6 py-3 rounded-lg font-semibold transition-colors whitespace-nowrap cursor-pointer shadow-sm flex items-center justify-center"
           >
             <i className="ri-download-line mr-2"></i>
             Export ({filteredOrders.length})
@@ -573,7 +573,7 @@ export default function AdminOrdersPage() {
       <div className="flex border-b border-gray-200">
         <button
           onClick={() => { setOrderViewTab('confirmed'); setStatusFilter('all'); }}
-          className={`px-6 py-3 font-semibold text-sm border-b-2 transition-colors cursor-pointer ${
+          className={`flex-1 sm:flex-none px-3 sm:px-6 py-3 font-semibold text-sm border-b-2 transition-colors cursor-pointer ${
             orderViewTab === 'confirmed'
               ? 'border-blue-700 text-blue-700'
               : 'border-transparent text-gray-500 hover:text-gray-700'
@@ -584,7 +584,7 @@ export default function AdminOrdersPage() {
         </button>
         <button
           onClick={() => { setOrderViewTab('abandoned'); setStatusFilter('all'); }}
-          className={`px-6 py-3 font-semibold text-sm border-b-2 transition-colors cursor-pointer ${
+          className={`flex-1 sm:flex-none px-3 sm:px-6 py-3 font-semibold text-sm border-b-2 transition-colors cursor-pointer ${
             orderViewTab === 'abandoned'
               ? 'border-amber-600 text-amber-600'
               : 'border-transparent text-gray-500 hover:text-gray-700'
@@ -596,18 +596,18 @@ export default function AdminOrdersPage() {
       </div>
 
       {orderViewTab === 'confirmed' && (
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+      <div className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1 md:mx-0 md:grid md:grid-cols-3 md:gap-4 md:overflow-visible md:px-0 md:pb-0 lg:grid-cols-6">
         {orderStats.map((stat) => (
           <button
             key={stat.status}
             onClick={() => setStatusFilter(stat.status)}
-            className={`p-4 rounded-xl border-2 transition-all text-left cursor-pointer ${statusFilter === stat.status
+            className={`shrink-0 min-w-[7.5rem] md:min-w-0 p-3 md:p-4 rounded-xl border-2 transition-all text-left cursor-pointer ${statusFilter === stat.status
               ? 'border-blue-700 bg-blue-50'
               : 'border-gray-200 bg-white hover:border-gray-300'
               }`}
           >
-            <p className="text-2xl font-bold text-gray-900">{stat.count}</p>
-            <p className="text-sm text-gray-600 mt-1">{stat.label}</p>
+            <p className="text-xl md:text-2xl font-bold text-gray-900">{stat.count}</p>
+            <p className="text-sm text-gray-600 mt-1 whitespace-nowrap md:whitespace-normal">{stat.label}</p>
           </button>
         ))}
       </div>
@@ -629,22 +629,22 @@ export default function AdminOrdersPage() {
       )}
 
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-        <div className="p-6 border-b border-gray-200">
-          <div className="flex flex-col md:flex-row md:items-center md:justify-between space-y-4 md:space-y-0">
-            <div className="flex-1 max-w-md">
+        <div className="p-4 sm:p-6 border-b border-gray-200">
+          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 md:gap-4">
+            <div className="flex-1 w-full md:max-w-md">
               <div className="relative">
                 <i className="ri-search-line absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 text-lg w-5 h-5 flex items-center justify-center"></i>
                 <input
                   type="text"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="Search by order ID, customer name, or email..."
+                  placeholder="Search order ID, name or email"
                   className="w-full pl-12 pr-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
                 />
               </div>
             </div>
 
-            <div className="flex items-center space-x-3">
+            <div className="grid grid-cols-2 gap-2 md:flex md:items-center md:gap-3">
               <button
                 onClick={() => setShowFilters(!showFilters)}
                 className="px-4 py-3 border-2 border-gray-300 text-gray-700 rounded-lg hover:border-gray-400 transition-colors font-medium whitespace-nowrap cursor-pointer"
@@ -655,7 +655,8 @@ export default function AdminOrdersPage() {
               <select
                 value={productFilter}
                 onChange={(e) => setProductFilter(e.target.value)}
-                className="px-4 py-3 pr-8 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 font-medium cursor-pointer"
+                aria-label="Filter by product"
+                className="col-span-2 order-last md:order-none w-full min-w-0 md:w-auto md:max-w-xs px-4 py-3 pr-8 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 font-medium cursor-pointer"
               >
                 <option value="all">All Products</option>
                 {availableProducts.map((name) => (
@@ -665,7 +666,8 @@ export default function AdminOrdersPage() {
               <select
                 value={sortBy}
                 onChange={(e) => setSortBy(e.target.value)}
-                className="px-4 py-3 pr-8 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 font-medium cursor-pointer"
+                aria-label="Sort orders"
+                className="min-w-0 px-3 sm:px-4 py-3 pr-8 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 font-medium cursor-pointer"
               >
                 <option value="date">Sort by Date</option>
                 <option value="total">Sort by Total</option>
@@ -676,7 +678,7 @@ export default function AdminOrdersPage() {
           </div>
 
           {showFilters && (
-            <div className="mt-4 p-4 bg-gray-50 rounded-lg grid sm:grid-cols-2 lg:grid-cols-5 gap-4">
+            <div className="mt-4 p-3 sm:p-4 bg-gray-50 rounded-lg grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-4">
               <div>
                 <label className="block text-sm font-semibold text-gray-700 mb-2">From</label>
                 <input

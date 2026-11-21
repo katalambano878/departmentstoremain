@@ -106,18 +106,18 @@ export default function AdminBlogPage() {
       {error && (
         <div className="flex items-start gap-2 bg-red-50 border border-red-200 text-red-800 px-4 py-3 rounded-lg" role="alert">
           <i className="ri-error-warning-line text-red-600 mt-0.5"></i>
-          <span className="flex-1">{error}</span>
-          <button onClick={() => setError('')} aria-label="Dismiss" className="opacity-70 hover:opacity-100"><i className="ri-close-line"></i></button>
+          <span className="min-w-0 flex-1 break-words">{error}</span>
+          <button onClick={() => setError('')} aria-label="Dismiss" className="-m-2 flex h-11 w-11 shrink-0 items-center justify-center opacity-70 hover:opacity-100 sm:m-0 sm:block sm:h-auto sm:w-auto"><i className="ri-close-line"></i></button>
         </div>
       )}
 
       <div className="bg-white rounded-xl border border-gray-200 p-4 flex flex-col md:flex-row md:items-center gap-3 justify-between">
-        <div className="flex flex-wrap gap-2">
+        <div className="flex gap-2 overflow-x-auto md:flex-wrap md:overflow-visible">
           {(['all', 'published', 'draft', 'archived'] as const).map(s => (
             <button
               key={s}
               onClick={() => setStatusFilter(s)}
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${statusFilter === s ? 'bg-blue-700 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}
+              className={`shrink-0 whitespace-nowrap min-h-[44px] md:min-h-0 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${statusFilter === s ? 'bg-blue-700 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}
             >
               {s === 'all' ? 'All' : STATUS_LABEL[s]} ({counts[s]})
             </button>
@@ -130,7 +130,7 @@ export default function AdminBlogPage() {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search title or tag"
-            className="w-full pl-10 pr-3 py-2 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
+            className="w-full min-h-[44px] sm:min-h-0 pl-10 pr-3 py-2 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-base sm:text-sm"
           />
         </div>
       </div>
@@ -154,11 +154,11 @@ export default function AdminBlogPage() {
             {visible.map(post => {
               const status = (post.status || 'draft') as BlogStatus;
               return (
-                <li key={post.id} className="flex items-center gap-4 p-4 hover:bg-gray-50">
+                <li key={post.id} className="flex items-center gap-3 sm:gap-4 p-4 hover:bg-gray-50">
                   {post.featured_image ? (
-                    <img src={post.featured_image} alt="" className="w-20 h-14 rounded-lg object-cover border border-gray-100 flex-shrink-0" />
+                    <img src={post.featured_image} alt="" className="w-16 h-12 sm:w-20 sm:h-14 rounded-lg object-cover border border-gray-100 flex-shrink-0" />
                   ) : (
-                    <div className="w-20 h-14 rounded-lg bg-gray-100 flex items-center justify-center text-gray-400 flex-shrink-0">
+                    <div className="w-16 h-12 sm:w-20 sm:h-14 rounded-lg bg-gray-100 flex items-center justify-center text-gray-400 flex-shrink-0">
                       <i className="ri-image-line text-xl"></i>
                     </div>
                   )}
@@ -177,10 +177,10 @@ export default function AdminBlogPage() {
                   <span className={`hidden sm:inline-flex px-3 py-1 rounded-full text-xs font-semibold ${STATUS_BADGE[status]}`}>
                     {STATUS_LABEL[status]}
                   </span>
-                  <div className="flex items-center gap-1">
+                  <div className="flex shrink-0 items-center gap-1">
                     <Link
                       href={`/admin/blog/${post.id}`}
-                      className="w-9 h-9 flex items-center justify-center text-gray-600 hover:text-blue-700 hover:bg-blue-50 rounded-lg"
+                      className="w-11 h-11 sm:w-9 sm:h-9 flex items-center justify-center text-gray-600 hover:text-blue-700 hover:bg-blue-50 rounded-lg"
                       title="Edit post"
                       aria-label={`Edit ${post.title}`}
                     >
@@ -189,7 +189,7 @@ export default function AdminBlogPage() {
                     <button
                       onClick={() => handleDelete(post)}
                       disabled={deletingId === post.id}
-                      className="w-9 h-9 flex items-center justify-center text-gray-600 hover:text-red-700 hover:bg-red-50 rounded-lg disabled:opacity-50"
+                      className="w-11 h-11 sm:w-9 sm:h-9 flex items-center justify-center text-gray-600 hover:text-red-700 hover:bg-red-50 rounded-lg disabled:opacity-50"
                       title="Delete post"
                       aria-label={`Delete ${post.title}`}
                     >

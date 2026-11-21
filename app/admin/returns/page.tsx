@@ -122,7 +122,7 @@ export default function AdminReturnsPage() {
         <div className="flex items-start gap-2 bg-red-50 border border-red-200 text-red-800 px-4 py-3 rounded-lg" role="alert">
           <i className="ri-error-warning-line text-red-600 mt-0.5"></i>
           <span className="flex-1">{error}</span>
-          <button onClick={() => setError('')} aria-label="Dismiss" className="opacity-70 hover:opacity-100"><i className="ri-close-line"></i></button>
+          <button onClick={() => setError('')} aria-label="Dismiss" className="shrink-0 -my-3 -mr-3 p-3 opacity-70 hover:opacity-100"><i className="ri-close-line"></i></button>
         </div>
       )}
 
@@ -131,12 +131,12 @@ export default function AdminReturnsPage() {
           <button
             key={f}
             onClick={() => setFilter(f)}
-            className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${filter === f ? 'bg-blue-700 text-white' : 'bg-white border border-gray-200 text-gray-700 hover:bg-gray-50'}`}
+            className={`min-h-[44px] sm:min-h-0 px-3 sm:px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-colors ${filter === f ? 'bg-blue-700 text-white' : 'bg-white border border-gray-200 text-gray-700 hover:bg-gray-50'}`}
           >
             {f === 'pending' ? `Waiting (${pendingCount})` : f === 'open' ? `Open (${openCount})` : `All (${rows.length})`}
           </button>
         ))}
-        <button onClick={load} className="ml-auto w-10 h-10 flex items-center justify-center border border-gray-200 bg-white rounded-lg text-gray-600 hover:bg-gray-50" aria-label="Refresh">
+        <button onClick={load} className="ml-auto w-11 h-11 sm:w-10 sm:h-10 shrink-0 flex items-center justify-center border border-gray-200 bg-white rounded-lg text-gray-600 hover:bg-gray-50" aria-label="Refresh">
           <i className={`ri-refresh-line ${loading ? 'animate-spin' : ''}`}></i>
         </button>
       </div>
@@ -153,7 +153,7 @@ export default function AdminReturnsPage() {
             const st = status(r);
             const noteChanged = (notes[r.id] ?? '') !== (r.admin_notes || '');
             return (
-              <li key={r.id} className="bg-white rounded-xl border border-gray-200 p-5">
+              <li key={r.id} className="bg-white rounded-xl border border-gray-200 p-4 sm:p-5">
                 <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
                   <div className="min-w-0">
                     <p className="font-semibold text-gray-900">
@@ -168,7 +168,7 @@ export default function AdminReturnsPage() {
                         <span className="text-gray-400">unknown</span>
                       )}
                       {r.orders?.total != null && ` · GH₵ ${Number(r.orders.total).toFixed(2)}`}
-                      {r.orders?.email && <> · <a href={`mailto:${r.orders.email}`} className="text-blue-700 hover:underline">{r.orders.email}</a></>}
+                      {r.orders?.email && <> · <a href={`mailto:${r.orders.email}`} className="text-blue-700 hover:underline break-all">{r.orders.email}</a></>}
                       {r.orders?.phone && <> · <a href={`tel:${r.orders.phone}`} className="text-blue-700 hover:underline">{r.orders.phone}</a></>}
                     </p>
                     <p className="text-xs text-gray-400 mt-0.5">Requested {formatDateTime(r.created_at)}</p>
@@ -179,14 +179,14 @@ export default function AdminReturnsPage() {
                         <button
                           onClick={() => update(r, { status: 'approved' }, `Approve return ${referenceFor(r.id)}?`)}
                           disabled={busyId === r.id}
-                          className="px-4 py-2 rounded-lg text-sm font-semibold bg-blue-700 text-white hover:bg-blue-800 disabled:opacity-50"
+                          className="min-h-[44px] flex-1 sm:min-h-0 sm:flex-none px-4 py-2 rounded-lg text-sm font-semibold bg-blue-700 text-white hover:bg-blue-800 disabled:opacity-50"
                         >
                           Approve
                         </button>
                         <button
                           onClick={() => update(r, { status: 'rejected' }, `Reject return ${referenceFor(r.id)}?`)}
                           disabled={busyId === r.id}
-                          className="px-4 py-2 rounded-lg text-sm font-semibold border-2 border-red-300 text-red-700 hover:bg-red-50 disabled:opacity-50"
+                          className="min-h-[44px] flex-1 sm:min-h-0 sm:flex-none px-4 py-2 rounded-lg text-sm font-semibold border-2 border-red-300 text-red-700 hover:bg-red-50 disabled:opacity-50"
                         >
                           Reject
                         </button>
@@ -198,7 +198,7 @@ export default function AdminReturnsPage() {
                         disabled={busyId === r.id}
                         onChange={(e) => update(r, { status: e.target.value as ReturnStatus })}
                         aria-label="Return status"
-                        className="px-3 py-2 border-2 border-gray-300 rounded-lg text-sm cursor-pointer disabled:opacity-50"
+                        className="min-h-[44px] w-full sm:min-h-0 sm:w-auto px-3 py-2 border-2 border-gray-300 rounded-lg text-base sm:text-sm cursor-pointer disabled:opacity-50"
                       >
                         {(Object.keys(STATUS_LABEL) as ReturnStatus[]).map(s => (
                           <option key={s} value={s}>{STATUS_LABEL[s]}</option>
@@ -209,7 +209,7 @@ export default function AdminReturnsPage() {
                 </div>
 
                 <div className="mt-3 text-sm">
-                  <p className="font-medium text-gray-900">{r.reason}</p>
+                  <p className="font-medium text-gray-900 break-words">{r.reason}</p>
                   {r.description && <p className="text-gray-700 mt-1 whitespace-pre-wrap break-words">{r.description}</p>}
                   {(r.refund_amount != null || r.refund_method) && (
                     <p className="text-gray-600 mt-1">
@@ -226,13 +226,13 @@ export default function AdminReturnsPage() {
                     rows={2}
                     value={notes[r.id] ?? ''}
                     onChange={(e) => { setSavedId(null); setNotes(prev => ({ ...prev, [r.id]: e.target.value })); }}
-                    className="w-full px-3 py-2 border-2 border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    className="w-full px-3 py-2 border-2 border-gray-300 rounded-lg text-base sm:text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   />
                   <div className="flex items-center gap-3 mt-2">
                     <button
                       onClick={() => update(r, { admin_notes: (notes[r.id] || '').trim() || null })}
                       disabled={busyId === r.id || !noteChanged}
-                      className="px-4 py-2 rounded-lg text-sm font-semibold bg-gray-900 text-white hover:bg-gray-800 disabled:opacity-40"
+                      className="min-h-[44px] sm:min-h-0 px-4 py-2 rounded-lg text-sm font-semibold bg-gray-900 text-white hover:bg-gray-800 disabled:opacity-40"
                     >
                       {busyId === r.id ? 'Saving...' : 'Save notes'}
                     </button>

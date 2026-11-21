@@ -125,29 +125,29 @@ export default function AdminAffiliateDetailPage() {
   }
 
   return (
-    <div className="p-6 max-w-5xl mx-auto">
-      <Link href="/admin/affiliates" className="text-sm text-gray-500 hover:text-gray-900">← All affiliates</Link>
+    <div className="sm:p-6 max-w-5xl mx-auto">
+      <Link href="/admin/affiliates" className="inline-flex min-h-[44px] sm:min-h-0 items-center text-sm text-gray-500 hover:text-gray-900">← All affiliates</Link>
       {error && (
         <div className="mt-3 flex items-start gap-2 bg-red-50 border border-red-200 text-red-800 px-4 py-3 rounded-lg text-sm" role="alert">
           <i className="ri-error-warning-line text-red-600 mt-0.5"></i>
-          <span className="flex-1">{error}</span>
-          <button onClick={() => setError('')} aria-label="Dismiss" className="opacity-70 hover:opacity-100"><i className="ri-close-line"></i></button>
+          <span className="min-w-0 flex-1 break-words">{error}</span>
+          <button onClick={() => setError('')} aria-label="Dismiss" className="-m-2 flex h-11 w-11 shrink-0 items-center justify-center opacity-70 hover:opacity-100 sm:m-0 sm:block sm:h-auto sm:w-auto"><i className="ri-close-line"></i></button>
         </div>
       )}
-      <div className="flex flex-wrap items-start justify-between gap-4 mt-2 mb-6">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">{affiliate.full_name || affiliate.email}</h1>
+      <div className="flex flex-col gap-4 sm:flex-row sm:flex-wrap sm:items-start sm:justify-between mt-2 mb-6">
+        <div className="min-w-0">
+          <h1 className="text-2xl font-bold text-gray-900 break-words">{affiliate.full_name || affiliate.email}</h1>
           <p className="text-sm text-gray-500">
             <code className="bg-gray-100 px-1.5 py-0.5 rounded">{affiliate.code}</code> · {affiliate.commission_pct}% · {affiliate.status}
           </p>
-          <p className="text-sm text-gray-500 mt-1">
+          <p className="text-sm text-gray-500 mt-1 break-words">
             Payout: {affiliate.payout_provider || '—'} {affiliate.payout_number || ''} {affiliate.payout_name ? `(${affiliate.payout_name})` : ''}
           </p>
         </div>
         <button
           onClick={() => { setPayError(''); setConfirmPay(true); }}
           disabled={Number(affiliate.balance_available) <= 0}
-          className="px-4 py-2 rounded-lg bg-green-600 text-white font-medium hover:bg-green-700 disabled:opacity-40 disabled:cursor-not-allowed"
+          className="w-full sm:w-auto min-h-[44px] sm:min-h-0 px-4 py-2 rounded-lg bg-green-600 text-white font-medium hover:bg-green-700 disabled:opacity-40 disabled:cursor-not-allowed"
         >
           Pay now · {ghs(affiliate.balance_available)}
         </button>
@@ -160,7 +160,7 @@ export default function AdminAffiliateDetailPage() {
         <Stat label="Total paid" value={affiliate.total_paid} accent="text-gray-500" />
       </div>
 
-      <div className="flex items-center gap-2 mb-3">
+      <div className="flex flex-wrap items-center gap-2 mb-3">
         <h2 className="text-lg font-semibold text-gray-900">Custom product prices</h2>
         {markups.some((m) => m.status === 'pending') && (
           <span className="inline-flex items-center gap-1 text-xs font-medium text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full">
@@ -186,21 +186,21 @@ export default function AdminAffiliateDetailPage() {
                     </p>
                   </div>
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
                   {m.status === 'pending' ? (
                     <>
-                      <button disabled={busyMarkup === m.id} onClick={() => markupAction(m.id, 'approve')} className="px-3 py-1.5 rounded-lg bg-emerald-600 text-white text-xs font-medium hover:bg-emerald-700 disabled:opacity-50">Approve</button>
-                      <button disabled={busyMarkup === m.id} onClick={() => markupAction(m.id, 'reject')} className="px-3 py-1.5 rounded-lg bg-gray-100 text-gray-700 text-xs font-medium hover:bg-gray-200 disabled:opacity-50">Reject</button>
+                      <button disabled={busyMarkup === m.id} onClick={() => markupAction(m.id, 'approve')} className="min-h-[44px] sm:min-h-0 px-3 py-1.5 rounded-lg bg-emerald-600 text-white text-xs font-medium hover:bg-emerald-700 disabled:opacity-50">Approve</button>
+                      <button disabled={busyMarkup === m.id} onClick={() => markupAction(m.id, 'reject')} className="min-h-[44px] sm:min-h-0 px-3 py-1.5 rounded-lg bg-gray-100 text-gray-700 text-xs font-medium hover:bg-gray-200 disabled:opacity-50">Reject</button>
                     </>
                   ) : m.status === 'approved' ? (
                     <>
                       <span className="inline-flex items-center gap-1 text-xs font-medium text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-1 rounded"><i className="ri-check-line" /> Live</span>
-                      <button disabled={busyMarkup === m.id} onClick={() => markupAction(m.id, 'reject')} className="px-2.5 py-1 rounded-lg border border-gray-300 text-gray-500 text-xs hover:bg-gray-50 disabled:opacity-50">Disable</button>
+                      <button disabled={busyMarkup === m.id} onClick={() => markupAction(m.id, 'reject')} className="min-h-[44px] sm:min-h-0 px-2.5 py-1 rounded-lg border border-gray-300 text-gray-500 text-xs hover:bg-gray-50 disabled:opacity-50">Disable</button>
                     </>
                   ) : (
                     <>
                       <span className="inline-flex items-center gap-1 text-xs font-medium text-rose-700 bg-rose-50 border border-rose-200 px-2 py-1 rounded"><i className="ri-close-line" /> Rejected</span>
-                      <button disabled={busyMarkup === m.id} onClick={() => markupAction(m.id, 'approve')} className="px-2.5 py-1 rounded-lg bg-emerald-600 text-white text-xs hover:bg-emerald-700 disabled:opacity-50">Approve</button>
+                      <button disabled={busyMarkup === m.id} onClick={() => markupAction(m.id, 'approve')} className="min-h-[44px] sm:min-h-0 px-2.5 py-1 rounded-lg bg-emerald-600 text-white text-xs hover:bg-emerald-700 disabled:opacity-50">Approve</button>
                     </>
                   )}
                 </div>
@@ -229,7 +229,7 @@ export default function AdminAffiliateDetailPage() {
               <tbody className="divide-y divide-gray-100">
                 {commissions.map((c) => (
                   <tr key={c.id}>
-                    <td className="px-4 py-2.5 font-mono text-xs text-gray-600">{c.order_number}</td>
+                    <td className="px-4 py-2.5 font-mono text-xs text-gray-600 break-all">{c.order_number}</td>
                     <td className="px-4 py-2.5 text-gray-500">{date(c.created_at)}</td>
                     <td className="px-4 py-2.5 text-right text-gray-500">{ghs(c.base_amount)}</td>
                     <td className="px-4 py-2.5 text-right font-semibold text-gray-900">{ghs(c.commission_amount)}</td>
@@ -280,19 +280,19 @@ export default function AdminAffiliateDetailPage() {
 
       {confirmPay && (
         <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4" onClick={() => setConfirmPay(false)}>
-          <div onClick={(e) => e.stopPropagation()} className="bg-white rounded-xl w-full max-w-md p-6">
+          <div onClick={(e) => e.stopPropagation()} className="bg-white rounded-xl w-full max-w-md p-4 sm:p-6 max-h-[90dvh] overflow-y-auto">
             <h2 className="text-lg font-bold text-gray-900 mb-2">Confirm payout</h2>
             <p className="text-sm text-gray-600 mb-1">
               Record a payout of <strong>{ghs(affiliate.balance_available)}</strong> to:
             </p>
-            <p className="text-sm text-gray-800 mb-4">{affiliate.payout_provider} {affiliate.payout_number} {affiliate.payout_name ? `(${affiliate.payout_name})` : ''}</p>
+            <p className="text-sm text-gray-800 mb-4 break-words">{affiliate.payout_provider} {affiliate.payout_number} {affiliate.payout_name ? `(${affiliate.payout_name})` : ''}</p>
             <p className="text-xs text-gray-400 mb-4">
               Send the mobile money transfer first, then confirm here. This marks all matured commissions as paid.
             </p>
             {payError && <p className="text-sm text-red-700 mb-3" role="alert">{payError}</p>}
-            <div className="flex justify-end gap-2">
-              <button onClick={() => setConfirmPay(false)} className="px-4 py-2 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50">Cancel</button>
-              <button onClick={payNow} disabled={paying} className="px-4 py-2 rounded-lg bg-green-600 text-white hover:bg-green-700 disabled:opacity-50">
+            <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-2">
+              <button onClick={() => setConfirmPay(false)} className="min-h-[44px] sm:min-h-0 px-4 py-2 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50">Cancel</button>
+              <button onClick={payNow} disabled={paying} className="min-h-[44px] sm:min-h-0 px-4 py-2 rounded-lg bg-green-600 text-white hover:bg-green-700 disabled:opacity-50">
                 {paying ? 'Recording…' : 'Confirm paid'}
               </button>
             </div>
@@ -305,8 +305,8 @@ export default function AdminAffiliateDetailPage() {
 
 function Stat({ label, value, accent }: { label: string; value: number; accent: string }) {
   return (
-    <div className="bg-white border border-gray-200 rounded-xl p-4 text-center">
-      <div className={`text-lg font-bold ${accent}`}>{ghs(value)}</div>
+    <div className="min-w-0 bg-white border border-gray-200 rounded-xl p-4 text-center">
+      <div className={`text-lg font-bold break-words ${accent}`}>{ghs(value)}</div>
       <div className="text-xs text-gray-500 mt-1">{label}</div>
     </div>
   );

@@ -86,34 +86,34 @@ export default function AdminMessagesPage() {
         <div className="flex items-start gap-2 bg-red-50 border border-red-200 text-red-800 px-4 py-3 rounded-lg" role="alert">
           <i className="ri-error-warning-line text-red-600 mt-0.5"></i>
           <span className="flex-1">{error}</span>
-          <button onClick={() => setError('')} aria-label="Dismiss" className="opacity-70 hover:opacity-100"><i className="ri-close-line"></i></button>
+          <button onClick={() => setError('')} aria-label="Dismiss" className="shrink-0 -my-3 -mr-3 p-3 opacity-70 hover:opacity-100"><i className="ri-close-line"></i></button>
         </div>
       )}
 
       <div className="bg-white rounded-xl border border-gray-200 p-4 flex flex-col md:flex-row md:items-center gap-3 justify-between">
-        <div className="flex flex-wrap gap-2">
+        <div className="flex gap-2 overflow-x-auto md:flex-wrap md:overflow-visible">
           {(['new', 'handled', 'all'] as const).map(f => (
             <button
               key={f}
               onClick={() => setFilter(f)}
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${filter === f ? 'bg-blue-700 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}
+              className={`min-h-[44px] shrink-0 whitespace-nowrap md:min-h-0 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${filter === f ? 'bg-blue-700 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}
             >
               {f === 'new' ? `Not handled (${newCount})` : f === 'handled' ? 'Handled' : 'All'}
             </button>
           ))}
         </div>
         <div className="flex items-center gap-2">
-          <div className="relative md:w-72">
+          <div className="relative min-w-0 flex-1 md:w-72 md:flex-none">
             <i className="ri-search-line absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"></i>
             <input
               type="search"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search name, email, message"
-              className="w-full pl-10 pr-3 py-2 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
+              className="w-full pl-10 pr-3 py-2 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-base sm:text-sm"
             />
           </div>
-          <button onClick={load} className="w-10 h-10 flex items-center justify-center border-2 border-gray-300 rounded-lg text-gray-600 hover:bg-gray-50" aria-label="Refresh">
+          <button onClick={load} className="w-11 h-11 shrink-0 md:w-10 md:h-10 flex items-center justify-center border-2 border-gray-300 rounded-lg text-gray-600 hover:bg-gray-50" aria-label="Refresh">
             <i className={`ri-refresh-line ${loading ? 'animate-spin' : ''}`}></i>
           </button>
         </div>
@@ -128,15 +128,15 @@ export default function AdminMessagesPage() {
       ) : (
         <ul className="space-y-3">
           {visible.map(r => (
-            <li key={r.id} className={`bg-white rounded-xl border p-5 ${isHandled(r) ? 'border-gray-200' : 'border-blue-200'}`}>
+            <li key={r.id} className={`bg-white rounded-xl border p-4 sm:p-5 ${isHandled(r) ? 'border-gray-200' : 'border-blue-200'}`}>
               <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
                 <div className="min-w-0">
-                  <p className="font-semibold text-gray-900">
+                  <p className="font-semibold text-gray-900 break-words">
                     {r.subject || 'No subject'}
                     {!isHandled(r) && <span className="ml-2 align-middle px-2 py-0.5 rounded-full text-xs font-semibold bg-blue-100 text-blue-700">New</span>}
                   </p>
                   <p className="text-sm text-gray-600 mt-0.5 break-words">
-                    {r.name} · <a href={`mailto:${r.email}`} className="text-blue-700 hover:underline">{r.email}</a>
+                    {r.name} · <a href={`mailto:${r.email}`} className="text-blue-700 hover:underline break-all">{r.email}</a>
                     {r.phone && <> · <a href={`tel:${r.phone}`} className="text-blue-700 hover:underline">{r.phone}</a></>}
                   </p>
                   <p className="text-xs text-gray-400 mt-0.5">{formatDateTime(r.created_at)}</p>
@@ -144,7 +144,7 @@ export default function AdminMessagesPage() {
                 <button
                   onClick={() => setStatus(r, isHandled(r) ? 'new' : 'handled')}
                   disabled={busyId === r.id}
-                  className={`flex-shrink-0 px-4 py-2 rounded-lg text-sm font-semibold disabled:opacity-50 ${isHandled(r) ? 'border-2 border-gray-300 text-gray-700 hover:bg-gray-50' : 'bg-blue-700 text-white hover:bg-blue-800'}`}
+                  className={`min-h-[44px] sm:min-h-0 flex-shrink-0 px-4 py-2 rounded-lg text-sm font-semibold disabled:opacity-50 ${isHandled(r) ? 'border-2 border-gray-300 text-gray-700 hover:bg-gray-50' : 'bg-blue-700 text-white hover:bg-blue-800'}`}
                 >
                   {busyId === r.id ? 'Saving...' : isHandled(r) ? 'Mark as not handled' : 'Mark as handled'}
                 </button>

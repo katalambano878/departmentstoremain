@@ -124,7 +124,7 @@ export default function BuySmsPage() {
   return (
     <div className="space-y-6 max-w-5xl">
       <div>
-        <h1 className="text-3xl font-bold text-gray-900">Buy SMS</h1>
+        <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Buy SMS</h1>
         <p className="mt-1 text-gray-600">
           Texts for order updates come out of this balance. You pay on the payment page, then the texts are added here. No separate SMS account to open.
         </p>
@@ -132,19 +132,19 @@ export default function BuySmsPage() {
 
       {notice && (
         <div className="flex items-center gap-2 rounded-lg border border-green-100 bg-green-50 p-4 text-sm text-green-800">
-          <i className="ri-checkbox-circle-fill text-green-600" />
-          {notice}
+          <i className="ri-checkbox-circle-fill shrink-0 text-green-600" />
+          <span className="min-w-0 break-words">{notice}</span>
         </div>
       )}
       {error && (
         <div role="alert" className="rounded-lg border border-red-100 bg-red-50 p-4 text-sm text-red-800">
-          <p>{error}</p>
+          <p className="break-words">{error}</p>
           <div className="mt-3 flex flex-wrap gap-2">
             <button
               type="button"
               onClick={() => void refresh()}
               disabled={loading}
-              className="inline-flex h-9 items-center gap-2 rounded-lg bg-red-700 px-3 text-sm font-semibold text-white hover:bg-red-800 disabled:cursor-wait disabled:opacity-60"
+              className="inline-flex h-11 sm:h-9 items-center gap-2 rounded-lg bg-red-700 px-3 text-sm font-semibold text-white hover:bg-red-800 disabled:cursor-wait disabled:opacity-60"
             >
               <i className={`${loading ? 'ri-loader-4-line animate-spin' : 'ri-refresh-line'}`} />
               {pendingId ? 'Check again' : 'Try again'}
@@ -154,7 +154,7 @@ export default function BuySmsPage() {
                 type="button"
                 onClick={forgetPending}
                 disabled={loading}
-                className="inline-flex h-9 items-center rounded-lg border border-red-200 bg-white px-3 text-sm font-semibold text-red-800 hover:border-red-400 disabled:opacity-60"
+                className="inline-flex h-11 sm:h-9 items-center rounded-lg border border-red-200 bg-white px-3 text-sm font-semibold text-red-800 hover:border-red-400 disabled:opacity-60"
               >
                 I did not pay, start over
               </button>
@@ -167,7 +167,7 @@ export default function BuySmsPage() {
           type="button"
           onClick={() => void refresh()}
           disabled={loading}
-          className="inline-flex h-9 items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-800 hover:border-slate-400 disabled:cursor-wait"
+          className="inline-flex h-11 sm:h-9 items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-800 hover:border-slate-400 disabled:cursor-wait"
         >
           <i className={`${loading ? 'ri-loader-4-line animate-spin' : 'ri-refresh-line'}`} />
           Check again
@@ -175,16 +175,16 @@ export default function BuySmsPage() {
       )}
 
       {billing && !billing.configured && (
-        <div className="rounded-xl border border-amber-200 bg-amber-50 p-5 text-sm text-amber-900">
+        <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 sm:p-5 text-sm text-amber-900">
           SMS buying is not connected on this store yet. Once the Taysend key is set, the packages appear here.
         </div>
       )}
 
       {billing?.configured && (
         <>
-          <div className="rounded-2xl bg-slate-700 p-6 text-white">
+          <div className="rounded-2xl bg-slate-700 p-4 sm:p-6 text-white">
             <p className="text-sm text-slate-100">SMS left</p>
-            <p className="mt-1 text-4xl font-bold">{(billing.sms_left || 0).toLocaleString('en-GH')}</p>
+            <p className="mt-1 text-3xl sm:text-4xl font-bold">{(billing.sms_left || 0).toLocaleString('en-GH')}</p>
             <p className="mt-2 text-sm text-slate-100">Used for customer texts and the new-order alert.</p>
           </div>
 
@@ -206,7 +206,7 @@ export default function BuySmsPage() {
                       setSelectedId(pkg.id);
                     }
                   }}
-                  className={`flex cursor-pointer flex-col rounded-2xl border p-5 text-left transition focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-700 focus-visible:ring-offset-2 ${
+                  className={`flex cursor-pointer flex-col rounded-2xl border p-4 sm:p-5 text-left transition focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-700 focus-visible:ring-offset-2 ${
                     selected ? 'border-slate-600 bg-slate-50 ring-2 ring-slate-600' : 'border-gray-200 bg-white hover:border-slate-300'
                   }`}
                 >

@@ -96,7 +96,7 @@ export default function ModulesPage() {
 
   if (role !== 'admin') {
     return (
-      <div className="max-w-md mx-auto mt-12 bg-white rounded-xl border border-gray-200 p-8 text-center">
+      <div className="max-w-md mx-auto mt-12 bg-white rounded-xl border border-gray-200 p-6 sm:p-8 text-center">
         <div className="w-14 h-14 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
           <i className="ri-lock-2-line text-2xl text-gray-600"></i>
         </div>
@@ -116,18 +116,18 @@ export default function ModulesPage() {
       {error && (
         <div className="mb-6 flex items-start gap-2 bg-red-50 border border-red-200 text-red-800 px-4 py-3 rounded-lg" role="alert">
           <i className="ri-error-warning-line text-red-600 mt-0.5"></i>
-          <span>{error}</span>
+          <span className="min-w-0 break-words">{error}</span>
         </div>
       )}
 
       {loading ? (
         <div className="text-center py-12 text-gray-500">Loading modules...</div>
       ) : (
-        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
           {modules.map(module => (
-            <div key={module.id} className={`bg-white rounded-xl border-2 p-6 transition-all ${module.enabled ? 'border-blue-500 shadow-md' : 'border-gray-200'}`}>
-              <div className="flex justify-between items-start mb-4">
-                <div className={`w-12 h-12 rounded-lg flex items-center justify-center ${colorMap[module.color] || 'bg-gray-100 text-gray-600'}`}>
+            <div key={module.id} className={`bg-white rounded-xl border-2 p-4 sm:p-6 transition-all ${module.enabled ? 'border-blue-500 shadow-md' : 'border-gray-200'}`}>
+              <div className="flex justify-between items-start gap-4 mb-4">
+                <div className={`w-12 h-12 shrink-0 rounded-lg flex items-center justify-center ${colorMap[module.color] || 'bg-gray-100 text-gray-600'}`}>
                   <i className={`${module.icon} text-2xl`}></i>
                 </div>
                 <button
@@ -136,12 +136,12 @@ export default function ModulesPage() {
                   role="switch"
                   aria-checked={module.enabled}
                   aria-label={`${module.name}: ${module.enabled ? 'on' : 'off'}`}
-                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors disabled:opacity-50 ${module.enabled ? 'bg-blue-600' : 'bg-gray-300'}`}
+                  className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors disabled:opacity-50 after:absolute after:-inset-x-1 after:-inset-y-2.5 after:content-[''] ${module.enabled ? 'bg-blue-600' : 'bg-gray-300'}`}
                 >
                   <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${module.enabled ? 'translate-x-6' : 'translate-x-1'}`} />
                 </button>
               </div>
-              <h3 className="text-lg font-bold text-gray-900">{module.name}</h3>
+              <h3 className="text-lg font-bold text-gray-900 break-words">{module.name}</h3>
               <p className="text-sm text-gray-500 mt-1">{module.description}</p>
               <div className="mt-4 pt-4 border-t border-gray-100">
                 <span className={`text-xs font-bold px-2 py-1 rounded-full ${module.enabled ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-600'}`}>

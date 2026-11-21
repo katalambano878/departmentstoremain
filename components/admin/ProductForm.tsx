@@ -1008,17 +1008,18 @@ export default function ProductForm({ initialData, isEditMode = false }: Product
     };
 
     return (
-        <div className="space-y-6">
-            <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-4">
+        <div className="space-y-6 pb-28 sm:pb-0">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex min-w-0 items-center gap-3 sm:gap-4">
                     <Link
                         href="/admin/products"
-                        className="w-10 h-10 flex items-center justify-center border-2 border-gray-300 rounded-lg hover:border-gray-400 transition-colors"
+                        aria-label="Back to products"
+                        className="w-11 h-11 shrink-0 flex items-center justify-center border-2 border-gray-300 rounded-lg hover:border-gray-400 transition-colors"
                     >
                         <i className="ri-arrow-left-line text-xl text-gray-700"></i>
                     </Link>
-                    <div>
-                        <h1 className="text-3xl font-bold text-gray-900">
+                    <div className="min-w-0">
+                        <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">
                             {isEditMode ? 'Edit Product' : 'Add New Product'}
                         </h1>
                         <p className="text-gray-600 mt-1">
@@ -1027,9 +1028,10 @@ export default function ProductForm({ initialData, isEditMode = false }: Product
                     </div>
                 </div>
 
-                <div className="flex items-center space-x-3">
+                {/* Phones: a save bar fixed to the bottom of the screen, reachable from every tab. */}
+                <div className="fixed inset-x-0 bottom-0 z-20 flex flex-wrap items-center gap-3 border-t border-gray-200 bg-white px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] shadow-[0_-4px_12px_rgba(0,0,0,0.06)] sm:static sm:z-auto sm:flex-nowrap sm:border-0 sm:bg-transparent sm:p-0 sm:shadow-none">
                     {(formErrors.name || formErrors.price || formErrors.variants) && (
-                        <p className="text-sm text-red-600 font-medium" role="alert">
+                        <p className="w-full sm:w-auto text-sm text-red-600 font-medium" role="alert">
                             Fix the highlighted fields to save.
                         </p>
                     )}
@@ -1037,7 +1039,7 @@ export default function ProductForm({ initialData, isEditMode = false }: Product
                         <Link
                             href={`/product/${initialData?.id}`}
                             target="_blank"
-                            className="px-6 py-3 border-2 border-gray-300 text-gray-700 rounded-lg hover:border-gray-400 transition-colors font-semibold whitespace-nowrap cursor-pointer flex items-center"
+                            className="px-4 sm:px-6 py-3 border-2 border-gray-300 text-gray-700 rounded-lg hover:border-gray-400 transition-colors font-semibold whitespace-nowrap cursor-pointer flex items-center justify-center"
                         >
                             <i className="ri-eye-line mr-2"></i>
                             Preview
@@ -1046,7 +1048,7 @@ export default function ProductForm({ initialData, isEditMode = false }: Product
                     <button
                         onClick={handleSubmit}
                         disabled={loading}
-                        className={`px-6 py-3 bg-blue-700 hover:bg-blue-800 text-white rounded-lg font-semibold transition-colors whitespace-nowrap cursor-pointer flex items-center ${loading ? 'opacity-70 cursor-not-allowed' : ''}`}
+                        className={`flex-1 sm:flex-none justify-center px-6 py-3 bg-blue-700 hover:bg-blue-800 text-white rounded-lg font-semibold transition-colors whitespace-nowrap cursor-pointer flex items-center ${loading ? 'opacity-70 cursor-not-allowed' : ''}`}
                     >
                         {loading ? (
                             <><i className="ri-loader-4-line animate-spin mr-2"></i>Saving...</>

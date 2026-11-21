@@ -176,23 +176,23 @@ export default function BlogEditor({ postId }: { postId?: string }) {
   return (
     <form onSubmit={handleSave} className="max-w-4xl mx-auto space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div className="flex items-center gap-4">
-          <Link href="/admin/blog" className="w-10 h-10 flex items-center justify-center border-2 border-gray-300 rounded-lg hover:border-gray-400" aria-label="Back to blog">
+        <div className="flex min-w-0 items-center gap-4">
+          <Link href="/admin/blog" className="w-11 h-11 sm:w-10 sm:h-10 shrink-0 flex items-center justify-center border-2 border-gray-300 rounded-lg hover:border-gray-400" aria-label="Back to blog">
             <i className="ri-arrow-left-line text-xl text-gray-700"></i>
           </Link>
-          <div>
+          <div className="min-w-0">
             <h1 className="text-2xl font-bold text-gray-900">{postId ? 'Edit post' : 'New post'}</h1>
             {postId && publishedAt && (
               <p className="text-sm text-gray-500">First published {new Date(publishedAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}</p>
             )}
           </div>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex w-full sm:w-auto items-center gap-2 sm:gap-3">
           <select
             value={form.status}
             onChange={(e) => set('status', e.target.value as BlogStatus)}
             aria-label="Status"
-            className="px-4 py-3 border-2 border-gray-300 rounded-lg font-medium cursor-pointer"
+            className="min-w-0 flex-1 sm:flex-none px-4 py-3 border-2 border-gray-300 rounded-lg font-medium cursor-pointer"
           >
             <option value="draft">Draft</option>
             <option value="published">Published</option>
@@ -201,7 +201,7 @@ export default function BlogEditor({ postId }: { postId?: string }) {
           <button
             type="submit"
             disabled={saving || uploading}
-            className="px-6 py-3 bg-blue-700 hover:bg-blue-800 text-white rounded-lg font-semibold disabled:opacity-50 flex items-center gap-2"
+            className="flex-1 sm:flex-none justify-center sm:justify-start px-6 py-3 bg-blue-700 hover:bg-blue-800 text-white rounded-lg font-semibold disabled:opacity-50 flex items-center gap-2"
           >
             {saving ? <><i className="ri-loader-4-line animate-spin"></i> Saving...</> : <><i className="ri-save-line"></i> Save</>}
           </button>
@@ -211,7 +211,7 @@ export default function BlogEditor({ postId }: { postId?: string }) {
       {error && (
         <div className="flex items-start gap-2 bg-red-50 border border-red-200 text-red-800 px-4 py-3 rounded-lg" role="alert">
           <i className="ri-error-warning-line text-red-600 mt-0.5"></i>
-          <span>{error}</span>
+          <span className="min-w-0 break-words">{error}</span>
         </div>
       )}
       {saved && (
@@ -221,7 +221,7 @@ export default function BlogEditor({ postId }: { postId?: string }) {
         </div>
       )}
 
-      <div className="bg-white rounded-xl border border-gray-200 p-6 space-y-5">
+      <div className="bg-white rounded-xl border border-gray-200 p-4 sm:p-6 space-y-5">
         <div>
           <label htmlFor="post-title" className="block text-sm font-semibold text-gray-900 mb-2">Title</label>
           <input id="post-title" value={form.title} onChange={(e) => set('title', e.target.value)} className={inputClass} required />
@@ -235,7 +235,7 @@ export default function BlogEditor({ postId }: { postId?: string }) {
               value={form.slug}
               onChange={(e) => { slugTouched.current = true; set('slug', e.target.value); }}
               onBlur={() => set('slug', slugify(form.slug))}
-              className={`${inputClass} font-mono text-sm`}
+              className={`${inputClass} min-w-0 font-mono text-base sm:text-sm`}
             />
           </div>
           <p className="text-xs text-gray-500 mt-1">Filled from the title. Lowercase letters, numbers and hyphens.</p>
@@ -255,24 +255,24 @@ export default function BlogEditor({ postId }: { postId?: string }) {
         </div>
       </div>
 
-      <div className="bg-white rounded-xl border border-gray-200 p-6">
+      <div className="bg-white rounded-xl border border-gray-200 p-4 sm:p-6">
         <h2 className="text-lg font-bold text-gray-900 mb-4">Featured image</h2>
         {form.featured_image ? (
           <div className="space-y-3">
             <img src={form.featured_image} alt="" className="w-full max-h-72 object-cover rounded-lg border border-gray-200" />
             <div className="flex gap-3">
-              <label className="px-4 py-2 border-2 border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 cursor-pointer">
+              <label className="flex min-h-[44px] sm:min-h-0 items-center px-4 py-2 border-2 border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 cursor-pointer">
                 {uploading ? 'Uploading...' : 'Replace'}
                 <input type="file" accept="image/jpeg,image/png,image/webp,image/gif" className="hidden" disabled={uploading}
                   onChange={(e) => { const f = e.target.files?.[0]; if (f) handleImageUpload(f); e.target.value = ''; }} />
               </label>
-              <button type="button" onClick={() => set('featured_image', '')} className="px-4 py-2 text-sm font-medium text-red-700 hover:bg-red-50 rounded-lg">
+              <button type="button" onClick={() => set('featured_image', '')} className="min-h-[44px] sm:min-h-0 px-4 py-2 text-sm font-medium text-red-700 hover:bg-red-50 rounded-lg">
                 Remove
               </button>
             </div>
           </div>
         ) : (
-          <label className={`flex flex-col items-center justify-center gap-2 border-2 border-dashed border-gray-300 rounded-lg p-8 text-gray-600 hover:border-blue-500 hover:bg-blue-50 cursor-pointer ${uploading ? 'opacity-50 cursor-not-allowed' : ''}`}>
+          <label className={`flex flex-col items-center justify-center gap-2 border-2 border-dashed border-gray-300 rounded-lg p-6 sm:p-8 text-gray-600 hover:border-blue-500 hover:bg-blue-50 cursor-pointer ${uploading ? 'opacity-50 cursor-not-allowed' : ''}`}>
             <i className={`${uploading ? 'ri-loader-4-line animate-spin' : 'ri-upload-2-line'} text-3xl`}></i>
             <span className="text-sm font-medium">{uploading ? 'Uploading...' : 'Upload an image'}</span>
             <input type="file" accept="image/jpeg,image/png,image/webp,image/gif" className="hidden" disabled={uploading}
@@ -281,7 +281,7 @@ export default function BlogEditor({ postId }: { postId?: string }) {
         )}
       </div>
 
-      <div className="bg-white rounded-xl border border-gray-200 p-6 space-y-5">
+      <div className="bg-white rounded-xl border border-gray-200 p-4 sm:p-6 space-y-5">
         <h2 className="text-lg font-bold text-gray-900">Search engines (optional)</h2>
         <div>
           <label htmlFor="post-seo-title" className="block text-sm font-semibold text-gray-900 mb-2">Search title</label>

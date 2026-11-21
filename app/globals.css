@@ -552,3 +552,162 @@ img {
 
 .pwa-splash-dots span:nth-child(2) { animation-delay: 0.2s; }
 .pwa-splash-dots span:nth-child(3) { animation-delay: 0.4s; }
+
+/* ------------------------------------------------------------------------
+   Dashboard tables on phones: one card per row (labels are added by
+   components/admin/ResponsiveTables.tsx). Desktop tables are unchanged.
+   ------------------------------------------------------------------------ */
+@media (max-width: 767.98px) {
+  table[data-cards] {
+    display: block;
+    width: 100%;
+    min-width: 0 !important;
+    border-collapse: separate;
+  }
+  table[data-cards] > thead {
+    display: none;
+  }
+  table[data-cards] > tbody {
+    display: block;
+    padding: 12px;
+  }
+  table[data-cards] > tbody > tr {
+    position: relative;
+    display: block;
+    margin: 0 0 12px;
+    padding: 12px 14px;
+    background: #fff;
+    border: 1px solid #e5e7eb !important;
+    border-radius: 12px;
+  }
+  table[data-cards] > tbody > tr:last-child {
+    margin-bottom: 0;
+  }
+  table[data-cards] > tbody > tr > td {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    width: auto !important;
+    max-width: none !important;
+    min-width: 0;
+    padding: 6px 0 !important;
+    border: 0 !important;
+    text-align: right;
+    white-space: normal !important;
+    overflow-wrap: anywhere;
+  }
+  table[data-cards] > tbody > tr > td::before {
+    content: attr(data-label);
+    flex: none;
+    max-width: 45%;
+    color: #6b7280;
+    font-size: 0.8125rem;
+    font-weight: 600;
+    text-align: left;
+    text-transform: none;
+    letter-spacing: normal;
+  }
+  table[data-cards] > tbody > tr > td[data-label='']::before,
+  table[data-cards] > tbody > tr > td:not([data-label])::before {
+    content: none;
+  }
+  table[data-cards] > tbody > tr > td[data-label=''] {
+    justify-content: flex-end;
+  }
+  /* The first real column (usually the name) leads the card, full width. */
+  table[data-cards] > tbody > tr > td[data-primary] {
+    display: block;
+    padding: 0 40px 10px 0 !important;
+    margin-bottom: 4px;
+    border-bottom: 1px solid #f3f4f6 !important;
+    text-align: left;
+  }
+  table[data-cards] > tbody > tr > td[data-primary]::before {
+    content: none;
+  }
+  /* The select box sits in the card's top-right corner. */
+  table[data-cards] > tbody > tr > td[data-select] {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 44px !important;
+    height: 44px;
+    padding: 0 !important;
+  }
+  table[data-cards] > tbody > tr > td[data-select]::before {
+    content: none;
+  }
+  /* Rows that span the whole table: empty states and loading messages. */
+  table[data-cards] > tbody > tr > td[data-full] {
+    display: block;
+    text-align: center;
+  }
+  table[data-cards] > tbody > tr > td[data-full]::before {
+    content: none;
+  }
+  table[data-cards] > tbody > tr:has(> td[data-full]) {
+    border: 0 !important;
+    background: transparent;
+  }
+  /* Total rows under a table become one card too. */
+  table[data-cards] > tfoot {
+    display: block;
+    padding: 0 12px 12px;
+  }
+  table[data-cards] > tfoot > tr {
+    display: block;
+    padding: 12px 14px;
+    background: #f9fafb;
+    border: 1px solid #e5e7eb !important;
+    border-radius: 12px;
+  }
+  table[data-cards] > tfoot > tr > td,
+  table[data-cards] > tfoot > tr > th {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 4px 0 !important;
+    border: 0 !important;
+    text-align: right;
+  }
+  table[data-cards] > tfoot > tr > td:empty,
+  table[data-cards] > tfoot > tr > th:empty {
+    display: none;
+  }
+  table[data-cards] > tfoot > tr > [data-label]::before {
+    content: attr(data-label);
+    color: #6b7280;
+    font-size: 0.8125rem;
+    font-weight: 600;
+    text-align: left;
+  }
+  table[data-cards] > tfoot > tr > [data-label='']::before {
+    content: none;
+  }
+  table[data-cards] > tfoot > tr > [data-primary] {
+    justify-content: flex-start;
+    font-weight: 700;
+    text-align: left;
+  }
+  /* A leading cell that is a form field keeps its label, above the field. */
+  table[data-cards] > tbody > tr > td[data-primary]:has(input:not([type='checkbox']), select, textarea)::before {
+    content: attr(data-label);
+    display: block;
+    max-width: none;
+    margin-bottom: 4px;
+  }
+  /* The sideways-scroll wrapper is no longer needed. */
+  .overflow-x-auto:has(> table[data-cards]) {
+    overflow-x: visible;
+  }
+  /* iOS zooms the page into any field with text under 16px; keep dashboard fields at 16px. */
+  #admin-main input:not([type='checkbox']):not([type='radio']):not([type='range']):not([type='color']),
+  #admin-main select,
+  #admin-main textarea {
+    font-size: 16px;
+  }
+}

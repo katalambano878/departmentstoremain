@@ -6,6 +6,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import { useCMS } from '@/context/CMSContext';
 import AppUpdateWatcher from '@/components/AppUpdateWatcher';
+import ResponsiveTables from '@/components/admin/ResponsiveTables';
 
 type BellCounts = {
   newOrders: number;
@@ -775,9 +776,10 @@ export default function AdminLayout({
           </div>
         </header>
 
-        <main className="p-4 lg:p-6">
+        <main id="admin-main" className="min-w-0 p-4 lg:p-6">
           {children}
         </main>
+        <ResponsiveTables rootId="admin-main" />
       </div>
     </div>
   );

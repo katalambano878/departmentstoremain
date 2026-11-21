@@ -123,7 +123,7 @@ export default function SettingsPage() {
   };
 
   return (
-    <div className="max-w-4xl mx-auto space-y-8">
+    <div className="max-w-4xl mx-auto space-y-6 sm:space-y-8">
       <div>
         <h1 className="text-2xl font-bold text-gray-900">Store Settings</h1>
         <p className="text-gray-600 mt-1">Manage your store branding and general information</p>
@@ -132,15 +132,15 @@ export default function SettingsPage() {
       {!roleLoading && role !== 'admin' && (
         <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 text-amber-900 px-4 py-3 rounded-lg">
           <i className="ri-lock-line text-amber-600 mt-0.5"></i>
-          <span>Only an admin can change store settings. You can view them here.</span>
+          <span className="min-w-0">Only an admin can change store settings. You can view them here.</span>
         </div>
       )}
 
       {saveError && (
         <div className="flex items-start gap-2 bg-red-50 border border-red-200 text-red-800 px-4 py-3 rounded-lg" role="alert">
           <i className="ri-error-warning-line text-red-600 mt-0.5"></i>
-          <span className="flex-1">{saveError}</span>
-          <button onClick={() => setSaveError(null)} className="text-red-700 hover:text-red-900" aria-label="Dismiss">
+          <span className="min-w-0 flex-1 break-words">{saveError}</span>
+          <button onClick={() => setSaveError(null)} className="-m-2 flex h-11 w-11 shrink-0 items-center justify-center text-red-700 hover:text-red-900 sm:m-0 sm:block sm:h-auto sm:w-auto" aria-label="Dismiss">
             <i className="ri-close-line"></i>
           </button>
         </div>
@@ -153,18 +153,18 @@ export default function SettingsPage() {
         </div>
       )}
 
-      <fieldset disabled={readOnly} className="space-y-8 min-w-0">
+      <fieldset disabled={readOnly} className="space-y-6 sm:space-y-8 min-w-0">
       {/* Logo Section */}
-      <div className="bg-white rounded-xl border border-gray-200 p-6">
+      <div className="bg-white rounded-xl border border-gray-200 p-4 sm:p-6">
         <h2 className="text-lg font-bold text-gray-900 mb-1">Logo</h2>
         <p className="text-sm text-gray-600 mb-6">
           Upload separate logos for the header and footer. Use a dark logo on the header (light background) and a white/light logo on the footer (dark background).
         </p>
 
-        <div className="grid sm:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
           {/* Dark Logo (Header) */}
-          <div className="border-2 border-gray-200 rounded-xl p-5">
-            <div className="flex items-center gap-2 mb-3">
+          <div className="border-2 border-gray-200 rounded-xl p-4 sm:p-5">
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-1 mb-3">
               <i className="ri-sun-line text-gray-700"></i>
               <h3 className="font-semibold text-gray-900">Header Logo</h3>
               <span className="text-xs text-gray-500">(dark version)</span>
@@ -179,7 +179,7 @@ export default function SettingsPage() {
               />
             </div>
 
-            <label className={`flex items-center justify-center gap-2 w-full px-4 py-2.5 border-2 border-dashed border-gray-300 rounded-lg hover:border-blue-500 hover:bg-blue-50 transition-colors cursor-pointer text-sm font-medium text-gray-600 hover:text-blue-700 ${uploadingLogo === 'dark' ? 'opacity-50 cursor-not-allowed' : ''}`}>
+            <label className={`flex items-center justify-center gap-2 w-full min-h-[44px] sm:min-h-0 px-4 py-2.5 border-2 border-dashed border-gray-300 rounded-lg hover:border-blue-500 hover:bg-blue-50 transition-colors cursor-pointer text-sm font-medium text-gray-600 hover:text-blue-700 ${uploadingLogo === 'dark' ? 'opacity-50 cursor-not-allowed' : ''}`}>
               {uploadingLogo === 'dark' ? (
                 <><i className="ri-loader-4-line animate-spin"></i> Uploading...</>
               ) : (
@@ -196,8 +196,8 @@ export default function SettingsPage() {
           </div>
 
           {/* White Logo (Footer) */}
-          <div className="border-2 border-gray-200 rounded-xl p-5">
-            <div className="flex items-center gap-2 mb-3">
+          <div className="border-2 border-gray-200 rounded-xl p-4 sm:p-5">
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-1 mb-3">
               <i className="ri-moon-line text-gray-700"></i>
               <h3 className="font-semibold text-gray-900">Footer Logo</h3>
               <span className="text-xs text-gray-500">(white/light version)</span>
@@ -212,7 +212,7 @@ export default function SettingsPage() {
               />
             </div>
 
-            <label className={`flex items-center justify-center gap-2 w-full px-4 py-2.5 border-2 border-dashed border-gray-300 rounded-lg hover:border-blue-500 hover:bg-blue-50 transition-colors cursor-pointer text-sm font-medium text-gray-600 hover:text-blue-700 ${uploadingLogo === 'white' ? 'opacity-50 cursor-not-allowed' : ''}`}>
+            <label className={`flex items-center justify-center gap-2 w-full min-h-[44px] sm:min-h-0 px-4 py-2.5 border-2 border-dashed border-gray-300 rounded-lg hover:border-blue-500 hover:bg-blue-50 transition-colors cursor-pointer text-sm font-medium text-gray-600 hover:text-blue-700 ${uploadingLogo === 'white' ? 'opacity-50 cursor-not-allowed' : ''}`}>
               {uploadingLogo === 'white' ? (
                 <><i className="ri-loader-4-line animate-spin"></i> Uploading...</>
               ) : (
@@ -236,11 +236,11 @@ export default function SettingsPage() {
       </div>
 
       {/* General Settings */}
-      <div className="bg-white rounded-xl border border-gray-200 p-6" onChange={() => { edited.current = true; }}>
+      <div className="bg-white rounded-xl border border-gray-200 p-4 sm:p-6" onChange={() => { edited.current = true; }}>
         <h2 className="text-lg font-bold text-gray-900 mb-6">General Information</h2>
 
         <div className="space-y-4">
-          <div className="grid sm:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-semibold text-gray-900 mb-2">Store Name</label>
               <input
@@ -263,7 +263,7 @@ export default function SettingsPage() {
             </div>
           </div>
 
-          <div className="grid sm:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-semibold text-gray-900 mb-2">Contact Email</label>
               <input
@@ -284,7 +284,7 @@ export default function SettingsPage() {
             </div>
           </div>
 
-          <div className="grid sm:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label htmlFor="whatsapp-number" className="block text-sm font-semibold text-gray-900 mb-2">WhatsApp chat number</label>
               <input
@@ -302,7 +302,7 @@ export default function SettingsPage() {
                 type="checkbox"
                 checked={whatsappEnabled}
                 onChange={(e) => setWhatsappEnabled(e.target.checked)}
-                className="mt-0.5 size-5 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                className="mt-0.5 size-5 shrink-0 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
               />
               <span className="text-sm text-gray-700">
                 <span className="block font-semibold text-gray-900">Show the WhatsApp chat button</span>
@@ -315,7 +315,7 @@ export default function SettingsPage() {
         <button
           onClick={handleSaveGeneral}
           disabled={readOnly || saving === 'general'}
-          className="mt-6 px-6 py-3 bg-blue-700 hover:bg-blue-800 text-white rounded-lg font-semibold transition-colors disabled:opacity-50 flex items-center gap-2"
+          className="mt-6 w-full sm:w-auto justify-center sm:justify-start px-6 py-3 bg-blue-700 hover:bg-blue-800 text-white rounded-lg font-semibold transition-colors disabled:opacity-50 flex items-center gap-2"
         >
           {saving === 'general' ? (
             <><i className="ri-loader-4-line animate-spin"></i> Saving...</>
@@ -326,7 +326,7 @@ export default function SettingsPage() {
       </div>
 
       {/* Birthday messages */}
-      <div className="bg-white rounded-xl border border-gray-200 p-6" onChange={() => { birthdayEdited.current = true; }}>
+      <div className="bg-white rounded-xl border border-gray-200 p-4 sm:p-6" onChange={() => { birthdayEdited.current = true; }}>
         <h2 className="text-lg font-bold text-gray-900 mb-1">Birthday messages</h2>
         <p className="text-sm text-gray-600 mb-6">
           Customers can add their birthday at checkout. On the day, they get this message by SMS and email, once a year.
@@ -337,7 +337,7 @@ export default function SettingsPage() {
             type="checkbox"
             checked={birthdayEnabled}
             onChange={(e) => setBirthdayEnabled(e.target.checked)}
-            className="mt-0.5 size-5 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+            className="mt-0.5 size-5 shrink-0 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
           />
           <span className="text-sm text-gray-700">
             <span className="block font-semibold text-gray-900">Send birthday messages</span>
@@ -358,14 +358,14 @@ export default function SettingsPage() {
           <span>{'{name}'} is replaced with the customer&apos;s first name.</span>
           <span>{birthdayMessage.length} characters{birthdayMessage.length > 160 ? ` (${Math.ceil(birthdayMessage.length / 153)} SMS parts)` : ''}</span>
         </div>
-        <p className="mt-3 text-sm text-gray-600">
+        <p className="mt-3 text-sm text-gray-600 break-words">
           Preview: {birthdayMessage.replace(/\{name\}/gi, 'Ama')}
         </p>
 
         <button
           onClick={handleSaveBirthday}
           disabled={readOnly || saving === 'birthday'}
-          className="mt-6 px-6 py-3 bg-blue-700 hover:bg-blue-800 text-white rounded-lg font-semibold transition-colors disabled:opacity-50 flex items-center gap-2"
+          className="mt-6 w-full sm:w-auto justify-center sm:justify-start px-6 py-3 bg-blue-700 hover:bg-blue-800 text-white rounded-lg font-semibold transition-colors disabled:opacity-50 flex items-center gap-2"
         >
           {saving === 'birthday' ? (
             <><i className="ri-loader-4-line animate-spin"></i> Saving...</>

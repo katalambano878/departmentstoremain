@@ -321,13 +321,13 @@ export default function AdminStaffPage() {
             className="w-full pl-10 pr-4 py-2.5 border-2 border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
           />
         </div>
-        <div className="flex rounded-lg border border-gray-200 overflow-hidden">
+        <div className="flex w-full sm:w-auto rounded-lg border border-gray-200 overflow-hidden">
           {(['all', 'admin', 'staff', 'staff_pos'] as const).map((key) => (
             <button
               key={key}
               type="button"
               onClick={() => setRoleFilter(key)}
-              className={`px-3 py-2.5 text-xs sm:text-sm font-semibold transition-colors ${
+              className={`min-h-[44px] flex-1 sm:min-h-0 sm:flex-none px-3 py-2.5 text-xs sm:text-sm font-semibold transition-colors ${
                 roleFilter === key ? 'bg-blue-700 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'
               }`}
             >
@@ -407,11 +407,11 @@ export default function AdminStaffPage() {
                     </td>
                     {isAdmin && (
                     <td className="px-5 py-4">
-                      <div className="flex items-center justify-end gap-1.5">
+                      <div className="flex flex-wrap items-center justify-end gap-1.5">
                         <button
                           type="button"
                           onClick={() => openEdit(member)}
-                          className="px-2.5 py-1.5 text-xs font-semibold rounded-lg border border-gray-200 text-gray-700 hover:bg-gray-50"
+                          className="min-h-[44px] px-3 md:min-h-0 md:px-2.5 py-1.5 text-xs font-semibold rounded-lg border border-gray-200 text-gray-700 hover:bg-gray-50"
                           title="Edit"
                         >
                           Edit
@@ -422,7 +422,7 @@ export default function AdminStaffPage() {
                             setNewPassword('');
                             setPasswordOpen(member);
                           }}
-                          className="px-2.5 py-1.5 text-xs font-semibold rounded-lg border border-blue-200 text-blue-700 hover:bg-blue-50"
+                          className="min-h-[44px] px-3 md:min-h-0 md:px-2.5 py-1.5 text-xs font-semibold rounded-lg border border-blue-200 text-blue-700 hover:bg-blue-50"
                           title="Change password"
                         >
                           Password
@@ -431,7 +431,7 @@ export default function AdminStaffPage() {
                           type="button"
                           onClick={() => handleRemove(member)}
                           disabled={busyId === member.id || member.id === viewerId}
-                          className="px-2.5 py-1.5 text-xs font-semibold rounded-lg border border-rose-200 text-rose-700 hover:bg-rose-50 disabled:opacity-40"
+                          className="min-h-[44px] px-3 md:min-h-0 md:px-2.5 py-1.5 text-xs font-semibold rounded-lg border border-rose-200 text-rose-700 hover:bg-rose-50 disabled:opacity-40"
                           title="Remove staff access"
                         >
                           {busyId === member.id ? '…' : 'Remove'}
@@ -453,7 +453,7 @@ export default function AdminStaffPage() {
           <div className="absolute inset-0 bg-black/40" onClick={() => !saving && setAddOpen(false)} />
           <form
             onSubmit={handleCreate}
-            className="relative w-full max-w-lg bg-white rounded-2xl shadow-xl border border-gray-200 p-6 space-y-4"
+            className="relative w-full max-w-lg max-h-[90dvh] overflow-y-auto bg-white rounded-2xl shadow-xl border border-gray-200 p-5 sm:p-6 space-y-4"
           >
             <h2 className="text-xl font-bold text-gray-900">Add staff member</h2>
             <div>
@@ -511,19 +511,19 @@ export default function AdminStaffPage() {
                 ))}
               </div>
             </div>
-            <div className="flex justify-end gap-2 pt-2">
+            <div className="flex flex-col-reverse gap-2 pt-2 sm:flex-row sm:justify-end">
               <button
                 type="button"
                 disabled={saving}
                 onClick={() => setAddOpen(false)}
-                className="px-4 py-2.5 rounded-lg border border-gray-300 text-gray-700 font-semibold"
+                className="min-h-[44px] px-4 py-2.5 rounded-lg border border-gray-300 text-gray-700 font-semibold"
               >
                 Cancel
               </button>
               <button
                 type="submit"
                 disabled={saving}
-                className="px-4 py-2.5 rounded-lg bg-blue-700 text-white font-semibold disabled:opacity-50"
+                className="min-h-[44px] px-4 py-2.5 rounded-lg bg-blue-700 text-white font-semibold disabled:opacity-50"
               >
                 {saving ? 'Saving…' : 'Create staff'}
               </button>
@@ -538,10 +538,10 @@ export default function AdminStaffPage() {
           <div className="absolute inset-0 bg-black/40" onClick={() => !saving && setEditOpen(null)} />
           <form
             onSubmit={handleEdit}
-            className="relative w-full max-w-lg bg-white rounded-2xl shadow-xl border border-gray-200 p-6 space-y-4"
+            className="relative w-full max-w-lg max-h-[90dvh] overflow-y-auto bg-white rounded-2xl shadow-xl border border-gray-200 p-5 sm:p-6 space-y-4"
           >
             <h2 className="text-xl font-bold text-gray-900">Edit staff</h2>
-            <p className="text-sm text-gray-500">{editOpen.email}</p>
+            <p className="text-sm text-gray-500 break-all">{editOpen.email}</p>
             <div>
               <label className="block text-sm font-semibold text-gray-800 mb-1">Full name</label>
               <input
@@ -593,19 +593,19 @@ export default function AdminStaffPage() {
               </div>
             </div>
             )}
-            <div className="flex justify-end gap-2 pt-2">
+            <div className="flex flex-col-reverse gap-2 pt-2 sm:flex-row sm:justify-end">
               <button
                 type="button"
                 disabled={saving}
                 onClick={() => setEditOpen(null)}
-                className="px-4 py-2.5 rounded-lg border border-gray-300 text-gray-700 font-semibold"
+                className="min-h-[44px] px-4 py-2.5 rounded-lg border border-gray-300 text-gray-700 font-semibold"
               >
                 Cancel
               </button>
               <button
                 type="submit"
                 disabled={saving}
-                className="px-4 py-2.5 rounded-lg bg-blue-700 text-white font-semibold disabled:opacity-50"
+                className="min-h-[44px] px-4 py-2.5 rounded-lg bg-blue-700 text-white font-semibold disabled:opacity-50"
               >
                 {saving ? 'Saving…' : 'Save changes'}
               </button>
@@ -620,10 +620,10 @@ export default function AdminStaffPage() {
           <div className="absolute inset-0 bg-black/40" onClick={() => !saving && setPasswordOpen(null)} />
           <form
             onSubmit={handlePassword}
-            className="relative w-full max-w-md bg-white rounded-2xl shadow-xl border border-gray-200 p-6 space-y-4"
+            className="relative w-full max-w-md max-h-[90dvh] overflow-y-auto bg-white rounded-2xl shadow-xl border border-gray-200 p-5 sm:p-6 space-y-4"
           >
             <h2 className="text-xl font-bold text-gray-900">Change password</h2>
-            <p className="text-sm text-gray-500">
+            <p className="text-sm text-gray-500 break-words">
               Set a new password for <strong>{passwordOpen.full_name || passwordOpen.email}</strong>
             </p>
             <div>
@@ -637,19 +637,19 @@ export default function AdminStaffPage() {
                 className="w-full px-4 py-2.5 border-2 border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
               />
             </div>
-            <div className="flex justify-end gap-2 pt-2">
+            <div className="flex flex-col-reverse gap-2 pt-2 sm:flex-row sm:justify-end">
               <button
                 type="button"
                 disabled={saving}
                 onClick={() => setPasswordOpen(null)}
-                className="px-4 py-2.5 rounded-lg border border-gray-300 text-gray-700 font-semibold"
+                className="min-h-[44px] px-4 py-2.5 rounded-lg border border-gray-300 text-gray-700 font-semibold"
               >
                 Cancel
               </button>
               <button
                 type="submit"
                 disabled={saving}
-                className="px-4 py-2.5 rounded-lg bg-blue-700 text-white font-semibold disabled:opacity-50"
+                className="min-h-[44px] px-4 py-2.5 rounded-lg bg-blue-700 text-white font-semibold disabled:opacity-50"
               >
                 {saving ? 'Updating…' : 'Update password'}
               </button>

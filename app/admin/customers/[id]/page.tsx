@@ -164,17 +164,17 @@ export default function CustomerDetailsPage() {
     return (
         <div className="max-w-7xl mx-auto">
             {/* Header */}
-            <div className="flex items-center justify-between mb-8">
-                <div className="flex items-center space-x-4">
-                    <Link href="/admin/customers" className="p-2 hover:bg-gray-100 rounded-lg text-gray-500 transition-colors">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between mb-6 sm:mb-8">
+                <div className="flex items-center gap-3 sm:gap-0 sm:space-x-4 min-w-0">
+                    <Link href="/admin/customers" className="shrink-0 w-11 h-11 sm:w-auto sm:h-auto flex sm:block items-center justify-center p-2 hover:bg-gray-100 rounded-lg text-gray-500 transition-colors">
                         <i className="ri-arrow-left-line text-xl"></i>
                     </Link>
-                    <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center text-blue-700 text-2xl font-bold">
+                    <div className="shrink-0 w-12 h-12 sm:w-16 sm:h-16 bg-blue-100 rounded-full flex items-center justify-center text-blue-700 text-xl sm:text-2xl font-bold">
                         {(customer.full_name || customer.email || '?').charAt(0).toUpperCase()}
                     </div>
-                    <div>
-                        <h1 className="text-3xl font-bold text-gray-900">{customer.full_name || 'No Name'}</h1>
-                        <p className="text-gray-500">{customer.email}</p>
+                    <div className="min-w-0">
+                        <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 break-words">{customer.full_name || 'No Name'}</h1>
+                        <p className="text-gray-500 break-all">{customer.email}</p>
                         {customer.source === 'customers' && (
                             <p className="text-sm text-gray-500 mt-0.5">
                                 <i className="ri-cake-2-line mr-1" aria-hidden="true"></i>
@@ -185,18 +185,18 @@ export default function CustomerDetailsPage() {
                         )}
                     </div>
                 </div>
-                <div className="flex space-x-3">
+                <div className="flex flex-wrap gap-2 sm:gap-3">
                     <button
                         onClick={() => window.open(`mailto:${customer.email}?subject=Hello from Discount Discovery Zone`)}
                         disabled={!customer.email}
-                        className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 font-medium hover:bg-gray-50 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="flex-1 sm:flex-none min-h-[44px] sm:min-h-0 whitespace-nowrap px-4 py-2 border border-gray-300 rounded-lg text-gray-700 font-medium hover:bg-gray-50 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                         <i className="ri-mail-send-line mr-2"></i>
                         Send Email
                     </button>
                     <button
                         onClick={openEdit}
-                        className="px-4 py-2 bg-blue-600 text-white rounded-lg font-bold hover:bg-blue-700 cursor-pointer"
+                        className="flex-1 sm:flex-none min-h-[44px] sm:min-h-0 whitespace-nowrap px-4 py-2 bg-blue-600 text-white rounded-lg font-bold hover:bg-blue-700 cursor-pointer"
                     >
                         Edit Customer
                     </button>
@@ -205,7 +205,7 @@ export default function CustomerDetailsPage() {
 
             {editing && (
                 <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true">
-                    <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6">
+                    <div className="bg-white rounded-xl shadow-xl w-full max-w-md max-h-[90dvh] overflow-y-auto p-4 sm:p-6">
                         <h2 className="text-lg font-bold text-gray-900 mb-4">Edit Customer</h2>
                         <div className="space-y-4">
                             <label className="block">
@@ -278,17 +278,17 @@ export default function CustomerDetailsPage() {
                                 </fieldset>
                             )}
                         </div>
-                        <div className="flex justify-end space-x-3 mt-6">
+                        <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end sm:gap-3 mt-6">
                             <button
                                 onClick={() => setEditing(false)}
-                                className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 font-medium hover:bg-gray-50 cursor-pointer"
+                                className="min-h-[44px] sm:min-h-0 px-4 py-2 border border-gray-300 rounded-lg text-gray-700 font-medium hover:bg-gray-50 cursor-pointer"
                             >
                                 Cancel
                             </button>
                             <button
                                 onClick={saveCustomer}
                                 disabled={saving}
-                                className="px-4 py-2 bg-blue-600 text-white rounded-lg font-bold hover:bg-blue-700 cursor-pointer disabled:opacity-50"
+                                className="min-h-[44px] sm:min-h-0 px-4 py-2 bg-blue-600 text-white rounded-lg font-bold hover:bg-blue-700 cursor-pointer disabled:opacity-50"
                             >
                                 {saving ? 'Saving…' : 'Save'}
                             </button>
@@ -298,30 +298,30 @@ export default function CustomerDetailsPage() {
             )}
 
             {/* Stats Grid */}
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-                <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 sm:gap-6 mb-6 sm:mb-8">
+                <div className="bg-white p-4 sm:p-6 rounded-xl shadow-sm border border-gray-200 min-w-0">
                     <p className="text-sm font-medium text-gray-500 mb-1">Total Spent</p>
-                    <p className="text-2xl font-bold text-gray-900">GH₵{totalSpent.toFixed(2)}</p>
+                    <p className="text-xl sm:text-2xl font-bold text-gray-900 break-words">GH₵{totalSpent.toFixed(2)}</p>
                 </div>
-                <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
+                <div className="bg-white p-4 sm:p-6 rounded-xl shadow-sm border border-gray-200 min-w-0">
                     <p className="text-sm font-medium text-gray-500 mb-1">Paid Orders</p>
-                    <p className="text-2xl font-bold text-gray-900">{paidOrders.length}</p>
+                    <p className="text-xl sm:text-2xl font-bold text-gray-900">{paidOrders.length}</p>
                 </div>
-                <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
+                <div className="bg-white p-4 sm:p-6 rounded-xl shadow-sm border border-gray-200 min-w-0">
                     <p className="text-sm font-medium text-gray-500 mb-1">Last Order</p>
-                    <p className="text-xl font-bold text-gray-900">
+                    <p className="text-lg sm:text-xl font-bold text-gray-900 break-words">
                         {orders[0] ? new Date(orders[0].created_at).toLocaleDateString() : 'Never'}
                     </p>
                 </div>
-                <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
+                <div className="bg-white p-4 sm:p-6 rounded-xl shadow-sm border border-gray-200 min-w-0">
                     <p className="text-sm font-medium text-gray-500 mb-1">Phone</p>
-                    <p className="text-lg font-bold text-gray-900">{customer.phone || 'N/A'}</p>
+                    <p className="text-base sm:text-lg font-bold text-gray-900 break-words">{customer.phone || 'N/A'}</p>
                 </div>
             </div>
 
             {/* Orders History */}
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-                <div className="px-6 py-4 border-b border-gray-200">
+                <div className="px-4 sm:px-6 py-4 border-b border-gray-200">
                     <h2 className="text-lg font-bold text-gray-900">Order History</h2>
                 </div>
 
@@ -365,7 +365,7 @@ export default function CustomerDetailsPage() {
                                         GH₵{(order.total || 0).toFixed(2)}
                                     </td>
                                     <td className="px-6 py-4 text-right">
-                                        <Link href={`/admin/orders/${order.id}`} className="text-gray-400 hover:text-blue-600">
+                                        <Link href={`/admin/orders/${order.id}`} className="inline-flex items-center justify-center w-11 h-11 md:inline md:w-auto md:h-auto text-gray-400 hover:text-blue-600">
                                             <i className="ri-eye-line text-lg"></i>
                                         </Link>
                                     </td>

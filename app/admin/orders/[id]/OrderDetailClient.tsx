@@ -535,7 +535,7 @@ export default function OrderDetailClient({ orderId }: OrderDetailClientProps) {
           {/* Order Items */}
           <div className="mb-6">
             <h2 className="font-bold text-lg mb-2 bg-gray-200 px-2 py-1">ORDER ITEMS:</h2>
-            <table className="w-full">
+            <table className="w-full" data-no-cards>
               <thead>
                 <tr className="border-b border-gray-400">
                   <th className="text-left py-2 px-2 w-16"> </th>
@@ -596,21 +596,21 @@ export default function OrderDetailClient({ orderId }: OrderDetailClientProps) {
         </div>
       </div>
 
-      <div className="max-w-7xl mx-auto p-6 no-print">
+      <div className="max-w-7xl mx-auto p-0 sm:p-6 no-print">
         {/* Page Header with Print Button */}
-        <div className="flex items-center justify-between mb-6">
-          <div className="flex items-center space-x-4">
-            <Link href="/admin/orders" className="text-gray-600 hover:text-gray-900">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-6">
+          <div className="flex min-w-0 items-center gap-2 sm:gap-4">
+            <Link href="/admin/orders" aria-label="Back to orders" className="w-11 h-11 shrink-0 flex items-center justify-center text-gray-600 hover:text-gray-900">
               <i className="ri-arrow-left-line text-2xl"></i>
             </Link>
-            <div>
-              <h1 className="text-2xl font-bold text-gray-900">{order?.order_number}</h1>
+            <div className="min-w-0">
+              <h1 className="text-xl sm:text-2xl font-bold text-gray-900 break-all">{order?.order_number}</h1>
               <p className="text-sm text-gray-600">Order placed on {order ? new Date(order.created_at).toLocaleDateString() : ''}</p>
             </div>
           </div>
           <button
             onClick={handlePrint}
-            className="flex items-center space-x-2 bg-gray-800 hover:bg-gray-900 text-white px-4 py-2 rounded-lg font-medium transition-colors"
+            className="self-start sm:self-auto flex items-center space-x-2 bg-gray-800 hover:bg-gray-900 text-white px-4 py-2.5 rounded-lg font-medium transition-colors"
           >
             <i className="ri-printer-line text-lg"></i>
             <span>Print Order</span>
@@ -634,7 +634,7 @@ export default function OrderDetailClient({ orderId }: OrderDetailClientProps) {
               </div>
             )}
 
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 sm:p-6">
               <div className="flex items-center justify-between mb-6">
                 <h2 className="text-xl font-bold text-gray-900">Order Items</h2>
                 <span className="text-gray-600">{order.order_items?.length || 0} items</span>
@@ -644,8 +644,8 @@ export default function OrderDetailClient({ orderId }: OrderDetailClientProps) {
                 {order.order_items?.map((item: any) => {
                   const lineImg = orderLineItemImageUrl(item);
                   return (
-                  <div key={item.id} className="flex items-start space-x-4 p-4 bg-gray-50 rounded-lg">
-                    <div className="w-20 h-20 bg-white rounded-lg overflow-hidden border border-gray-200 flex items-center justify-center relative shrink-0">
+                  <div key={item.id} className="flex items-start gap-3 sm:gap-4 p-3 sm:p-4 bg-gray-50 rounded-lg">
+                    <div className="w-16 h-16 sm:w-20 sm:h-20 bg-white rounded-lg overflow-hidden border border-gray-200 flex items-center justify-center relative shrink-0">
                       {lineImg ? (
                         <img
                           src={lineImg}
@@ -656,8 +656,8 @@ export default function OrderDetailClient({ orderId }: OrderDetailClientProps) {
                         <i className="ri-image-line text-2xl text-gray-300"></i>
                       )}
                     </div>
-                    <div className="flex-1">
-                      <h3 className="font-semibold text-gray-900 mb-1">{item.product_name}</h3>
+                    <div className="flex-1 min-w-0">
+                      <h3 className="font-semibold text-gray-900 mb-1 break-words">{item.product_name}</h3>
                       <p className="text-sm text-gray-600 mb-1">{item.variant_name}</p>
                       <p className="text-xs text-gray-500">SKU: {item.sku}</p>
                     </div>
@@ -696,7 +696,7 @@ export default function OrderDetailClient({ orderId }: OrderDetailClientProps) {
               </div>
             </div>
 
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 sm:p-6">
               <h2 className="text-xl font-bold text-gray-900 mb-6">Order Timeline</h2>
               <div className="space-y-4">
                 {timeline.map((event, index) => (
@@ -724,7 +724,7 @@ export default function OrderDetailClient({ orderId }: OrderDetailClientProps) {
           </div>
 
           <div className="space-y-6">
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 sm:p-6">
               <h2 className="text-lg font-bold text-gray-900 mb-4">Order Status</h2>
               <div className="relative">
                 <button
@@ -774,7 +774,7 @@ export default function OrderDetailClient({ orderId }: OrderDetailClientProps) {
             </div>
 
             {statusChangeLog.length > 0 && (
-              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 sm:p-6">
                 <h2 className="text-lg font-bold text-gray-900 mb-2">Who changed the status</h2>
                 <p className="text-sm text-gray-600 mb-4">
                   Newest first. Each row is recorded when an admin or staff member saves a new order status.
@@ -804,7 +804,7 @@ export default function OrderDetailClient({ orderId }: OrderDetailClientProps) {
               </div>
             )}
 
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 sm:p-6">
               <h2 className="text-lg font-bold text-gray-900 mb-4">Customer</h2>
               <div className="flex items-start space-x-3 mb-4">
                 <div className="w-12 h-12 flex items-center justify-center bg-blue-100 text-blue-700 rounded-full font-semibold uppercase">
@@ -818,7 +818,7 @@ export default function OrderDetailClient({ orderId }: OrderDetailClientProps) {
               </div>
             </div>
 
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 sm:p-6">
               <h2 className="text-lg font-bold text-gray-900 mb-4">Shipping Address</h2>
               {order.metadata?.customer_preferred_date && (
                 <div className="mb-4 p-3 rounded-lg bg-amber-50 border border-amber-100">
@@ -843,7 +843,7 @@ export default function OrderDetailClient({ orderId }: OrderDetailClientProps) {
               </div>
             </div>
 
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 sm:p-6">
               <h2 className="text-lg font-bold text-gray-900 mb-4">Payment Info</h2>
               <div className="space-y-3">
                 <div className="flex justify-between">
@@ -894,7 +894,7 @@ export default function OrderDetailClient({ orderId }: OrderDetailClientProps) {
               )}
             </div>
 
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 sm:p-6">
               <h2 className="text-lg font-bold text-gray-900 mb-4">Notifications</h2>
               <p className="text-sm text-gray-600 mb-4">
                 Resend email and SMS notifications to the customer about the current order status.
@@ -921,7 +921,7 @@ export default function OrderDetailClient({ orderId }: OrderDetailClientProps) {
               </p>
             </div>
 
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 sm:p-6">
               <h2 className="text-lg font-bold text-gray-900 mb-4">Admin Notes</h2>
               <textarea
                 value={adminNotes}

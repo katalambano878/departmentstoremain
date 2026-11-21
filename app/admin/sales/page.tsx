@@ -542,8 +542,8 @@ export default function AdminSalesPage() {
     return (
         <div className="space-y-6">
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                <div>
-                    <h1 className="text-3xl font-bold text-gray-900">Sales</h1>
+                <div className="min-w-0">
+                    <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Sales</h1>
                     <p className="text-gray-600 mt-1">
                         Set a discount % or a sale price, then switch each sale on or off, or all of them at once.
                     </p>
@@ -551,7 +551,7 @@ export default function AdminSalesPage() {
                 <Link
                     href="/sale"
                     target="_blank"
-                    className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 inline-flex items-center gap-2 text-sm font-medium"
+                    className="min-h-[44px] md:min-h-0 justify-center whitespace-nowrap px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 inline-flex items-center gap-2 text-sm font-medium"
                 >
                     <i className="ri-external-link-line"></i>
                     View Sale page
@@ -560,20 +560,20 @@ export default function AdminSalesPage() {
 
             {/* Master on/off switch */}
             <div
-                className={`rounded-xl border p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 ${
+                className={`rounded-xl border p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 ${
                     salesActive === null ? 'bg-gray-50 border-gray-200' : salesActive ? 'bg-green-50 border-green-200' : 'bg-amber-50 border-amber-200'
                 }`}
             >
-                <div className="flex items-start gap-3">
+                <div className="flex items-start gap-3 min-w-0">
                     <i
                         className={`text-2xl mt-0.5 ${
                             salesActive === null ? 'ri-loader-4-line animate-spin text-gray-400' : salesActive ? 'ri-flashlight-fill text-green-600' : 'ri-pause-circle-line text-amber-600'
                         }`}
                     ></i>
-                    <div>
+                    <div className="min-w-0">
                         <p className="font-semibold text-gray-900">
                             {salesActive === null ? 'Loading sale status...' : `All sales: ${salesActive ? 'ON' : 'OFF'}`}
-                            <span className="ml-2 text-sm font-normal text-gray-600">
+                            <span className="ml-2 text-sm font-normal text-gray-600 whitespace-nowrap">
                                 {liveCount} live{pausedCount > 0 ? `, ${pausedCount} switched off` : ''}
                             </span>
                         </p>
@@ -663,14 +663,14 @@ export default function AdminSalesPage() {
             </div>
 
             {/* Bulk action bar */}
-            <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 sticky top-2 z-20">
+            <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 md:sticky md:top-2 md:z-20">
                 <div className="flex flex-col lg:flex-row lg:items-center gap-3">
                     <div className="flex items-center gap-2 lg:w-56">
                         <input
                             type="checkbox"
                             checked={allFilteredSelected}
                             onChange={toggleSelectAllFiltered}
-                            className="w-4 h-4 rounded border-gray-300"
+                            className="w-5 h-5 md:w-4 md:h-4 rounded border-gray-300"
                         />
                         <span className="text-sm font-medium text-gray-700">
                             {selected.size > 0
@@ -680,7 +680,7 @@ export default function AdminSalesPage() {
                     </div>
 
                     <div className="flex flex-wrap items-center gap-2">
-                        <div className="flex items-center gap-1">
+                        <div className="flex w-full sm:w-auto items-center gap-1">
                             <input
                                 type="number"
                                 min={1}
@@ -688,18 +688,18 @@ export default function AdminSalesPage() {
                                 value={bulkPercent}
                                 onChange={(e) => setBulkPercent(e.target.value)}
                                 placeholder="%"
-                                className="w-20 px-3 py-2 border border-gray-300 rounded-lg"
+                                className="min-w-0 flex-1 sm:flex-none sm:w-20 min-h-[44px] md:min-h-0 px-3 py-2 border border-gray-300 rounded-lg"
                             />
                             <button
                                 onClick={() => runBulk('percentage')}
                                 disabled={busy || selected.size === 0}
-                                className="px-4 py-2 bg-blue-700 hover:bg-blue-800 text-white rounded-lg text-sm font-semibold disabled:opacity-50"
+                                className="shrink-0 whitespace-nowrap min-h-[44px] md:min-h-0 px-4 py-2 bg-blue-700 hover:bg-blue-800 text-white rounded-lg text-sm font-semibold disabled:opacity-50"
                             >
                                 Apply % off
                             </button>
                         </div>
 
-                        <div className="flex items-center gap-1">
+                        <div className="flex w-full sm:w-auto items-center gap-1">
                             <input
                                 type="number"
                                 min={0}
@@ -707,12 +707,12 @@ export default function AdminSalesPage() {
                                 value={bulkFixed}
                                 onChange={(e) => setBulkFixed(e.target.value)}
                                 placeholder="₵ price"
-                                className="w-28 px-3 py-2 border border-gray-300 rounded-lg"
+                                className="min-w-0 flex-1 sm:flex-none sm:w-28 min-h-[44px] md:min-h-0 px-3 py-2 border border-gray-300 rounded-lg"
                             />
                             <button
                                 onClick={() => runBulk('fixed')}
                                 disabled={busy || selected.size === 0}
-                                className="px-4 py-2 bg-blue-700 hover:bg-blue-800 text-white rounded-lg text-sm font-semibold disabled:opacity-50"
+                                className="shrink-0 whitespace-nowrap min-h-[44px] md:min-h-0 px-4 py-2 bg-blue-700 hover:bg-blue-800 text-white rounded-lg text-sm font-semibold disabled:opacity-50"
                             >
                                 Set price
                             </button>
@@ -721,14 +721,14 @@ export default function AdminSalesPage() {
                         <button
                             onClick={() => switchSelected(true)}
                             disabled={busy || selected.size === 0}
-                            className="px-4 py-2 bg-white border border-green-300 text-green-800 hover:bg-green-50 rounded-lg text-sm font-semibold disabled:opacity-50"
+                            className="flex-1 sm:flex-none whitespace-nowrap min-h-[44px] md:min-h-0 px-4 py-2 bg-white border border-green-300 text-green-800 hover:bg-green-50 rounded-lg text-sm font-semibold disabled:opacity-50"
                         >
                             Switch on
                         </button>
                         <button
                             onClick={() => switchSelected(false)}
                             disabled={busy || selected.size === 0}
-                            className="px-4 py-2 bg-white border border-gray-300 text-gray-700 hover:bg-gray-50 rounded-lg text-sm font-semibold disabled:opacity-50"
+                            className="flex-1 sm:flex-none whitespace-nowrap min-h-[44px] md:min-h-0 px-4 py-2 bg-white border border-gray-300 text-gray-700 hover:bg-gray-50 rounded-lg text-sm font-semibold disabled:opacity-50"
                         >
                             Switch off
                         </button>
@@ -736,7 +736,7 @@ export default function AdminSalesPage() {
                         <button
                             onClick={() => runBulk('remove')}
                             disabled={busy || selected.size === 0}
-                            className="px-4 py-2 bg-white border border-red-300 text-red-700 hover:bg-red-50 rounded-lg text-sm font-semibold disabled:opacity-50"
+                            className="flex-1 sm:flex-none whitespace-nowrap min-h-[44px] md:min-h-0 px-4 py-2 bg-white border border-red-300 text-red-700 hover:bg-red-50 rounded-lg text-sm font-semibold disabled:opacity-50"
                         >
                             Remove from sale
                         </button>
@@ -797,15 +797,15 @@ export default function AdminSalesPage() {
                                                     checked={selected.has(p.id)}
                                                     onChange={() => toggleOne(p.id)}
                                                     aria-label={`Select ${p.name}`}
-                                                    className="w-4 h-4 rounded border-gray-300"
+                                                    className="w-5 h-5 md:w-4 md:h-4 rounded border-gray-300"
                                                 />
                                             </td>
                                             <td className="p-3">
-                                                <div className="flex items-center gap-3">
+                                                <div className="flex items-center gap-3 min-w-0">
                                                     <img src={p.image} alt="" className="w-10 h-10 rounded object-cover bg-gray-100 flex-shrink-0" />
                                                     <div className="min-w-0">
-                                                        <div className="font-medium text-gray-900 truncate max-w-[260px]">{p.name}</div>
-                                                        <div className="text-xs text-gray-500 flex items-center gap-2">
+                                                        <div className="font-medium text-gray-900 break-words md:truncate md:max-w-[260px]">{p.name}</div>
+                                                        <div className="text-xs text-gray-500 flex flex-wrap items-center gap-2">
                                                             <span>{p.category}</span>
                                                             {p.variantsCount > 0 && (
                                                                 <span className="px-1.5 py-0.5 bg-gray-100 rounded text-gray-600">
@@ -872,7 +872,7 @@ export default function AdminSalesPage() {
                                                     <button
                                                         onClick={() => toggleVariants(p)}
                                                         disabled={busy}
-                                                        className="px-2.5 py-1.5 bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 rounded-lg text-xs font-medium disabled:opacity-50 inline-flex items-center gap-1 whitespace-nowrap"
+                                                        className="min-h-[44px] md:min-h-0 px-2.5 py-1.5 bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 rounded-lg text-xs font-medium disabled:opacity-50 inline-flex items-center gap-1 whitespace-nowrap"
                                                     >
                                                         <i className={expandedId === p.id ? 'ri-arrow-up-s-line' : 'ri-arrow-down-s-line'}></i>
                                                         {expandedId === p.id ? 'Hide variants' : 'Variant prices'}
@@ -886,12 +886,12 @@ export default function AdminSalesPage() {
                                                             value={rowPrice[p.id] ?? ''}
                                                             onChange={(e) => setRowPrice((prev) => ({ ...prev, [p.id]: e.target.value }))}
                                                             placeholder="₵"
-                                                            className="w-24 px-2 py-1.5 border border-gray-300 rounded-lg"
+                                                            className="w-24 min-h-[44px] md:min-h-0 px-2 py-1.5 border border-gray-300 rounded-lg"
                                                         />
                                                         <button
                                                             onClick={() => applyRowPrice(p)}
                                                             disabled={busy}
-                                                            className="px-2.5 py-1.5 bg-gray-900 hover:bg-black text-white rounded-lg text-xs font-medium disabled:opacity-50"
+                                                            className="min-h-[44px] md:min-h-0 px-2.5 py-1.5 bg-gray-900 hover:bg-black text-white rounded-lg text-xs font-medium disabled:opacity-50"
                                                         >
                                                             Set
                                                         </button>
@@ -903,7 +903,7 @@ export default function AdminSalesPage() {
                                                     <button
                                                         onClick={() => removeRow(p)}
                                                         disabled={busy}
-                                                        className="text-red-600 hover:text-red-800 text-xs font-medium disabled:opacity-50 whitespace-nowrap"
+                                                        className="min-h-[44px] md:min-h-0 px-2 md:px-0 text-red-600 hover:text-red-800 text-xs font-medium disabled:opacity-50 whitespace-nowrap"
                                                     >
                                                         Remove
                                                     </button>
@@ -912,8 +912,8 @@ export default function AdminSalesPage() {
                                         </tr>
                                         {expandedId === p.id && (
                                             <tr className="border-b border-gray-100 bg-blue-50/40">
-                                                <td className="p-0"></td>
-                                                <td colSpan={7} className="p-4">
+                                                <td className="p-0 max-md:!hidden"></td>
+                                                <td colSpan={7} className="p-4 max-md:!text-left">
                                                     {variantLoading && !variantData[p.id] ? (
                                                         <div className="text-sm text-gray-500 flex items-center gap-2">
                                                             <i className="ri-loader-4-line animate-spin"></i>
@@ -926,7 +926,7 @@ export default function AdminSalesPage() {
                                                                     Set a custom sale price per variant. Leave a box empty to keep that
                                                                     variant unchanged.
                                                                 </p>
-                                                                <div className="flex items-center gap-1">
+                                                                <div className="flex items-center gap-1 min-w-0">
                                                                     <input
                                                                         type="number"
                                                                         min={0}
@@ -934,7 +934,7 @@ export default function AdminSalesPage() {
                                                                         value={variantFillAll}
                                                                         onChange={(e) => setVariantFillAll(e.target.value)}
                                                                         placeholder="₵ same for all"
-                                                                        className="w-32 px-2 py-1.5 border border-gray-300 rounded-lg text-xs bg-white"
+                                                                        className="min-w-0 flex-1 sm:flex-none sm:w-32 min-h-[44px] md:min-h-0 px-2 py-1.5 border border-gray-300 rounded-lg text-base md:text-xs bg-white"
                                                                     />
                                                                     <button
                                                                         onClick={() => {
@@ -947,7 +947,7 @@ export default function AdminSalesPage() {
                                                                                 return next;
                                                                             });
                                                                         }}
-                                                                        className="px-2.5 py-1.5 bg-white border border-gray-300 hover:bg-gray-50 rounded-lg text-xs font-medium"
+                                                                        className="shrink-0 min-h-[44px] md:min-h-0 px-2.5 py-1.5 bg-white border border-gray-300 hover:bg-gray-50 rounded-lg text-xs font-medium"
                                                                     >
                                                                         Fill all
                                                                     </button>
@@ -983,7 +983,7 @@ export default function AdminSalesPage() {
                                                                                 }))
                                                                             }
                                                                             placeholder="₵ sale"
-                                                                            className="w-24 px-2 py-1.5 border border-gray-300 rounded-lg text-sm flex-shrink-0"
+                                                                            className="w-24 min-h-[44px] md:min-h-0 px-2 py-1.5 border border-gray-300 rounded-lg text-base md:text-sm flex-shrink-0"
                                                                         />
                                                                     </div>
                                                                 ))}
@@ -993,7 +993,7 @@ export default function AdminSalesPage() {
                                                                 <button
                                                                     onClick={() => applyVariantPrices(p)}
                                                                     disabled={busy}
-                                                                    className="px-4 py-2 bg-gray-900 hover:bg-black text-white rounded-lg text-xs font-semibold disabled:opacity-50"
+                                                                    className="w-full sm:w-auto min-h-[44px] md:min-h-0 px-4 py-2 bg-gray-900 hover:bg-black text-white rounded-lg text-xs font-semibold disabled:opacity-50"
                                                                 >
                                                                     Apply variant prices
                                                                 </button>
@@ -1014,15 +1014,15 @@ export default function AdminSalesPage() {
 
             {/* Pagination */}
             {!loading && filtered.length > PAGE_SIZE && (
-                <div className="flex items-center justify-between">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                     <span className="text-sm text-gray-500">
                         Showing {(currentPage - 1) * PAGE_SIZE + 1}–{Math.min(currentPage * PAGE_SIZE, filtered.length)} of {filtered.length}
                     </span>
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center justify-between sm:justify-start gap-2">
                         <button
                             onClick={() => setPage((p) => Math.max(1, p - 1))}
                             disabled={currentPage <= 1}
-                            className="px-3 py-2 border border-gray-300 rounded-lg disabled:opacity-50 text-sm"
+                            className="min-h-[44px] sm:min-h-0 px-3 py-2 border border-gray-300 rounded-lg disabled:opacity-50 text-sm"
                         >
                             Previous
                         </button>
@@ -1030,7 +1030,7 @@ export default function AdminSalesPage() {
                         <button
                             onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
                             disabled={currentPage >= totalPages}
-                            className="px-3 py-2 border border-gray-300 rounded-lg disabled:opacity-50 text-sm"
+                            className="min-h-[44px] sm:min-h-0 px-3 py-2 border border-gray-300 rounded-lg disabled:opacity-50 text-sm"
                         >
                             Next
                         </button>

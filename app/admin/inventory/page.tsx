@@ -401,9 +401,9 @@ export default function InventoryManagementPage() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
-          <div>
+      <div className="max-w-7xl mx-auto sm:px-6 lg:px-8 sm:py-8">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6 sm:mb-8">
+          <div className="min-w-0">
             <h1 className="text-2xl md:text-3xl font-bold text-gray-900">Inventory</h1>
             <p className="text-gray-600 mt-1 md:mt-2 text-sm md:text-base">Stock levels for every product. Low stock uses each product&apos;s own threshold (default {DEFAULT_THRESHOLD}).</p>
           </div>
@@ -418,71 +418,71 @@ export default function InventoryManagementPage() {
         {loadError && (
           <div className="mb-6 flex items-start gap-2 bg-red-50 border border-red-200 text-red-800 px-4 py-3 rounded-lg" role="alert">
             <i className="ri-error-warning-line text-red-600 mt-0.5"></i>
-            <span>{loadError}</span>
+            <span className="min-w-0 break-words">{loadError}</span>
           </div>
         )}
 
         {notice && (
           <div className={`mb-6 flex items-start gap-2 px-4 py-3 rounded-lg border ${notice.kind === 'ok' ? 'bg-green-50 border-green-200 text-green-800' : 'bg-red-50 border-red-200 text-red-800'}`} role="status">
             <i className={`${notice.kind === 'ok' ? 'ri-checkbox-circle-line text-green-600' : 'ri-error-warning-line text-red-600'} mt-0.5`}></i>
-            <span className="flex-1">{notice.text}</span>
-            <button onClick={() => setNotice(null)} aria-label="Dismiss" className="opacity-70 hover:opacity-100"><i className="ri-close-line"></i></button>
+            <span className="flex-1 min-w-0 break-words">{notice.text}</span>
+            <button onClick={() => setNotice(null)} aria-label="Dismiss" className="shrink-0 flex items-center justify-center w-11 h-11 -my-3 -mr-3 sm:m-0 sm:block sm:w-auto sm:h-auto opacity-70 hover:opacity-100"><i className="ri-close-line"></i></button>
           </div>
         )}
 
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-          <div className="bg-white rounded-xl shadow-sm p-6">
-            <div className="flex items-center justify-between">
-              <div>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 sm:gap-6 mb-6 sm:mb-8">
+          <div className="bg-white rounded-xl shadow-sm p-4 sm:p-6 min-w-0">
+            <div className="flex flex-col-reverse items-start gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-0">
+              <div className="min-w-0">
                 <p className="text-sm text-gray-600 mb-1">Total Products</p>
-                <p className="text-3xl font-bold text-gray-900">{products.length}</p>
+                <p className="text-xl sm:text-3xl break-words font-bold text-gray-900">{products.length}</p>
               </div>
-              <div className="w-12 h-12 flex items-center justify-center bg-blue-100 rounded-lg">
+              <div className="w-10 h-10 sm:w-12 sm:h-12 shrink-0 flex items-center justify-center bg-blue-100 rounded-lg">
                 <i className="ri-stack-line text-2xl text-blue-600"></i>
               </div>
             </div>
           </div>
 
-          <div className="bg-white rounded-xl shadow-sm p-6">
-            <div className="flex items-center justify-between">
-              <div>
+          <div className="bg-white rounded-xl shadow-sm p-4 sm:p-6 min-w-0">
+            <div className="flex flex-col-reverse items-start gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-0">
+              <div className="min-w-0">
                 <p className="text-sm text-gray-600 mb-1">Low Stock Items</p>
-                <p className="text-3xl font-bold text-amber-600">{lowStockCount}</p>
+                <p className="text-xl sm:text-3xl break-words font-bold text-amber-600">{lowStockCount}</p>
               </div>
-              <div className="w-12 h-12 flex items-center justify-center bg-amber-100 rounded-lg">
+              <div className="w-10 h-10 sm:w-12 sm:h-12 shrink-0 flex items-center justify-center bg-amber-100 rounded-lg">
                 <i className="ri-alert-line text-2xl text-amber-600"></i>
               </div>
             </div>
           </div>
 
-          <div className="bg-white rounded-xl shadow-sm p-6">
-            <div className="flex items-center justify-between">
-              <div>
+          <div className="bg-white rounded-xl shadow-sm p-4 sm:p-6 min-w-0">
+            <div className="flex flex-col-reverse items-start gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-0">
+              <div className="min-w-0">
                 <p className="text-sm text-gray-600 mb-1">Out of Stock</p>
-                <p className="text-3xl font-bold text-red-600">{outOfStockCount}</p>
+                <p className="text-xl sm:text-3xl break-words font-bold text-red-600">{outOfStockCount}</p>
               </div>
-              <div className="w-12 h-12 flex items-center justify-center bg-red-100 rounded-lg">
+              <div className="w-10 h-10 sm:w-12 sm:h-12 shrink-0 flex items-center justify-center bg-red-100 rounded-lg">
                 <i className="ri-close-circle-line text-2xl text-red-600"></i>
               </div>
             </div>
           </div>
 
-          <div className="bg-white rounded-xl shadow-sm p-6">
-            <div className="flex items-center justify-between">
-              <div>
+          <div className="bg-white rounded-xl shadow-sm p-4 sm:p-6 min-w-0">
+            <div className="flex flex-col-reverse items-start gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-0">
+              <div className="min-w-0">
                 <p className="text-sm text-gray-600 mb-1">Total Retail Value</p>
-                <p className="text-3xl font-bold text-blue-600">GH₵{totalValue.toLocaleString(undefined, { maximumFractionDigits: 0 })}</p>
+                <p className="text-xl sm:text-3xl break-words font-bold text-blue-600">GH₵{totalValue.toLocaleString(undefined, { maximumFractionDigits: 0 })}</p>
               </div>
-              <div className="w-12 h-12 flex items-center justify-center bg-blue-100 rounded-lg">
+              <div className="w-10 h-10 sm:w-12 sm:h-12 shrink-0 flex items-center justify-center bg-blue-100 rounded-lg">
                 <i className="ri-money-dollar-circle-line text-2xl text-blue-600"></i>
               </div>
             </div>
           </div>
         </div>
 
-        <div className="bg-white rounded-xl shadow-sm p-6 mb-6">
+        <div className="bg-white rounded-xl shadow-sm p-4 sm:p-6 mb-6">
           <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-            <div className="flex-1 max-w-md">
+            <div className="w-full md:flex-1 md:max-w-md">
               <div className="relative">
                 <i className="ri-search-line absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 text-xl flex items-center justify-center"></i>
                 <input
@@ -490,18 +490,18 @@ export default function InventoryManagementPage() {
                   placeholder="Search by product name or SKU..."
                   value={searchTerm}
                   onChange={(e) => { setSearchTerm(e.target.value); setSelectedProducts([]); }}
-                  className="w-full pl-12 pr-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
+                  className="w-full pl-12 pr-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-base sm:text-sm"
                 />
               </div>
             </div>
 
             <div className="flex flex-wrap items-center gap-3">
-              <div className="flex items-center space-x-2 bg-gray-100 rounded-lg p-1">
+              <div className="flex w-full md:w-auto items-center space-x-2 overflow-x-auto md:overflow-visible bg-gray-100 rounded-lg p-1">
                 {['all', 'low', 'out', 'good'].map((filter) => (
                   <button
                     key={filter}
                     onClick={() => { setStockFilter(filter); setSelectedProducts([]); }}
-                    className={`px-4 py-2 rounded-md font-medium text-sm transition-colors whitespace-nowrap cursor-pointer ${stockFilter === filter
+                    className={`shrink-0 flex-1 md:flex-none min-h-[44px] md:min-h-0 px-3 sm:px-4 py-2 rounded-md font-medium text-sm transition-colors whitespace-nowrap cursor-pointer ${stockFilter === filter
                       ? 'bg-white text-gray-900 shadow-sm'
                       : 'text-gray-600 hover:text-gray-900'
                       }`}
@@ -517,7 +517,7 @@ export default function InventoryManagementPage() {
               <button
                 onClick={() => setShowImportModal(true)}
                 disabled={loading}
-                className="bg-blue-700 hover:bg-blue-800 text-white px-4 py-3 rounded-lg font-semibold transition-colors flex items-center space-x-2 whitespace-nowrap cursor-pointer disabled:opacity-50"
+                className="flex-1 md:flex-none justify-center bg-blue-700 hover:bg-blue-800 text-white px-4 py-3 rounded-lg font-semibold transition-colors flex items-center space-x-2 whitespace-nowrap cursor-pointer disabled:opacity-50"
               >
                 <i className="ri-upload-line"></i>
                 <span>Import CSV</span>
@@ -526,7 +526,7 @@ export default function InventoryManagementPage() {
               <button
                 onClick={handleExportCSV}
                 disabled={loading || products.length === 0}
-                className="border-2 border-gray-300 hover:border-gray-400 text-gray-700 px-4 py-3 rounded-lg font-semibold transition-colors flex items-center space-x-2 whitespace-nowrap cursor-pointer disabled:opacity-50"
+                className="flex-1 md:flex-none justify-center border-2 border-gray-300 hover:border-gray-400 text-gray-700 px-4 py-3 rounded-lg font-semibold transition-colors flex items-center space-x-2 whitespace-nowrap cursor-pointer disabled:opacity-50"
               >
                 <i className="ri-download-line"></i>
                 <span>Export</span>
@@ -557,13 +557,13 @@ export default function InventoryManagementPage() {
                 <button
                   onClick={handleBulkRestock}
                   disabled={restocking}
-                  className="bg-blue-700 hover:bg-blue-800 text-white px-4 py-2 rounded-lg font-semibold transition-colors whitespace-nowrap cursor-pointer disabled:opacity-50"
+                  className="min-h-[44px] sm:min-h-0 bg-blue-700 hover:bg-blue-800 text-white px-4 py-2 rounded-lg font-semibold transition-colors whitespace-nowrap cursor-pointer disabled:opacity-50"
                 >
                   {restocking ? 'Restocking...' : 'Restock'}
                 </button>
                 <button
                   onClick={() => setSelectedProducts([])}
-                  className="text-gray-600 hover:text-gray-900 font-medium whitespace-nowrap cursor-pointer"
+                  className="min-h-[44px] sm:min-h-0 px-2 sm:px-0 text-gray-600 hover:text-gray-900 font-medium whitespace-nowrap cursor-pointer"
                 >
                   Clear Selection
                 </button>
@@ -613,7 +613,7 @@ export default function InventoryManagementPage() {
                         />
                       </td>
                       <td className="px-6 py-4">
-                        <p className="font-semibold text-gray-900">{product.name}</p>
+                        <p className="font-semibold text-gray-900 break-words">{product.name}</p>
                         {product.variants.length > 0 && (
                           <p className="text-sm text-gray-500">{product.variants.length} variant{product.variants.length > 1 ? 's' : ''}</p>
                         )}
@@ -652,7 +652,7 @@ export default function InventoryManagementPage() {
                       <td className="px-6 py-4">
                         <Link
                           href={`/admin/products/${product.id}`}
-                          className="w-8 h-8 flex items-center justify-center text-gray-600 hover:text-blue-700 transition-colors cursor-pointer"
+                          className="w-11 h-11 md:w-8 md:h-8 flex items-center justify-center text-gray-600 hover:text-blue-700 transition-colors cursor-pointer"
                           title="Edit product"
                         >
                           <i className="ri-edit-line text-lg"></i>
@@ -669,10 +669,10 @@ export default function InventoryManagementPage() {
 
       {showImportModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl p-6 w-full max-w-3xl max-h-[90vh] overflow-y-auto">
-            <div className="flex items-start justify-between mb-4">
-              <h2 className="text-xl font-bold text-gray-900">Import stock from CSV</h2>
-              <button onClick={closeImport} aria-label="Close" className="text-gray-500 hover:text-gray-800"><i className="ri-close-line text-xl"></i></button>
+          <div className="bg-white rounded-xl p-4 sm:p-6 w-full max-w-3xl max-h-[90dvh] overflow-y-auto">
+            <div className="flex items-start justify-between gap-2 mb-4">
+              <h2 className="text-lg sm:text-xl font-bold text-gray-900">Import stock from CSV</h2>
+              <button onClick={closeImport} aria-label="Close" className="shrink-0 flex items-center justify-center w-11 h-11 -mt-2 -mr-2 sm:m-0 sm:block sm:w-auto sm:h-auto text-gray-500 hover:text-gray-800"><i className="ri-close-line text-xl"></i></button>
             </div>
             <p className="text-sm text-gray-600 mb-4">
               Columns: <strong>SKU</strong> (or <strong>Name</strong>) and <strong>Quantity</strong>. A variant SKU updates that variant and
@@ -743,12 +743,12 @@ export default function InventoryManagementPage() {
               </>
             )}
 
-            <div className="flex justify-end gap-3">
-              <button onClick={closeImport} className="px-5 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-800 rounded-lg font-semibold">Cancel</button>
+            <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-3">
+              <button onClick={closeImport} className="min-h-[44px] sm:min-h-0 px-5 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-800 rounded-lg font-semibold">Cancel</button>
               <button
                 onClick={applyImport}
                 disabled={importing || importReady.length === 0}
-                className="px-5 py-2.5 bg-blue-700 hover:bg-blue-800 text-white rounded-lg font-semibold disabled:opacity-50"
+                className="min-h-[44px] sm:min-h-0 px-5 py-2.5 bg-blue-700 hover:bg-blue-800 text-white rounded-lg font-semibold disabled:opacity-50"
               >
                 {importing ? 'Applying...' : `Apply ${importReady.length} change${importReady.length === 1 ? '' : 's'}`}
               </button>

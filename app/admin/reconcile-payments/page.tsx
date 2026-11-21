@@ -89,9 +89,9 @@ export default function ReconcilePaymentsPage() {
     }, [load]);
 
     return (
-        <div className="p-6 max-w-6xl">
+        <div className="sm:p-6 max-w-6xl">
             <h1 className="text-2xl font-bold mb-2">Payment reconciliation (Hubtel)</h1>
-            <p className="text-gray-600 mb-4 max-w-3xl">
+            <p className="text-gray-600 mb-4 max-w-3xl break-words">
                 This list shows orders where a payment link was generated but the order is still
                 not marked paid — the usual suspects when money arrived at the gateway but our
                 callback or success flow did not complete. For Hubtel orders, click
@@ -101,25 +101,25 @@ export default function ReconcilePaymentsPage() {
             </p>
             {note && <p className="text-sm text-gray-700 mb-4 border-l-4 border-amber-400 pl-3">{note}</p>}
 
-            <div className="flex gap-3 mb-6">
+            <div className="flex flex-wrap gap-2 sm:gap-3 mb-6">
                 <button
                     type="button"
                     onClick={() => load()}
                     disabled={loading}
-                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
+                    className="flex-1 sm:flex-none min-h-[44px] sm:min-h-0 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
                 >
                     {loading ? 'Loading…' : 'Refresh list'}
                 </button>
                 <Link
                     href="/admin/orders"
-                    className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 inline-flex items-center"
+                    className="flex-1 sm:flex-none min-h-[44px] sm:min-h-0 justify-center sm:justify-start px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 inline-flex items-center"
                 >
                     All orders
                 </Link>
             </div>
 
             {error && (
-                <div className="mb-4 p-3 bg-red-50 text-red-800 rounded border border-red-200">{error}</div>
+                <div className="mb-4 p-3 bg-red-50 text-red-800 rounded border border-red-200 break-words">{error}</div>
             )}
 
             {!loading && !error && rows.length === 0 && (
@@ -144,7 +144,7 @@ export default function ReconcilePaymentsPage() {
                             {rows.map((r) => (
                                 <tr key={r.id} className="border-b border-gray-100 hover:bg-gray-50/80">
                                     <td className="p-3">
-                                        <div className="font-medium">{r.order_number || r.id}</div>
+                                        <div className="font-medium break-all">{r.order_number || r.id}</div>
                                         <div className="text-gray-500 text-xs truncate max-w-[200px]">{r.email}</div>
                                     </td>
                                     <td className="p-3 whitespace-nowrap">{r.total != null ? `₵${Number(r.total).toFixed(2)}` : '—'}</td>
@@ -163,21 +163,21 @@ export default function ReconcilePaymentsPage() {
                                         {r.hubtel_client_reference || r.moolre_externalref || '—'}
                                     </td>
                                     <td className="p-3">
-                                        <div className="flex flex-col gap-1.5">
+                                        <div className="flex flex-col items-end md:items-stretch gap-1.5">
                                             {/* POS MoMo links are Hubtel even when payment_method says 'moolre', so key on the stored reference. */}
                                             {(r.hubtel_client_reference || r.payment_method === 'hubtel') && (
                                                 <button
                                                     type="button"
                                                     onClick={() => reverify(r.id)}
                                                     disabled={reconcilingId === r.id}
-                                                    className="px-3 py-1 bg-emerald-600 text-white text-xs rounded hover:bg-emerald-700 disabled:opacity-50 whitespace-nowrap"
+                                                    className="min-h-[44px] md:min-h-0 px-3 py-1 bg-emerald-600 text-white text-xs rounded hover:bg-emerald-700 disabled:opacity-50 whitespace-nowrap"
                                                 >
                                                     {reconcilingId === r.id ? 'Checking…' : 'Re-verify'}
                                                 </button>
                                             )}
                                             <Link
                                                 href={`/admin/orders/${r.id}`}
-                                                className="text-blue-600 hover:underline whitespace-nowrap text-xs"
+                                                className="inline-flex min-h-[44px] md:min-h-0 items-center text-blue-600 hover:underline whitespace-nowrap text-xs"
                                             >
                                                 Open order
                                             </Link>
@@ -195,10 +195,10 @@ export default function ReconcilePaymentsPage() {
                 </div>
             )}
 
-            <p className="mt-8 text-sm text-gray-500 max-w-3xl">
+            <p className="mt-8 text-sm text-gray-500 max-w-3xl break-words">
                 Hubtel orders can be reconciled directly here with <strong>Re-verify</strong>, which
                 re-queries Hubtel using the stored{' '}
-                <code className="bg-gray-100 px-1 rounded">hubtel_client_reference</code> and only marks
+                <code className="bg-gray-100 px-1 rounded break-all">hubtel_client_reference</code> and only marks
                 the order paid when Hubtel reports the transaction as Paid and the settled amount matches
                 the order total. Legacy Moolre orders still require manual confirmation in the Moolre
                 dashboard before being marked paid.

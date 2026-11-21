@@ -153,14 +153,14 @@ export default function ActivityLogsPage() {
     );
   }
 
-  const selectClass = 'w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500';
+  const selectClass = 'w-full min-w-0 min-h-[44px] sm:min-h-0 px-3 py-2 border border-gray-300 rounded-lg text-base sm:text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500';
   const setField = (key: keyof Filters) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
     setFilters({ ...filters, [key]: e.target.value });
 
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold text-gray-900">Activity Logs</h1>
+        <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Activity Logs</h1>
         <p className="text-gray-600 mt-1">Every change made in the store, who made it, and when. Logs cannot be edited or deleted.</p>
       </div>
 
@@ -193,16 +193,16 @@ export default function ActivityLogsPage() {
           <input type="date" value={filters.to} onChange={setField('to')} className={selectClass} aria-label="To date" />
         </div>
         <div className="flex gap-2 lg:col-span-6 justify-end">
-          <button type="button" onClick={() => { setFilters(EMPTY_FILTERS); applyFilters(EMPTY_FILTERS); }} className="px-4 py-2 border border-gray-300 rounded-lg text-sm font-semibold text-gray-700 hover:bg-gray-50 cursor-pointer">
+          <button type="button" onClick={() => { setFilters(EMPTY_FILTERS); applyFilters(EMPTY_FILTERS); }} className="flex-1 sm:flex-none min-h-[44px] sm:min-h-0 px-4 py-2 border border-gray-300 rounded-lg text-sm font-semibold text-gray-700 hover:bg-gray-50 cursor-pointer">
             Clear
           </button>
-          <button type="submit" className="px-4 py-2 bg-blue-700 hover:bg-blue-800 text-white rounded-lg text-sm font-semibold cursor-pointer">
+          <button type="submit" className="flex-1 sm:flex-none min-h-[44px] sm:min-h-0 px-4 py-2 bg-blue-700 hover:bg-blue-800 text-white rounded-lg text-sm font-semibold cursor-pointer">
             Apply filters
           </button>
         </div>
       </form>
 
-      {error && <div className="bg-red-50 border border-red-200 text-red-800 rounded-lg p-3 text-sm">Could not load logs: {error}</div>}
+      {error && <div className="bg-red-50 border border-red-200 text-red-800 rounded-lg p-3 text-sm break-words">Could not load logs: {error}</div>}
 
       <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
         <div className="overflow-x-auto">
@@ -261,13 +261,13 @@ export default function ActivityLogsPage() {
             </tbody>
           </table>
         </div>
-        <div className="flex items-center justify-between px-4 py-3 border-t border-gray-200">
+        <div className="flex items-center justify-between gap-3 px-4 py-3 border-t border-gray-200">
           <p className="text-sm text-gray-600">Page {page + 1}</p>
           <div className="flex gap-2">
-            <button disabled={page === 0 || loading} onClick={() => setPage(page - 1)} className="px-4 py-2 border border-gray-300 rounded-lg text-sm font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer">
+            <button disabled={page === 0 || loading} onClick={() => setPage(page - 1)} className="min-h-[44px] sm:min-h-0 px-4 py-2 border border-gray-300 rounded-lg text-sm font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer">
               Newer
             </button>
-            <button disabled={!hasMore || loading} onClick={() => setPage(page + 1)} className="px-4 py-2 border border-gray-300 rounded-lg text-sm font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer">
+            <button disabled={!hasMore || loading} onClick={() => setPage(page + 1)} className="min-h-[44px] sm:min-h-0 px-4 py-2 border border-gray-300 rounded-lg text-sm font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer">
               Older
             </button>
           </div>

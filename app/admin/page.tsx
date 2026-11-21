@@ -188,34 +188,34 @@ export default function AdminDashboard() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="flex items-center justify-between mb-8">
+      <div className="max-w-7xl mx-auto px-0 sm:px-6 lg:px-8 py-2 sm:py-8">
+        <div className="flex items-center justify-between mb-6 sm:mb-8">
           <div>
-            <h1 className="text-3xl font-bold text-gray-900">Dashboard</h1>
+            <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Dashboard</h1>
             <p className="text-gray-600 mt-1">Welcome back! Here's what's happening with your store.</p>
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-          {stats.map((stat) => (
-            <div key={stat.title} className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 hover:shadow-md transition-shadow">
-              <div className="flex items-center justify-between mb-4">
-                <div className={`w-12 h-12 flex items-center justify-center bg-${stat.color}-100 text-${stat.color}-700 rounded-lg`}>
-                  <i className={`${stat.icon} text-2xl`}></i>
+        <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-6 mb-6 sm:mb-8">
+          {stats.map((stat, index) => (
+            <div key={stat.title} className={`min-w-0 bg-white rounded-xl shadow-sm border border-gray-200 p-4 sm:p-6 hover:shadow-md transition-shadow ${index === 0 ? 'col-span-2 md:col-span-1' : ''}`}>
+              <div className="flex items-center justify-between gap-2 mb-3 sm:mb-4">
+                <div className={`w-10 h-10 sm:w-12 sm:h-12 shrink-0 flex items-center justify-center bg-${stat.color}-100 text-${stat.color}-700 rounded-lg`}>
+                  <i className={`${stat.icon} text-xl sm:text-2xl`}></i>
                 </div>
-                <span className="text-xs font-medium text-gray-500">
+                <span className="text-xs font-medium text-gray-500 text-right">
                   {stat.note}
                 </span>
               </div>
-              <h3 className="text-2xl font-bold text-gray-900 mb-1">{stat.value}</h3>
+              <h3 className="text-xl sm:text-2xl font-bold text-gray-900 mb-1 break-words">{stat.value}</h3>
               <p className="text-gray-600 text-sm">{stat.title}</p>
             </div>
           ))}
         </div>
 
         {/* Revenue Chart & Quick Actions */}
-        <div className="grid lg:grid-cols-3 gap-6 mb-8">
-          <div className="lg:col-span-2 bg-white p-6 rounded-xl shadow-sm border border-gray-200">
+        <div className="grid lg:grid-cols-3 gap-4 sm:gap-6 mb-6 sm:mb-8">
+          <div className="min-w-0 lg:col-span-2 bg-white p-4 sm:p-6 rounded-xl shadow-sm border border-gray-200">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-xl font-bold text-gray-900">Revenue Trend</h2>
               <select
@@ -227,7 +227,7 @@ export default function AdminDashboard() {
                 <option value="30days">Last 30 Days</option>
               </select>
             </div>
-            <div className="h-80 w-full">
+            <div className="h-64 sm:h-80 w-full">
               <ResponsiveContainer width="100%" height="100%">
                 <AreaChart data={chartData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
                   <defs>
@@ -249,7 +249,7 @@ export default function AdminDashboard() {
             </div>
           </div>
 
-          <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
+          <div className="bg-white p-4 sm:p-6 rounded-xl shadow-sm border border-gray-200">
             <h2 className="text-xl font-bold text-gray-900 mb-4">Quick Actions</h2>
             <div className="space-y-3">
               <Link href="/admin/products/new" className="flex items-center justify-between p-4 bg-gray-50 hover:bg-blue-50 text-gray-700 hover:text-blue-700 rounded-lg transition-colors group">
@@ -283,8 +283,8 @@ export default function AdminDashboard() {
           </div>
         </div>
 
-        <div className="grid lg:grid-cols-3 gap-6 mb-8">
-          <div className="lg:col-span-2 bg-white rounded-xl shadow-sm border border-gray-200 p-4 sm:p-6 overflow-hidden">
+        <div className="grid lg:grid-cols-3 gap-4 sm:gap-6 mb-6 sm:mb-8">
+          <div className="min-w-0 lg:col-span-2 bg-white rounded-xl shadow-sm border border-gray-200 p-4 sm:p-6 overflow-hidden">
             <div className="flex items-center justify-between mb-6">
               <h2 className="text-xl font-bold text-gray-900">Recent Orders</h2>
               <Link href="/admin/orders" className="text-blue-700 hover:text-blue-800 font-medium text-sm whitespace-nowrap cursor-pointer">
@@ -340,7 +340,7 @@ export default function AdminDashboard() {
           </div>
 
           <div className="space-y-6">
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 sm:p-6">
               <h2 className="text-xl font-bold text-gray-900 mb-4">Low Stock Alert</h2>
               {lowStockProducts.length === 0 ? (
                 <p className="text-gray-500">Inventory looks good!</p>
@@ -375,9 +375,9 @@ export default function AdminDashboard() {
             </Link>
           </div>
 
-          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
             {topProducts.map((product) => (
-              <div key={product.id} className="border border-gray-200 rounded-xl p-4 hover:shadow-md transition-shadow">
+              <div key={product.id} className="min-w-0 border border-gray-200 rounded-xl p-3 sm:p-4 hover:shadow-md transition-shadow">
                 <div className="aspect-square bg-gray-100 rounded-lg overflow-hidden mb-3">
                   <img src={product.image} alt={product.name} className="w-full h-full object-cover" />
                 </div>

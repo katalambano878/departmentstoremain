@@ -166,15 +166,15 @@ export default function AdminCouponsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">Coupons & Promotions</h1>
+          <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Coupons & Promotions</h1>
           <p className="text-gray-600 mt-1">Create and manage discount codes</p>
         </div>
         {canEdit && (
         <button
           onClick={() => { resetForm(); setShowAddModal(true); }}
-          className="bg-blue-700 hover:bg-blue-800 text-white px-6 py-3 rounded-lg font-semibold transition-colors whitespace-nowrap cursor-pointer"
+          className="w-full sm:w-auto bg-blue-700 hover:bg-blue-800 text-white px-6 py-3 rounded-lg font-semibold transition-colors whitespace-nowrap cursor-pointer"
         >
           <i className="ri-add-line mr-2"></i>
           Create Coupon
@@ -216,15 +216,15 @@ export default function AdminCouponsPage() {
       </div>
 
       <div className="bg-white rounded-xl shadow-sm border border-gray-200">
-        <div className="p-6 border-b border-gray-200">
-          <div className="flex items-center justify-between">
+        <div className="p-4 sm:p-6 border-b border-gray-200">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <h2 className="text-lg font-bold text-gray-900">All Coupons</h2>
-            <div className="flex items-center space-x-3">
+            <div className="flex items-center gap-2 sm:gap-3">
               <select
                 value={statusFilter}
                 onChange={(e) => setStatusFilter(e.target.value as typeof statusFilter)}
                 aria-label="Filter by status"
-                className="px-4 py-2 pr-8 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 font-medium cursor-pointer"
+                className="min-h-[44px] min-w-0 flex-1 sm:min-h-0 sm:flex-none px-4 py-2 pr-8 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 font-medium cursor-pointer"
               >
                 <option value="all">All Status</option>
                 <option value="Active">Active</option>
@@ -237,7 +237,7 @@ export default function AdminCouponsPage() {
                 value={sortBy}
                 onChange={(e) => setSortBy(e.target.value as typeof sortBy)}
                 aria-label="Sort coupons"
-                className="px-4 py-2 pr-8 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 font-medium cursor-pointer"
+                className="min-h-[44px] min-w-0 flex-1 sm:min-h-0 sm:flex-none px-4 py-2 pr-8 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 font-medium cursor-pointer"
               >
                 <option value="date">Sort by Date</option>
                 <option value="usage">Sort by Usage</option>
@@ -274,7 +274,7 @@ export default function AdminCouponsPage() {
                         <span className="font-mono font-bold text-gray-900 bg-gray-100 px-3 py-1 rounded">{coupon.code}</span>
                         <button
                           onClick={() => handleCopyCode(coupon.code)}
-                          className="w-7 h-7 flex items-center justify-center text-gray-400 hover:text-blue-700 hover:bg-blue-50 rounded transition-colors cursor-pointer"
+                          className="w-11 h-11 md:w-7 md:h-7 flex items-center justify-center text-gray-400 hover:text-blue-700 hover:bg-blue-50 rounded transition-colors cursor-pointer"
                           title="Copy code"
                         >
                           <i className="ri-file-copy-line"></i>
@@ -318,13 +318,13 @@ export default function AdminCouponsPage() {
                         <button
                           onClick={() => handleEdit(coupon)}
                           title="Edit coupon"
-                          className="w-8 h-8 flex items-center justify-center text-gray-600 hover:text-blue-700 hover:bg-blue-50 rounded-lg transition-colors cursor-pointer"
+                          className="w-11 h-11 md:w-8 md:h-8 flex items-center justify-center text-gray-600 hover:text-blue-700 hover:bg-blue-50 rounded-lg transition-colors cursor-pointer"
                         >
                           <i className="ri-edit-line text-lg"></i>
                         </button>
                         <button
                           onClick={() => handleDeleteCoupon(coupon.id)}
-                          className="w-8 h-8 flex items-center justify-center text-gray-600 hover:text-red-700 hover:bg-red-50 rounded-lg transition-colors cursor-pointer"
+                          className="w-11 h-11 md:w-8 md:h-8 flex items-center justify-center text-gray-600 hover:text-red-700 hover:bg-red-50 rounded-lg transition-colors cursor-pointer"
                           title="Delete coupon"
                         >
                           <i className="ri-delete-bin-line text-lg"></i>
@@ -344,7 +344,7 @@ export default function AdminCouponsPage() {
 
       {(showAddModal || showEditModal) && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white p-6 rounded-xl max-w-lg w-full max-h-[90vh] overflow-y-auto">
+          <div className="bg-white p-5 sm:p-6 rounded-xl max-w-lg w-full max-h-[90dvh] overflow-y-auto">
             <h2 className="text-xl font-bold text-gray-900 mb-6">
               {showEditModal ? 'Edit Coupon' : 'Create New Coupon'}
             </h2>
@@ -359,7 +359,7 @@ export default function AdminCouponsPage() {
                   className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 font-mono"
                 />
               </div>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-semibold text-gray-700 mb-1">Discount Type</label>
                   <select
@@ -385,7 +385,7 @@ export default function AdminCouponsPage() {
                   />
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-semibold text-gray-700 mb-1">Min Purchase (GH₵)</label>
                   <input

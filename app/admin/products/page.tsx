@@ -627,14 +627,14 @@ export default function ProductsPage() {
     <div className="space-y-6">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">Products</h1>
+          <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Products</h1>
           <p className="text-gray-600 mt-1">Manage your product catalog and inventory</p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="grid grid-cols-2 gap-2 sm:flex sm:items-center sm:gap-3">
           <button
             onClick={handleExportCsv}
             disabled={printing || loading}
-            className="px-5 py-3 border-2 border-gray-300 text-gray-700 rounded-lg font-semibold transition-colors whitespace-nowrap cursor-pointer flex items-center justify-center hover:border-gray-400 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="px-3 sm:px-5 py-3 border-2 border-gray-300 text-gray-700 rounded-lg font-semibold transition-colors whitespace-nowrap cursor-pointer flex items-center justify-center hover:border-gray-400 disabled:opacity-50 disabled:cursor-not-allowed"
             title="Download an Excel/CSV spreadsheet of all products, variants and current stock"
           >
             <i className="ri-file-excel-2-line mr-2"></i>
@@ -644,7 +644,7 @@ export default function ProductsPage() {
             <button
               onClick={() => setShowPrintParts((open) => !open)}
               disabled={printing || loading}
-              className="px-5 py-3 border-2 border-gray-300 text-gray-700 rounded-lg font-semibold transition-colors whitespace-nowrap cursor-pointer flex items-center justify-center hover:border-gray-400 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="w-full px-3 sm:px-5 py-3 border-2 border-gray-300 text-gray-700 rounded-lg font-semibold transition-colors whitespace-nowrap cursor-pointer flex items-center justify-center hover:border-gray-400 disabled:opacity-50 disabled:cursor-not-allowed"
               title={`Generate printable PDFs of products, variants and current stock, ${STOCK_PRINT_PART_SIZE} products per part`}
             >
               <i className={`mr-2 ${printing ? 'ri-loader-4-line animate-spin' : 'ri-printer-line'}`}></i>
@@ -652,7 +652,7 @@ export default function ProductsPage() {
               {!printing && <i className="ri-arrow-down-s-line ml-1"></i>}
             </button>
             {showPrintParts && (
-              <div className="absolute right-0 mt-2 w-72 bg-white border border-gray-200 rounded-lg shadow-lg z-20">
+              <div className="absolute right-0 mt-2 w-72 max-w-[calc(100vw-2rem)] bg-white border border-gray-200 rounded-lg shadow-lg z-20">
                 <div className="px-4 py-3 border-b border-gray-100">
                   <p className="text-sm font-semibold text-gray-900">Choose a part to print</p>
                   <p className="text-xs text-gray-500 mt-0.5">
@@ -687,7 +687,7 @@ export default function ProductsPage() {
           </div>
           <Link
             href="/admin/products/new"
-            className="px-6 py-3 bg-blue-700 hover:bg-blue-800 text-white rounded-lg font-semibold transition-colors whitespace-nowrap cursor-pointer flex items-center justify-center md:items-start"
+            className="col-span-2 order-first sm:order-none px-6 py-3 bg-blue-700 hover:bg-blue-800 text-white rounded-lg font-semibold transition-colors whitespace-nowrap cursor-pointer flex items-center justify-center"
           >
             <i className="ri-add-line mr-2"></i>
             Add Product
@@ -739,22 +739,22 @@ export default function ProductsPage() {
       </div>
 
       <div className="bg-white rounded-xl shadow-sm border border-gray-200">
-        <div className="p-6 border-b border-gray-200">
-          <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between space-y-4 lg:space-y-0">
-            <div className="flex-1 max-w-md">
+        <div className="p-4 sm:p-6 border-b border-gray-200">
+          <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3 lg:gap-4">
+            <div className="flex-1 w-full lg:max-w-md">
               <div className="relative">
                 <i className="ri-search-line absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 text-lg w-5 h-5 flex items-center justify-center"></i>
                 <input
                   type="text"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="Search products by name, SKU, or category..."
-                  className="w-full pl-12 pr-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
+                  placeholder="Search name, SKU or category"
+                  className="w-full pl-12 pr-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-base sm:text-sm"
                 />
               </div>
             </div>
 
-            <div className="flex items-center space-x-3">
+            <div className="flex items-center gap-2 sm:gap-3">
               <button
                 onClick={() => setShowFilters(!showFilters)}
                 className="px-4 py-3 border-2 border-gray-300 text-gray-700 rounded-lg hover:border-gray-400 transition-colors font-medium whitespace-nowrap cursor-pointer"
@@ -765,7 +765,8 @@ export default function ProductsPage() {
               <select
                 value={sortBy}
                 onChange={(e) => setSortBy(e.target.value)}
-                className="px-4 py-3 pr-8 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 font-medium cursor-pointer"
+                aria-label="Sort products"
+                className="min-w-0 flex-1 lg:flex-none px-3 sm:px-4 py-3 pr-8 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 font-medium cursor-pointer"
               >
                 <option value="newest">Newest First</option>
                 <option value="name">Sort by Name</option>
@@ -773,17 +774,19 @@ export default function ProductsPage() {
                 <option value="price_desc">Price: High to Low</option>
                 <option value="stock">Sort by Stock</option>
               </select>
-              <div className="flex border-2 border-gray-300 rounded-lg overflow-hidden">
+              <div className="flex shrink-0 border-2 border-gray-300 rounded-lg overflow-hidden">
                 <button
                   onClick={() => setViewMode('list')}
-                  className={`w-10 h-10 flex items-center justify-center transition-colors cursor-pointer ${viewMode === 'list' ? 'bg-blue-700 text-white' : 'bg-white text-gray-700 hover:bg-gray-50'
+                  aria-label="List view"
+                  className={`w-11 h-11 flex items-center justify-center transition-colors cursor-pointer ${viewMode === 'list' ? 'bg-blue-700 text-white' : 'bg-white text-gray-700 hover:bg-gray-50'
                     }`}
                 >
                   <i className="ri-list-check text-xl w-5 h-5 flex items-center justify-center"></i>
                 </button>
                 <button
                   onClick={() => setViewMode('grid')}
-                  className={`w-10 h-10 flex items-center justify-center border-l-2 border-gray-300 transition-colors cursor-pointer ${viewMode === 'grid' ? 'bg-blue-700 text-white' : 'bg-white text-gray-700 hover:bg-gray-50'
+                  aria-label="Grid view"
+                  className={`w-11 h-11 flex items-center justify-center border-l-2 border-gray-300 transition-colors cursor-pointer ${viewMode === 'grid' ? 'bg-blue-700 text-white' : 'bg-white text-gray-700 hover:bg-gray-50'
                     }`}
                 >
                   <i className="ri-grid-line text-xl w-5 h-5 flex items-center justify-center"></i>
@@ -793,11 +796,11 @@ export default function ProductsPage() {
           </div>
 
           {showFilters && (
-            <div className="mt-4 p-4 bg-gray-50 rounded-lg grid md:grid-cols-5 gap-4">
+            <div className="mt-4 p-3 sm:p-4 bg-gray-50 rounded-lg grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-3 sm:gap-4">
               <select
                 value={categoryFilter}
                 onChange={(e) => setCategoryFilter(e.target.value)}
-                className="px-3 py-2 pr-8 border-2 border-gray-300 rounded-lg text-sm cursor-pointer"
+                className="w-full px-3 py-2.5 pr-8 border-2 border-gray-300 rounded-lg text-base sm:text-sm cursor-pointer"
               >
                 <option value="">All Categories</option>
                 {categories.map((cat: any) => <option key={cat.name} value={cat.name}>{cat.name}</option>)}
@@ -805,7 +808,7 @@ export default function ProductsPage() {
               <select
                 value={statusFilter}
                 onChange={(e) => setStatusFilter(e.target.value)}
-                className="px-3 py-2 pr-8 border-2 border-gray-300 rounded-lg text-sm cursor-pointer"
+                className="w-full px-3 py-2.5 pr-8 border-2 border-gray-300 rounded-lg text-base sm:text-sm cursor-pointer"
               >
                 <option value="">All Status</option>
                 <option value="active">Active</option>
@@ -815,7 +818,7 @@ export default function ProductsPage() {
               <select
                 value={variantFilter}
                 onChange={(e) => setVariantFilter(e.target.value)}
-                className="px-3 py-2 pr-8 border-2 border-gray-300 rounded-lg text-sm cursor-pointer"
+                className="w-full px-3 py-2.5 pr-8 border-2 border-gray-300 rounded-lg text-base sm:text-sm cursor-pointer"
               >
                 <option value="">All Products</option>
                 <option value="with">Only With Variants</option>
@@ -824,7 +827,7 @@ export default function ProductsPage() {
               <select
                 value={stockFilter}
                 onChange={(e) => setStockFilter(e.target.value as 'all' | 'low' | 'out')}
-                className="px-3 py-2 pr-8 border-2 border-gray-300 rounded-lg text-sm cursor-pointer"
+                className="w-full px-3 py-2.5 pr-8 border-2 border-gray-300 rounded-lg text-base sm:text-sm cursor-pointer"
               >
                 <option value="all">All Stock Levels</option>
                 <option value="low">Low Stock Only</option>
@@ -835,11 +838,11 @@ export default function ProductsPage() {
         </div>
 
         {selectedProducts.length > 0 && (
-          <div className="p-4 bg-blue-50 border-b border-blue-200 flex items-center justify-between">
+          <div className="p-4 bg-blue-50 border-b border-blue-200 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
             <p className="text-blue-800 font-semibold">
               {selectedProducts.length} product{selectedProducts.length > 1 ? 's' : ''} selected
             </p>
-            <div className="flex items-center space-x-2">
+            <div className="flex flex-wrap items-center gap-2">
               <select
                 value={bulkStatus}
                 onChange={(e) => setBulkStatus(e.target.value)}
@@ -951,13 +954,15 @@ export default function ProductsPage() {
                         <Link
                           href={`/admin/products/${product.id}`}
                           onClick={saveScrollForReturn}
-                          className="w-8 h-8 flex items-center justify-center text-gray-600 hover:text-blue-700 hover:bg-blue-50 rounded-lg transition-colors cursor-pointer"
+                          aria-label={`Edit ${product.name}`}
+                          className="w-11 h-11 md:w-8 md:h-8 flex items-center justify-center text-gray-600 hover:text-blue-700 hover:bg-blue-50 rounded-lg transition-colors cursor-pointer"
                         >
                           <i className="ri-edit-line text-lg"></i>
                         </Link>
                         <button
                           onClick={() => handleDeleteProduct(product.id)}
-                          className="w-8 h-8 flex items-center justify-center text-gray-600 hover:text-red-700 hover:bg-red-50 rounded-lg transition-colors cursor-pointer"
+                          aria-label={`Delete ${product.name}`}
+                          className="w-11 h-11 md:w-8 md:h-8 flex items-center justify-center text-gray-600 hover:text-red-700 hover:bg-red-50 rounded-lg transition-colors cursor-pointer"
                         >
                           <i className="ri-delete-bin-line text-lg"></i>
                         </button>
@@ -969,9 +974,9 @@ export default function ProductsPage() {
             </table>
           </div>
         ) : (
-          <div className="p-6 grid md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+          <div className="p-3 sm:p-6 grid grid-cols-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-6">
             {filteredProducts.map((product) => (
-              <div key={product.id} className="border-2 border-gray-200 rounded-xl p-4 hover:shadow-lg transition-shadow">
+              <div key={product.id} className="min-w-0 border-2 border-gray-200 rounded-xl p-2.5 sm:p-4 hover:shadow-lg transition-shadow">
                 <div className="relative">
                   <input
                     type="checkbox"
@@ -1001,17 +1006,18 @@ export default function ProductsPage() {
                 <div className="flex items-center justify-between text-sm text-gray-600 mb-3 pb-3 border-b border-gray-200">
                   <span>Stock: {product.stock}</span>
                 </div>
-                <div className="flex items-center space-x-2">
+                <div className="flex items-center gap-2">
                   <Link
                     href={`/admin/products/${product.id}`}
                     onClick={saveScrollForReturn}
-                    className="flex-1 bg-blue-700 hover:bg-blue-800 text-white py-2 rounded-lg text-sm font-medium text-center transition-colors whitespace-nowrap cursor-pointer"
+                    className="flex-1 bg-blue-700 hover:bg-blue-800 text-white py-2.5 rounded-lg text-sm font-medium text-center transition-colors whitespace-nowrap cursor-pointer"
                   >
                     Edit
                   </Link>
                   <button
                     onClick={() => handleDeleteProduct(product.id)}
-                    className="w-9 h-9 flex items-center justify-center border-2 border-gray-300 text-gray-700 hover:border-red-600 hover:text-red-600 rounded-lg transition-colors cursor-pointer"
+                    aria-label={`Delete ${product.name}`}
+                    className="w-10 h-10 shrink-0 flex items-center justify-center border-2 border-gray-300 text-gray-700 hover:border-red-600 hover:text-red-600 rounded-lg transition-colors cursor-pointer"
                   >
                     <i className="ri-delete-bin-line"></i>
                   </button>
@@ -1021,7 +1027,7 @@ export default function ProductsPage() {
           </div>
         )}
 
-        <div className="p-6 border-t border-gray-200 flex items-center justify-between">
+        <div className="p-4 sm:p-6 border-t border-gray-200 flex items-center justify-between">
           <p className="text-sm text-gray-500">
             {filteredProducts.length === 0 ? 'No products' : `Showing ${filteredProducts.length} product${filteredProducts.length !== 1 ? 's' : ''}`}
           </p>
