@@ -16,6 +16,8 @@ function AdminLoginForm() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
+  // True while a sign-in kept on this device is being renewed (see below).
+  const [resuming, setResuming] = useState(false);
   const { getToken, verifying } = useRecaptcha();
   const { getSetting } = useCMS();
   const siteName = getSetting('site_name') || 'Discount Discovery Zone';
@@ -47,6 +49,47 @@ function AdminLoginForm() {
       return '/admin';
     }
   };
+
+  // The dashboard's sign-in cookie lasts one hour, and only an open dashboard
+  // tab renews it. Coming back later (a new tab, a phone that slept, the next
+  // day) used to land here with "session expired" although the sign-in kept
+  // on this device is good for 30 days. Renew it and go straight back; ask for
+  // the password only when that fails.
+  useEffect(() => {
+    if (searchParams.get('error') === 'unauthorized') return;
+    try {
+      if (!localStorage.getItem('ddz-auth-token')) return;
+      // At most one try every 30 seconds, so a refused session can never loop.
+      const last = Number(sessionStorage.getItem('ddz_admin_resume_at') || 0);
+      if (Date.now() - last < 30_000) return;
+      sessionStorage.setItem('ddz_admin_resume_at', String(Date.now()));
+    } catch {
+      return;
+    }
+    let cancelled = false;
+    setResuming(true);
+    (async () => {
+      try {
+        // Renews the session from the stored refresh token when it has expired.
+        const { data: { session } } = await supabase.auth.getSession();
+        if (cancelled) return;
+        const stillValid = !!session?.expires_at && session.expires_at * 1000 > Date.now() + 60_000;
+        if (session && stillValid) {
+          document.cookie = `sb-access-token=${session.access_token}; path=/; max-age=${60 * 60 * 24 * 7}; SameSite=Lax; Secure`;
+          window.location.replace(safeRedirect());
+          return;
+        }
+      } catch {
+        // Offline or the session was revoked: fall back to the form.
+      }
+      if (!cancelled) setResuming(false);
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // Runs once when the page opens.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -110,7 +153,14 @@ function AdminLoginForm() {
         </div>
 
         <div className="bg-white rounded-xl sm:rounded-2xl shadow-xl p-5 sm:p-8 border border-gray-100 w-full">
-          {notice && !error && (
+          {resuming && (
+            <div className="mb-5 sm:mb-6 p-3 sm:p-4 bg-blue-50 border border-blue-200 rounded-lg flex items-center gap-3" role="status">
+              <i className="ri-loader-4-line animate-spin text-blue-600 text-xl shrink-0" aria-hidden />
+              <p className="text-blue-800 text-sm sm:text-base min-w-0 text-left">Signing you back in...</p>
+            </div>
+          )}
+
+          {!resuming && notice && !error && (
             <div className="mb-5 sm:mb-6 p-3 sm:p-4 bg-amber-50 border border-amber-200 rounded-lg flex items-start gap-3" role="status">
               <i className="ri-time-line text-amber-600 text-xl mt-0.5 shrink-0" aria-hidden />
               <p className="text-amber-800 text-sm sm:text-base min-w-0 text-left">{notice}</p>
