@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import { thumb } from '@/lib/thumb';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
@@ -177,7 +178,7 @@ export default function AdminAffiliateDetailPage() {
               <div key={m.id} className="flex flex-col sm:flex-row sm:items-center gap-3 p-3">
                 <div className="flex items-center gap-3 flex-1 min-w-0">
                   <div className="w-11 h-11 rounded-lg bg-gray-100 overflow-hidden flex-shrink-0">
-                    {m.image ? <img src={m.image} alt="" className="w-full h-full object-cover" /> : null}
+                    {m.image ? <img src={thumb(m.image, 160)} alt="" loading="lazy" decoding="async" className="w-full h-full object-cover" /> : null}
                   </div>
                   <div className="min-w-0">
                     <p className="text-sm font-medium text-gray-900 truncate">{m.product_name}</p>

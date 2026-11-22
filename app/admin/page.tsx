@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { thumb } from '@/lib/thumb';
 import { useState, useEffect, useMemo } from 'react';
 import { supabase } from '@/lib/supabase';
 import { fetchAllPaged } from '@/lib/supabase-paginate';
@@ -379,7 +380,7 @@ export default function AdminDashboard() {
             {topProducts.map((product) => (
               <div key={product.id} className="min-w-0 border border-gray-200 rounded-xl p-3 sm:p-4 hover:shadow-md transition-shadow">
                 <div className="aspect-square bg-gray-100 rounded-lg overflow-hidden mb-3">
-                  <img src={product.image} alt={product.name} className="w-full h-full object-cover" />
+                  <img src={thumb(product.image, 160)} alt={product.name} loading="lazy" decoding="async" className="w-full h-full object-cover" />
                 </div>
                 <h3 className="font-semibold text-gray-900 mb-2 line-clamp-2">{product.name}</h3>
                 <div className="mt-3 pt-3 border-t border-gray-200 flex items-center justify-between">

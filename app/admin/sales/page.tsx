@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useMemo, useCallback, Fragment } from 'react';
+import { thumb } from '@/lib/thumb';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
 import { fetchAllPaged } from '@/lib/supabase-paginate';
@@ -802,7 +803,7 @@ export default function AdminSalesPage() {
                                             </td>
                                             <td className="p-3">
                                                 <div className="flex items-center gap-3 min-w-0">
-                                                    <img src={p.image} alt="" className="w-10 h-10 rounded object-cover bg-gray-100 flex-shrink-0" />
+                                                    <img src={thumb(p.image, 96)} alt="" loading="lazy" decoding="async" className="w-10 h-10 rounded object-cover bg-gray-100 flex-shrink-0" />
                                                     <div className="min-w-0">
                                                         <div className="font-medium text-gray-900 break-words md:truncate md:max-w-[260px]">{p.name}</div>
                                                         <div className="text-xs text-gray-500 flex flex-wrap items-center gap-2">

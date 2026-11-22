@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { thumb } from '@/lib/thumb';
 import { supabase } from '@/lib/supabase';
 
 export default function AdminReviewsPage() {
@@ -284,8 +285,10 @@ export default function AdminReviewsPage() {
                       <div className="flex items-center space-x-3">
                         {review.product.image ? (
                           <img
-                            src={review.product.image}
+                            src={thumb(review.product.image, 96)}
                             alt={review.product.name}
+                            loading="lazy"
+                            decoding="async"
                             className="w-12 h-12 rounded-lg object-cover border border-gray-100"
                           />
                         ) : (

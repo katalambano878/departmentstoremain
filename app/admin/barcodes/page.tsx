@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { thumb } from '@/lib/thumb';
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
 import { fetchAllPaged } from '@/lib/supabase-paginate';
@@ -879,7 +880,7 @@ export default function BarcodesPage() {
 
                                     <div className="flex items-center gap-3 min-w-0">
                                         {product.image_url ? (
-                                            <img src={product.image_url} alt={product.name} className="w-10 h-10 rounded-lg object-cover border border-gray-200 flex-shrink-0" />
+                                            <img src={thumb(product.image_url, 96)} alt={product.name} loading="lazy" decoding="async" className="w-10 h-10 rounded-lg object-cover border border-gray-200 flex-shrink-0" />
                                         ) : (
                                             <div className="w-10 h-10 rounded-lg bg-gray-100 flex items-center justify-center flex-shrink-0">
                                                 <i className="ri-image-line text-gray-400"></i>

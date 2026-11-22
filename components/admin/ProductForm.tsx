@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { thumb } from '@/lib/thumb';
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useRouter } from 'next/navigation';
@@ -1603,7 +1604,7 @@ export default function ProductForm({ initialData, isEditMode = false }: Product
                                                                         <div className="flex items-center gap-2">
                                                                             {group.imageUrl ? (
                                                                                 <div className="relative w-12 h-12 flex-shrink-0">
-                                                                                    <img src={group.imageUrl} alt="variant" className="w-12 h-12 rounded-lg object-cover border border-gray-200" />
+                                                                                    <img src={thumb(group.imageUrl, 96)} alt="variant" loading="lazy" decoding="async" className="w-12 h-12 rounded-lg object-cover border border-gray-200" />
                                                                                     <button
                                                                                         onClick={() => updateGroup(group.tempId, 'imageUrl', '')}
                                                                                         className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-red-500 text-white rounded-full flex items-center justify-center text-[10px] cursor-pointer hover:bg-red-600"
@@ -1850,7 +1851,7 @@ export default function ProductForm({ initialData, isEditMode = false }: Product
                                 {images.map((img: any, index: number) => (
                                     <div key={index} className="relative group">
                                         <div className="aspect-square bg-gray-100 rounded-xl overflow-hidden border-2 border-gray-200">
-                                            <img src={img.url} alt={`Product ${index + 1}`} className="w-full h-full object-cover" />
+                                            <img src={thumb(img.url, 480)} alt={`Product ${index + 1}`} decoding="async" className="w-full h-full object-cover" />
                                         </div>
                                         {index === 0 && (
                                             <span className="absolute top-2 left-2 bg-blue-700 text-white px-2 py-1 rounded text-xs font-semibold">Primary</span>

@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import { thumb } from '@/lib/thumb';
 import { createPortal } from 'react-dom';
 import dynamic from 'next/dynamic';
 import { supabase } from '@/lib/supabase';
@@ -808,8 +809,10 @@ export default function POSPage() {
                                 >
                                     <div className="aspect-square relative bg-gray-50 shrink-0">
                                         <img
-                                            src={product.image}
+                                            src={thumb(product.image, 320)}
                                             alt={product.name}
+                                            loading="lazy"
+                                            decoding="async"
                                             className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                                         />
                                         <div className="absolute top-2 right-2 bg-black/60 text-white text-xs px-2 py-1 rounded-full backdrop-blur-sm">
@@ -885,7 +888,7 @@ export default function POSPage() {
                         cart.map(item => (
                             <div key={item.cartKey} className="flex gap-3 p-3 bg-gray-50 rounded-lg group hover:bg-gray-100 transition-colors">
                                 <div className="w-16 h-16 bg-white rounded-md overflow-hidden flex-shrink-0 border border-gray-200">
-                                    <img src={item.image} className="w-full h-full object-cover" alt="" />
+                                    <img src={thumb(item.image, 96)} className="w-full h-full object-cover" alt="" decoding="async" />
                                 </div>
                                 <div className="flex-1 min-w-0 flex flex-col justify-between">
                                     <div className="flex justify-between items-start">
@@ -1013,8 +1016,10 @@ export default function POSPage() {
                                             <div className="w-16 h-16 shrink-0 rounded-lg overflow-hidden bg-gray-100 border border-gray-200 flex items-center justify-center">
                                                 {(variant.image_url || variantPickerProduct.image) ? (
                                                     <img
-                                                        src={variant.image_url || variantPickerProduct.image}
+                                                        src={thumb(variant.image_url || variantPickerProduct.image, 160)}
                                                         alt=""
+                                                        loading="lazy"
+                                                        decoding="async"
                                                         className="w-full h-full object-cover"
                                                     />
                                                 ) : (

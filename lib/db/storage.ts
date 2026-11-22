@@ -8,7 +8,7 @@ import { createHmac } from "crypto";
 import { promises as fs } from "fs";
 import path from "path";
 
-const STORAGE_ROOT =
+export const STORAGE_ROOT =
   process.env.STORAGE_ROOT || path.join(process.cwd(), ".storage");
 
 function publicBase(): string {

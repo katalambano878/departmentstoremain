@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { thumb } from '@/lib/thumb';
 import { supabase } from '@/lib/supabase';
 
 export default function AdminCategoriesPage() {
@@ -252,7 +253,7 @@ export default function AdminCategoriesPage() {
                       <div className="flex items-center space-x-3 min-w-0">
                         <div className="w-16 h-16 shrink-0 bg-gray-100 rounded-lg overflow-hidden border border-gray-200">
                           {category.image_url ? (
-                            <img src={category.image_url} alt={category.name} className="w-full h-full object-cover" />
+                            <img src={thumb(category.image_url, 160)} alt={category.name} loading="lazy" decoding="async" className="w-full h-full object-cover" />
                           ) : (
                             <div className="w-full h-full flex items-center justify-center text-gray-400">
                               <i className="ri-image-line text-2xl"></i>

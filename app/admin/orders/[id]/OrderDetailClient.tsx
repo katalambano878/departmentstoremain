@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { thumb } from '@/lib/thumb';
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 import { orderLineItemImageUrl } from '@/lib/orderLineItemImage';
@@ -552,7 +553,7 @@ export default function OrderDetailClient({ orderId }: OrderDetailClientProps) {
                   <tr key={item.id} className="border-b border-gray-200">
                     <td className="py-2 px-2 align-middle w-16">
                       {lineImg ? (
-                        <img src={lineImg} alt="" className="w-12 h-12 object-cover rounded border border-gray-300" />
+                        <img src={thumb(lineImg, 96)} alt="" className="w-12 h-12 object-cover rounded border border-gray-300" />
                       ) : (
                         <span className="text-gray-300 text-xs">—</span>
                       )}
@@ -648,8 +649,10 @@ export default function OrderDetailClient({ orderId }: OrderDetailClientProps) {
                     <div className="w-16 h-16 sm:w-20 sm:h-20 bg-white rounded-lg overflow-hidden border border-gray-200 flex items-center justify-center relative shrink-0">
                       {lineImg ? (
                         <img
-                          src={lineImg}
+                          src={thumb(lineImg, 160)}
                           alt={item.product_name}
+                          loading="lazy"
+                          decoding="async"
                           className="w-full h-full object-cover"
                         />
                       ) : (

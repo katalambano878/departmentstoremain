@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { thumb } from '@/lib/thumb';
 import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 
@@ -156,7 +157,7 @@ export default function AdminBlogPage() {
               return (
                 <li key={post.id} className="flex items-center gap-3 sm:gap-4 p-4 hover:bg-gray-50">
                   {post.featured_image ? (
-                    <img src={post.featured_image} alt="" className="w-16 h-12 sm:w-20 sm:h-14 rounded-lg object-cover border border-gray-100 flex-shrink-0" />
+                    <img src={thumb(post.featured_image, 160)} alt="" loading="lazy" decoding="async" className="w-16 h-12 sm:w-20 sm:h-14 rounded-lg object-cover border border-gray-100 flex-shrink-0" />
                   ) : (
                     <div className="w-16 h-12 sm:w-20 sm:h-14 rounded-lg bg-gray-100 flex items-center justify-center text-gray-400 flex-shrink-0">
                       <i className="ri-image-line text-xl"></i>

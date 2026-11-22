@@ -1,6 +1,7 @@
 'use client';
 
 import { useRef, useState } from 'react';
+import { thumb } from '@/lib/thumb';
 import { adminFetch } from '@/lib/admin-fetch';
 import { uploadProductPhoto } from '@/lib/product-photo';
 
@@ -108,7 +109,7 @@ export default function PhotoFirstDetails({
       <div className="flex items-start gap-4">
         <div className="flex h-16 w-16 flex-none items-center justify-center overflow-hidden rounded-lg border border-blue-100 bg-white sm:h-20 sm:w-20">
           {firstPhoto ? (
-            <img src={firstPhoto} alt="" className="h-full w-full object-cover" />
+            <img src={thumb(firstPhoto, 160)} alt="" decoding="async" className="h-full w-full object-cover" />
           ) : (
             <i className="ri-image-add-line text-3xl text-blue-600" aria-hidden="true"></i>
           )}

@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { thumb } from '@/lib/thumb';
 import { useState, useEffect, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
 import { fetchAllPaged } from '@/lib/supabase-paginate';
@@ -915,7 +916,7 @@ export default function ProductsPage() {
                     <td className="py-4 px-4">
                       <div className="flex items-center space-x-3">
                         <div className="w-16 h-16 bg-gray-100 rounded-lg overflow-hidden border border-gray-200">
-                          <img src={product.image} alt={product.name} className="w-full h-full object-cover" />
+                          <img src={thumb(product.image, 96)} alt={product.name} loading="lazy" decoding="async" className="w-full h-full object-cover" />
                         </div>
                         <div>
                           <p className="font-semibold text-gray-900">{product.name}</p>
@@ -985,7 +986,7 @@ export default function ProductsPage() {
                     className="absolute top-2 left-2 w-5 h-5 text-blue-700 border-gray-300 rounded focus:ring-blue-500 cursor-pointer z-10"
                   />
                   <div className="aspect-square bg-gray-100 rounded-lg overflow-hidden mb-3 border border-gray-200">
-                    <img src={product.image} alt={product.name} className="w-full h-full object-cover" />
+                    <img src={thumb(product.image, 480)} alt={product.name} loading="lazy" decoding="async" className="w-full h-full object-cover" />
                   </div>
                 </div>
                 <div className="flex flex-wrap items-center gap-1.5 mb-2">
