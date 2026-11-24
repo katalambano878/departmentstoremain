@@ -7,6 +7,7 @@ import { supabase } from '@/lib/supabase';
 import { useCMS } from '@/context/CMSContext';
 import AppUpdateWatcher from '@/components/AppUpdateWatcher';
 import ResponsiveTables from '@/components/admin/ResponsiveTables';
+import { SmsCreditDashboardCard } from '@/components/admin/SmsCreditDashboardCard';
 
 type BellCounts = {
   newOrders: number;
@@ -776,6 +777,7 @@ export default function AdminLayout({
           </div>
         </header>
 
+        <SmsCreditDashboardCard />
         <main id="admin-main" className="min-w-0 p-4 lg:p-6">
           {children}
         </main>
