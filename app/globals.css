@@ -711,3 +711,34 @@ img {
     font-size: 16px;
   }
 }
+
+/* Admin dashboard: SMS credit low / empty — two blinks, pause, repeat */
+@keyframes sms-credit-double-blink {
+  0%,
+  42%,
+  100% {
+    opacity: 1;
+  }
+  5%,
+  10%,
+  15%,
+  20% {
+    opacity: 0.45;
+  }
+  22%,
+  40% {
+    opacity: 1;
+  }
+}
+
+.sms-credit-double-blink,
+.sms-credit-double-blink-empty {
+  animation: sms-credit-double-blink 2.8s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sms-credit-double-blink,
+  .sms-credit-double-blink-empty {
+    animation: none;
+  }
+}
