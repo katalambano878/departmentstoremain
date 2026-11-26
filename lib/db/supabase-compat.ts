@@ -384,17 +384,17 @@ export class QueryBuilder implements PromiseLike<{ data: any; error: any; count:
 
   insert(payload: Row | Row[]) {
     this.action = "insert";
-    this.payload = payload;
+    this.payload = asJsonBody(payload);
     return this;
   }
   update(patch: Row) {
     this.action = "update";
-    this.payload = patch;
+    this.payload = asJsonBody(patch);
     return this;
   }
   upsert(payload: Row | Row[], opts?: { onConflict?: string; ignoreDuplicates?: boolean }) {
     this.action = "upsert";
-    this.payload = payload;
+    this.payload = asJsonBody(payload);
     this.ignoreDuplicates = !!opts?.ignoreDuplicates;
     this.onConflictCols = opts?.onConflict
       ? opts.onConflict.split(",").map((c) => c.trim())
@@ -1429,4 +1429,15 @@ function looksLikePlainNumber(v: string): boolean {
   if (intPart.length > 1 && intPart.startsWith("0")) return false; // "0241..." (but "0" and "0.5" are numbers)
   if (unsigned.replace(".", "").length > 15) return false; // beyond exact double precision
   return true;
+}
+
+/**
+ * The write body exactly as supabase-js would have sent it over HTTP:
+ * JSON.stringify drops `undefined` keys (so `update({ status, notes })` with
+ * no notes leaves the column alone instead of setting it to NULL) and turns
+ * Dates into ISO strings.
+ */
+function asJsonBody<T>(payload: T): T {
+  if (payload === undefined || payload === null) return payload;
+  return JSON.parse(JSON.stringify(payload));
 }
